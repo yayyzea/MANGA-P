@@ -1,1 +1,1 @@
-# MANGA-P
+# MANGA:P
