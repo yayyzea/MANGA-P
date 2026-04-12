@@ -1,7 +1,5 @@
-from .add_manga_form import AddMangaForm
-
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QPushButton
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 
@@ -123,38 +121,13 @@ class LibraryPage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        top_row = QHBoxLayout()
 
         self.search_bar = SearchBar()
         self.search_bar.search_triggered.connect(
             lambda q: self.main_window.go_search(q) if q else None
         )
         self.search_bar.filter_triggered.connect(lambda: self.main_window.go_search(""))
-        
-        top_row.addWidget(self.search_bar)
-        
-        # tombol +
-        self.add_btn = QPushButton("+")
-        self.add_btn.setFixedSize(40, 40)
-        self.add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.add_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: {BLUE_PRIMARY};
-                color: white;
-                border-radius: 20px;
-                font-size: 20px;
-                font-weight: bold;
-            }}
-            QPushButton:hover {{
-                background: #1565C0;
-            }}
-        """)
-        
-        self.add_btn.clicked.connect(self._open_add_form)
-        
-        top_row.addWidget(self.add_btn)
-        
-        root.addLayout(top_row)
+        root.addWidget(self.search_bar)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -205,17 +178,3 @@ class LibraryPage(QWidget):
 
     def refresh(self):
         self._start_loading()
-        
-    def _on_manga_added(self, manga_id: int):
-        print(f"Manga ID {manga_id} berhasil ditambahkan")
-    
-        # kalau ada toast di main_window
-        if hasattr(self.main_window, "show_toast"):
-            self.main_window.show_toast("Manga berhasil ditambahkan!")
-    
-        self._start_loading()  # refresh library
-        
-    def _open_add_form(self):
-        form = AddMangaForm(parent=self)
-        form.manga_added.connect(self._on_manga_added)
-        form.exec()
