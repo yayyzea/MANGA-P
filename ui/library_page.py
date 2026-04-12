@@ -1,5 +1,7 @@
+from .add_manga_form import AddMangaForm
+
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea, QPushButton
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 
@@ -121,13 +123,38 @@ class LibraryPage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+        top_row = QHBoxLayout()
 
         self.search_bar = SearchBar()
         self.search_bar.search_triggered.connect(
             lambda q: self.main_window.go_search(q) if q else None
         )
         self.search_bar.filter_triggered.connect(lambda: self.main_window.go_search(""))
-        root.addWidget(self.search_bar)
+        
+        top_row.addWidget(self.search_bar)
+        
+        # tombol +
+        self.add_btn = QPushButton("+")
+        self.add_btn.setFixedSize(40, 40)
+        self.add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.add_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {BLUE_PRIMARY};
+                color: white;
+                border-radius: 20px;
+                font-size: 20px;
+                font-weight: bold;
+            }}
+            QPushButton:hover {{
+                background: #1565C0;
+            }}
+        """)
+        
+        self.add_btn.clicked.connect(self._open_add_form)
+        
+        top_row.addWidget(self.add_btn)
+        
+        root.addLayout(top_row)
 
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -178,3 +205,10 @@ class LibraryPage(QWidget):
 
     def refresh(self):
         self._start_loading()
+        
+    def _open_add_form(self):
+        dialog = AddMangaForm(self)
+    
+        dialog.manga_added.connect(lambda _: self.refresh())
+    
+        dialog.exec()
