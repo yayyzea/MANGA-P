@@ -188,7 +188,7 @@ class MangaService:
 
         finally:
             session.close()
-
+    
     # ── Cache helpers ─────────────────────────────────────────────────────────
 
     def _fetch_and_cache_keyword(self, query: str, session: Session):
