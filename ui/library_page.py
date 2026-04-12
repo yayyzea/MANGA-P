@@ -206,9 +206,16 @@ class LibraryPage(QWidget):
     def refresh(self):
         self._start_loading()
         
+    def _on_manga_added(self, manga_id: int):
+        print(f"Manga ID {manga_id} berhasil ditambahkan")
+    
+        # kalau ada toast di main_window
+        if hasattr(self.main_window, "show_toast"):
+            self.main_window.show_toast("Manga berhasil ditambahkan!")
+    
+        self._start_loading()  # refresh library
+        
     def _open_add_form(self):
-        dialog = AddMangaForm(self)
-    
-        dialog.manga_added.connect(lambda _: self.refresh())
-    
-        dialog.exec()
+        form = AddMangaForm(parent=self)
+        form.manga_added.connect(self._on_manga_added)
+        form.exec()
