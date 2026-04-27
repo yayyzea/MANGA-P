@@ -100,6 +100,7 @@ class Sidebar(QWidget):
             ("home.png",      "Home",      0),
             ("library.png",   "Library",   1),
             ("dashboard.png", "Dashboard", 5),
+            ("about.png",     "About",     4),
         ]
         for icon_file, tip, page_idx in nav_items:
             btn = QPushButton()
