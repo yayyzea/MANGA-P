@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-    QPushButton, QLineEdit, QCheckBox, QGridLayout,
+    QPushButton, QLineEdit, QCheckBox, QGridLayout, QMessageBox,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QColor, QPalette, QPixmap, QIcon
 from pathlib import Path
 
@@ -96,11 +96,12 @@ def _filter_entries(entries, query: str, genres: list, statuses: list, year: str
     return result
 
 
-# ── Search bar khusus Library (dengan tombol filter toggle) ───────────────────
+# ── Search bar khusus Library ─────────────────────────────────────────────────
 
 class LibrarySearchBar(QWidget):
     search_triggered  = pyqtSignal(str)
-    filter_toggled    = pyqtSignal()        # sinyal toggle sidebar filter
+    filter_toggled    = pyqtSignal()
+    delete_toggled    = pyqtSignal(bool)   # True = masuk mode delete
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -169,6 +170,30 @@ class LibrarySearchBar(QWidget):
         self.filter_btn.clicked.connect(self.filter_toggled)
         layout.addWidget(self.filter_btn)
 
+        # Tombol trash bin
+        self.trash_btn = QPushButton("🗑")
+        self.trash_btn.setObjectName("TrashBtn")
+        self.trash_btn.setFixedSize(36, 36)
+        self.trash_btn.setCheckable(True)
+        self.trash_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {WHITE}; border: none;
+                border-radius: 18px; font-size: 16px; color: #E53935;
+            }}
+            QPushButton:hover   {{ background: #FFEBEE; }}
+            QPushButton:checked {{
+                background: #E53935; color: {WHITE};
+            }}
+        """)
+        self.trash_btn.toggled.connect(self.delete_toggled)
+        layout.addWidget(self.trash_btn)
+
+    def reset_trash(self):
+        """Reset tombol trash ke state normal (tidak aktif)."""
+        self.trash_btn.blockSignals(True)
+        self.trash_btn.setChecked(False)
+        self.trash_btn.blockSignals(False)
+
     def get_text(self) -> str:
         return self.input.text().strip()
 
@@ -176,10 +201,6 @@ class LibrarySearchBar(QWidget):
 # ── Filter panel khusus Library ───────────────────────────────────────────────
 
 class LibraryFilterPanel(QWidget):
-    """
-    Sidebar filter yang muncul/hilang saat tombol filter diklik.
-    Konten: Genre, Read Status, Tahun, dan tombol Apply.
-    """
     apply_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -191,7 +212,6 @@ class LibraryFilterPanel(QWidget):
         self._status_cbs = {}
         self._year_input = None
         self._build()
-        # Tersembunyi secara default
         self.setVisible(False)
 
     def _build(self):
@@ -201,7 +221,6 @@ class LibraryFilterPanel(QWidget):
 
         root.addWidget(self._heading("Filter"))
 
-        # ── Genre ──────────────────────────────────────────────────────────
         root.addWidget(self._subheading("Genre"))
         g_grid = QGridLayout()
         g_grid.setSpacing(6)
@@ -213,7 +232,6 @@ class LibraryFilterPanel(QWidget):
             g_grid.addWidget(cb, i // 3, i % 3)
         root.addLayout(g_grid)
 
-        # ── Read Status ────────────────────────────────────────────────────
         root.addWidget(self._subheading("Read Status"))
         s_grid = QGridLayout()
         s_grid.setSpacing(6)
@@ -227,7 +245,6 @@ class LibraryFilterPanel(QWidget):
                 s_grid.addWidget(cb, row_idx, col_idx)
         root.addLayout(s_grid)
 
-        # ── Tahun ──────────────────────────────────────────────────────────
         root.addWidget(self._subheading("Tahun"))
         self._year_input = QLineEdit()
         self._year_input.setFixedHeight(32)
@@ -245,7 +262,6 @@ class LibraryFilterPanel(QWidget):
 
         root.addStretch()
 
-        # ── Apply ──────────────────────────────────────────────────────────
         apply_btn = QPushButton("Apply")
         apply_btn.setFixedHeight(46)
         apply_btn.setStyleSheet(f"""
@@ -263,8 +279,6 @@ class LibraryFilterPanel(QWidget):
         """)
         apply_btn.clicked.connect(self.apply_clicked)
         root.addWidget(apply_btn)
-
-    # ── Helpers ───────────────────────────────────────────────────────────
 
     def _heading(self, text):
         lbl = QLabel(text)
@@ -293,8 +307,6 @@ class LibraryFilterPanel(QWidget):
             }}
         """
 
-    # ── Getters ───────────────────────────────────────────────────────────
-
     def selected_genres(self)   -> list: return [g for g, cb in self._genre_cbs.items()  if cb.isChecked()]
     def selected_statuses(self) -> list: return [s for s, cb in self._status_cbs.items() if cb.isChecked()]
     def selected_year(self)     -> str:  return (self._year_input.text() or "").strip()
@@ -303,11 +315,71 @@ class LibraryFilterPanel(QWidget):
         self.setVisible(not self.isVisible())
 
 
+# ── Manga Card dengan Checkbox overlay (mode delete) ─────────────────────────
+
+class SelectableMangaCard(QWidget):
+    """
+    Wrapper MangaCard yang menampilkan checkbox di pojok kiri atas
+    saat mode delete aktif.
+    """
+    clicked = pyqtSignal(int)
+
+    def __init__(self, manga, entry_id: int, show_labels: bool = True, parent=None):
+        super().__init__(parent)
+        self.manga    = manga
+        self.entry_id = entry_id     # UserCollection.id untuk delete
+
+        self._checkbox = None
+
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("background: transparent;")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        self._card = MangaCard(manga, show_labels=show_labels)
+        self._card.clicked.connect(self.clicked)
+        layout.addWidget(self._card)
+
+        self.setSizePolicy(self._card.sizePolicy())
+        self.setFixedWidth(self._card.width())
+
+    def set_select_mode(self, active: bool):
+        if active:
+            if self._checkbox is None:
+                self._checkbox = QCheckBox(self)
+                self._checkbox.setStyleSheet(f"""
+                    QCheckBox {{ background: transparent; spacing: 0px; }}
+                    QCheckBox::indicator {{
+                        width: 22px; height: 22px;
+                        border: 2.5px solid {WHITE};
+                        border-radius: 5px;
+                        background: rgba(255,255,255,0.85);
+                    }}
+                    QCheckBox::indicator:checked {{
+                        background: #E53935;
+                        border-color: #E53935;
+                    }}
+                """)
+                self._checkbox.move(8, 8)
+                self._checkbox.raise_()
+            self._checkbox.setChecked(False)
+            self._checkbox.setVisible(True)
+        else:
+            if self._checkbox:
+                self._checkbox.setVisible(False)
+
+    def is_selected(self) -> bool:
+        return self._checkbox is not None and self._checkbox.isChecked()
+
+
 # ── Horizontal card row ───────────────────────────────────────────────────────
 
 class CardRow(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._selectable_cards: list[SelectableMangaCard] = []
         self._build()
 
     def _build(self):
@@ -339,23 +411,109 @@ class CardRow(QWidget):
             ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
             self._row.insertWidget(self._row.count() - 1, ph)
 
-    def load_cards(self, manga_list, on_click):
+    def load_cards(self, entries, on_click):
+        """
+        entries: list of UserCollection entries.
+        on_click: callable(manga_id).
+        """
         self._clear()
-        if not manga_list:
+        self._selectable_cards = []
+        if not entries:
             lbl = QLabel("No manga found.")
             lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 13px; background: transparent;")
             self._row.insertWidget(0, lbl)
             return
-        for manga in manga_list:
-            card = MangaCard(manga, show_labels=True)
+        for entry in entries:
+            manga = entry.manga
+            if not manga:
+                continue
+            card = SelectableMangaCard(manga, entry_id=entry.id, show_labels=True)
             card.clicked.connect(on_click)
+            self._selectable_cards.append(card)
             self._row.insertWidget(self._row.count() - 1, card)
 
+    def set_select_mode(self, active: bool):
+        for card in self._selectable_cards:
+            card.set_select_mode(active)
+
+    def get_selected_entry_ids(self) -> list:
+        return [c.entry_id for c in self._selectable_cards if c.is_selected()]
+
     def _clear(self):
+        self._selectable_cards = []
         while self._row.count() > 1:
             item = self._row.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+
+# ── Banner konfirmasi delete ───────────────────────────────────────────────────
+
+class DeleteConfirmBar(QWidget):
+    cancelled = pyqtSignal()
+    confirmed = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"background: {WHITE}; border-top: 1.5px solid #FFCDD2;")
+        self.setFixedHeight(64)
+        self._build()
+        self.setVisible(False)
+
+    def _build(self):
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(24, 8, 24, 8)
+        layout.setSpacing(12)
+
+        self.info_lbl = QLabel("Pilih manga yang ingin dihapus")
+        self.info_lbl.setStyleSheet(
+            f"color: {TEXT_DARK}; font-size: 14px; background: transparent;"
+        )
+        layout.addWidget(self.info_lbl, stretch=1)
+
+        cancel_btn = QPushButton("Batal")
+        cancel_btn.setFixedHeight(38)
+        cancel_btn.setMinimumWidth(90)
+        cancel_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {WHITE};
+                border: 2px solid {BLUE_PRIMARY};
+                border-radius: 19px;
+                color: {BLUE_PRIMARY};
+                font-size: 14px; font-weight: 600;
+                padding: 0 16px;
+            }}
+            QPushButton:hover {{ background: #E3F2FD; }}
+        """)
+        cancel_btn.clicked.connect(self.cancelled)
+        layout.addWidget(cancel_btn)
+
+        self.delete_btn = QPushButton("🗑  Hapus")
+        self.delete_btn.setFixedHeight(38)
+        self.delete_btn.setMinimumWidth(100)
+        self.delete_btn.setEnabled(False)
+        self.delete_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: #E53935; border: none;
+                border-radius: 19px;
+                color: {WHITE};
+                font-size: 14px; font-weight: 700;
+                padding: 0 16px;
+            }}
+            QPushButton:hover   {{ background: #B71C1C; }}
+            QPushButton:disabled {{ background: #FFCDD2; color: #EF9A9A; }}
+        """)
+        self.delete_btn.clicked.connect(self.confirmed)
+        layout.addWidget(self.delete_btn)
+
+    def update_count(self, count: int):
+        if count == 0:
+            self.info_lbl.setText("Pilih manga yang ingin dihapus")
+            self.delete_btn.setEnabled(False)
+        else:
+            self.info_lbl.setText(f"{count} manga dipilih")
+            self.delete_btn.setEnabled(True)
 
 
 # ── Library page ──────────────────────────────────────────────────────────────
@@ -378,16 +536,15 @@ class LibraryPage(QWidget):
         # ── Search bar ─────────────────────────────────────────────────────
         self.search_bar = LibrarySearchBar()
         self.search_bar.search_triggered.connect(self._apply_filters)
-        # Tombol filter → toggle sidebar
         self.search_bar.filter_toggled.connect(self._toggle_filter)
+        self.search_bar.delete_toggled.connect(self._set_delete_mode)
         root.addWidget(self.search_bar)
 
-        # ── Body: konten kiri + filter kanan (filter awalnya hidden) ───────
+        # ── Body: konten + filter sidebar ──────────────────────────────────
         self.body = QHBoxLayout()
         self.body.setContentsMargins(0, 0, 0, 0)
         self.body.setSpacing(0)
 
-        # Kiri: scroll area berisi Last Read + My Books
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -412,12 +569,22 @@ class LibraryPage(QWidget):
         scroll.setWidget(content)
         self.body.addWidget(scroll, stretch=1)
 
-        # Kanan: filter panel (hidden by default)
         self.filter_panel = LibraryFilterPanel()
         self.filter_panel.apply_clicked.connect(self._apply_filters)
         self.body.addWidget(self.filter_panel)
 
         root.addLayout(self.body, stretch=1)
+
+        # ── Banner konfirmasi delete ────────────────────────────────────────
+        self.confirm_bar = DeleteConfirmBar()
+        self.confirm_bar.cancelled.connect(self._cancel_delete_mode)
+        self.confirm_bar.confirmed.connect(self._confirm_delete)
+        root.addWidget(self.confirm_bar)
+
+        # Timer polling untuk update jumlah checkbox yang dicentang
+        self._check_timer = QTimer(self)
+        self._check_timer.setInterval(150)
+        self._check_timer.timeout.connect(self._update_selection_count)
 
     def _sec(self, text):
         lbl = QLabel(text)
@@ -427,10 +594,92 @@ class LibraryPage(QWidget):
         )
         return lbl
 
-    # ── Toggle filter sidebar ─────────────────────────────────────────────────
+    # ── Filter sidebar ────────────────────────────────────────────────────────
 
     def _toggle_filter(self):
         self.filter_panel.toggle_visibility()
+
+    # ── Delete mode ───────────────────────────────────────────────────────────
+
+    def _set_delete_mode(self, active: bool):
+        self.last_read_row.set_select_mode(active)
+        self.my_books_row.set_select_mode(active)
+        if active:
+            self.confirm_bar.setVisible(True)
+            self._check_timer.start()
+        else:
+            self.confirm_bar.setVisible(False)
+            self._check_timer.stop()
+
+    def _cancel_delete_mode(self):
+        self.search_bar.reset_trash()     # unchecks trash_btn tanpa memicu sinyal
+        self._set_delete_mode(False)
+
+    def _update_selection_count(self):
+        ids = list(dict.fromkeys(
+            self.last_read_row.get_selected_entry_ids()
+            + self.my_books_row.get_selected_entry_ids()
+        ))
+        self.confirm_bar.update_count(len(ids))
+
+    def _confirm_delete(self):
+        ids = list(dict.fromkeys(
+            self.last_read_row.get_selected_entry_ids()
+            + self.my_books_row.get_selected_entry_ids()
+        ))
+        if not ids:
+            return
+
+        count = len(ids)
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Konfirmasi Hapus")
+        msg.setText(
+            f"Hapus {count} manga dari My Library?\n\n"
+            "Tindakan ini tidak dapat dibatalkan."
+        )
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
+        )
+        msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        msg.button(QMessageBox.StandardButton.Yes).setText("Ya, Hapus")
+        msg.button(QMessageBox.StandardButton.Cancel).setText("Batal")
+        msg.setStyleSheet(f"""
+            QMessageBox {{ background: {WHITE}; }}
+            QLabel {{ color: {TEXT_DARK}; font-size: 14px; }}
+            QPushButton {{
+                min-width: 90px; min-height: 34px;
+                border-radius: 17px;
+                font-size: 13px; font-weight: 600;
+                padding: 0 12px;
+            }}
+        """)
+
+        if msg.exec() == QMessageBox.StandardButton.Yes:
+            self._do_delete(ids)
+
+    def _do_delete(self, entry_ids: list):
+        from services.collection_service import CollectionService
+        svc = CollectionService()
+        deleted = sum(1 for eid in entry_ids if svc.delete(eid))
+
+        self._cancel_delete_mode()
+        self._start_loading()
+
+        if deleted:
+            ok = QMessageBox(self)
+            ok.setWindowTitle("Berhasil")
+            ok.setText(f"{deleted} manga berhasil dihapus dari My Library.")
+            ok.setStandardButtons(QMessageBox.StandardButton.Ok)
+            ok.setStyleSheet(f"""
+                QMessageBox {{ background: {WHITE}; }}
+                QLabel {{ color: {TEXT_DARK}; font-size: 14px; }}
+                QPushButton {{
+                    min-width: 80px; min-height: 32px;
+                    border-radius: 16px; font-size: 13px;
+                    background: {BLUE_PRIMARY}; color: {WHITE}; border: none;
+                }}
+            """)
+            ok.exec()
 
     # ── Loading ───────────────────────────────────────────────────────────────
 
@@ -455,7 +704,6 @@ class LibraryPage(QWidget):
     def _apply_filters(self, query: str = ""):
         if not isinstance(query, str):
             query = ""
-        # Selalu ambil teks terkini dari search bar
         current_text = self.search_bar.get_text()
         if current_text:
             query = current_text
@@ -465,13 +713,11 @@ class LibraryPage(QWidget):
         year     = self.filter_panel.selected_year()
 
         filtered_lr = _filter_entries(self._all_last_read, query, genres, statuses, year)
-        lr_manga = [e.manga for e in filtered_lr][:12]
+        filtered_mb = _filter_entries(self._all_my_books,  query, genres, statuses, year)
 
-        filtered_mb = _filter_entries(self._all_my_books, query, genres, statuses, year)
-        mb_manga = [e.manga for e in filtered_mb]
-
-        self.last_read_row.load_cards(lr_manga, self.main_window.go_detail)
-        self.my_books_row.load_cards(mb_manga, self.main_window.go_detail)
+        # Kirim list entries (bukan manga) agar entry.id tersedia untuk delete
+        self.last_read_row.load_cards(filtered_lr[:12], self.main_window.go_detail)
+        self.my_books_row.load_cards(filtered_mb,       self.main_window.go_detail)
 
     # ── Public ────────────────────────────────────────────────────────────────
 
