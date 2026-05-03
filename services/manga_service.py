@@ -85,6 +85,46 @@ class MangaService:
         finally:
             session.close()
 
+    def add_manual(
+        self,
+        title: str,
+        synopsis: str = None,
+        authors: str = None,
+        genres: str = None,
+        status: str = None,
+        chapters: int = None,
+        year: int = None,
+        cover_url: str = None,
+        score: float = None,
+    ):
+        """Simpan manga manual (is_manual=True) ke DB dan kembalikan objeknya."""
+        if not title or not title.strip():
+            raise ValueError("Judul manga wajib diisi.")
+ 
+        session = get_session()
+        try:
+            manga = Manga(
+                title     = title.strip(),
+                synopsis  = synopsis,
+                authors   = authors,
+                genres    = genres,
+                status    = status,
+                chapters  = chapters,
+                year      = year,
+                cover_url = cover_url,
+                score     = score,
+                is_manual = True,
+            )
+            session.add(manga)
+            session.commit()
+            session.refresh(manga)
+            from sqlalchemy.orm import make_transient
+            session.expunge(manga)
+            make_transient(manga)
+            return manga
+        finally:
+            session.close()
+ 
     def get_recommendations(self, manga: Manga, limit: int = 4) -> list[Manga]:
         """
         Priority order:
@@ -190,7 +230,7 @@ class MangaService:
             session.close()
     
     # ── Cache helpers ─────────────────────────────────────────────────────────
-
+            
     def _fetch_and_cache_keyword(self, query: str, session: Session):
         raw_list = self.jikan.search_manga(query)
         self._bulk_upsert(raw_list, session)

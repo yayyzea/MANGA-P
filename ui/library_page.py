@@ -9,11 +9,12 @@ from pathlib import Path
 _ICON_DIR = Path(__file__).parent.parent / "assets"
 
 from .theme import (
-    BLUE_PRIMARY, BLUE_CARD, BLUE_LIGHT, WHITE,
+    BLUE_DARK, BLUE_PRIMARY, BLUE_CARD, BLUE_LIGHT, WHITE,
     TEXT_DARK, TEXT_MUTED,
     TOPBAR_HEIGHT, CARD_W, CARD_H, CARD_RADIUS
 )
 from .widgets import MangaCard
+from .add_manga_form import AddMangaForm
 
 
 # ── Konstanta ─────────────────────────────────────────────────────────────────
@@ -555,7 +556,29 @@ class LibraryPage(QWidget):
         cl.setContentsMargins(24, 20, 24, 20)
         cl.setSpacing(20)
 
-        cl.addWidget(self._sec("Last Read"))
+        # ── Last Read header + tombol + ──────────────────────────────────
+        lr_header = QHBoxLayout()
+        lr_header.setContentsMargins(0, 0, 0, 0)
+        lr_header.addWidget(self._sec("Last Read"))
+        lr_header.addStretch()
+        self._add_btn = QPushButton("+")
+        self._add_btn.setFixedSize(32, 32)
+        self._add_btn.setToolTip("Tambah Manga Manual")
+        self._add_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {BLUE_PRIMARY};
+                border: none;
+                font-size: 26px;
+                font-weight: 300;
+                line-height: 1;
+            }}
+            QPushButton:hover {{ color: {BLUE_DARK}; }}
+        """)
+        self._add_btn.clicked.connect(self._open_add_form)
+        lr_header.addWidget(self._add_btn)
+        cl.addLayout(lr_header)
+ 
         self.last_read_row = CardRow()
         self.last_read_row.show_placeholders(6)
         cl.addWidget(self.last_read_row)
@@ -598,6 +621,18 @@ class LibraryPage(QWidget):
 
     def _toggle_filter(self):
         self.filter_panel.toggle_visibility()
+
+    def _open_add_form(self):
+        """Buka dialog AddMangaForm untuk menambah manga manual."""
+        dialog = AddMangaForm(parent=self)
+        dialog.manga_added.connect(self._on_manga_added)
+        dialog.exec()
+ 
+    def _on_manga_added(self, manga_id: int):
+        """Dipanggil setelah manga berhasil disimpan — refresh library."""
+        self._start_loading()
+        if hasattr(self.main_window, 'show_toast'):
+            self.main_window.show_toast("Manga berhasil ditambahkan!")
 
     # ── Delete mode ───────────────────────────────────────────────────────────
 
