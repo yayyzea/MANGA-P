@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (
-    QDialog, QWidget, QHBoxLayout, QVBoxLayout,
+    QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QLineEdit, QPushButton, QSizePolicy
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap, QFont
+from PyQt6.QtGui import QPixmap, QFont, QPainter, QLinearGradient, QColor
 from pathlib import Path
 
 from services.auth_service import AuthService
@@ -11,25 +11,24 @@ from services.auth_service import AuthService
 _ASSET_DIR = Path(__file__).parent.parent / "assets"
 
 
-class SignUpPage(QDialog):
-    def __init__(self, parent=None):
+class SignUpPage(QWidget):
+    def __init__(self, on_signup=None, on_switch_login=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("MANGA:P — Sign Up")
-        self.resize(1000, 580)
-        self.setMinimumSize(800, 500)
-        self.registered_email = ""
+        self.on_signup = on_signup
+        self.on_switch_login = on_switch_login
         self._auth = AuthService()
         self._build()
 
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        gradient = QLinearGradient(0, 0, 0, self.height())
+        gradient.setColorAt(0.0, QColor("#B3D9F5"))
+        gradient.setColorAt(0.5, QColor("#3DA8E8"))
+        gradient.setColorAt(1.0, QColor("#1E7BC4"))
+        painter.fillRect(self.rect(), gradient)
+
     def _build(self):
-        self.setStyleSheet("""
-            QDialog {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #B3D9F5, stop:0.5 #3DA8E8, stop:1 #1E7BC4
-                );
-            }
-        """)
+        self.setStyleSheet("QWidget { background: transparent; }")
 
         root = QHBoxLayout(self)
         root.setContentsMargins(60, 40, 80, 40)
@@ -133,7 +132,7 @@ class SignUpPage(QDialog):
             QPushButton:hover { color: #AED6F1; }
         """)
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        back_btn.clicked.connect(self.reject)
+        back_btn.clicked.connect(self._go_login)
         back_row.addWidget(have)
         back_row.addWidget(back_btn)
         back_row.addStretch()
@@ -159,13 +158,17 @@ class SignUpPage(QDialog):
         """)
         return w
 
+    def _go_login(self):
+        if self.on_switch_login:
+            self.on_switch_login()
+
     def _do_register(self):
         self.error_lbl.setStyleSheet("color: #FADBD8; background: transparent; font-size: 12px;")
         self.error_lbl.setText("")
         self.signup_btn.setEnabled(False)
         self.signup_btn.setText("Mendaftar...")
 
-        user, error = self._auth.register(
+        success, error = self._auth.register(
             self.username_input.text().strip(),
             self.email_input.text().strip(),
             self.pass_input.text()
@@ -178,5 +181,6 @@ class SignUpPage(QDialog):
             self.error_lbl.setText(f"⚠  {error}")
             return
 
-        self.registered_email = self.email_input.text().strip()
-        self.accept()
+        registered_email = self.email_input.text().strip()
+        if self.on_signup:
+            self.on_signup(registered_email)
