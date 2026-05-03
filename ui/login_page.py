@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (
-    QDialog, QWidget, QHBoxLayout, QVBoxLayout,
+    QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QLineEdit, QPushButton, QSizePolicy
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap, QFont
+from PyQt6.QtGui import QPixmap, QFont, QPainter, QLinearGradient, QColor
 from pathlib import Path
 
 from services.auth_service import AuthService
@@ -11,25 +11,28 @@ from services.auth_service import AuthService
 _ASSET_DIR = Path(__file__).parent.parent / "assets"
 
 
-class LoginPage(QDialog):
-    def __init__(self, parent=None):
+class LoginPage(QWidget):
+    def __init__(self, on_login=None, on_switch_signup=None, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("MANGA:P")
-        self.resize(1000, 560)
-        self.setMinimumSize(800, 480)
-        self.user = None
+        self.on_login = on_login
+        self.on_switch_signup = on_switch_signup
         self._auth = AuthService()
         self._build()
 
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        gradient = QLinearGradient(0, 0, 0, self.height())
+        gradient.setColorAt(0.0, QColor("#B3D9F5"))
+        gradient.setColorAt(0.5, QColor("#3DA8E8"))
+        gradient.setColorAt(1.0, QColor("#1E7BC4"))
+        painter.fillRect(self.rect(), gradient)
+
+    def show_success(self, message: str):
+        self.error_lbl.setStyleSheet("color: #A9DFBF; background: transparent; font-size: 12px;")
+        self.error_lbl.setText(message)
+
     def _build(self):
-        self.setStyleSheet("""
-            QDialog {
-                background: qlineargradient(
-                    x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #B3D9F5, stop:0.5 #3DA8E8, stop:1 #1E7BC4
-                );
-            }
-        """)
+        self.setStyleSheet("QWidget { background: transparent; }")
 
         root = QHBoxLayout(self)
         root.setContentsMargins(60, 40, 80, 40)
@@ -83,7 +86,7 @@ class LoginPage(QDialog):
             QPushButton:hover { color: #D6EAF8; }
         """)
         su_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        su_btn.clicked.connect(self._open_signup)
+        su_btn.clicked.connect(self._go_signup)
         row.addWidget(dont)
         row.addWidget(su_btn)
         row.addStretch()
@@ -104,7 +107,7 @@ class LoginPage(QDialog):
         rl.addWidget(self.pass_input)
         rl.addSpacing(8)
 
-        # Error label
+        # Error/success label
         self.error_lbl = QLabel("")
         self.error_lbl.setStyleSheet("color: #FADBD8; background: transparent; font-size: 12px;")
         self.error_lbl.setWordWrap(True)
@@ -154,12 +157,17 @@ class LoginPage(QDialog):
         """)
         return w
 
+    def _go_signup(self):
+        if self.on_switch_signup:
+            self.on_switch_signup()
+
     def _do_login(self):
+        self.error_lbl.setStyleSheet("color: #FADBD8; background: transparent; font-size: 12px;")
         self.error_lbl.setText("")
         self.signin_btn.setEnabled(False)
         self.signin_btn.setText("Masuk...")
 
-        user, error = self._auth.login(
+        user = self._auth.login(
             self.email_input.text().strip(),
             self.pass_input.text()
         )
@@ -167,20 +175,10 @@ class LoginPage(QDialog):
         self.signin_btn.setEnabled(True)
         self.signin_btn.setText("Sign In")
 
-        if error:
-            self.error_lbl.setText(f"⚠  {error}")
+        if not user:
+            self.error_lbl.setText("⚠  Username/email atau password salah.")
             self.pass_input.clear()
             return
 
-        self.user = user
-        self.accept()
-
-    def _open_signup(self):
-        from ui.signup_page import SignUpPage
-        signup = SignUpPage(self)
-        if signup.exec():
-            self.email_input.setText(signup.registered_email)
-            self.error_lbl.setStyleSheet(
-                "color: #A9DFBF; background: transparent; font-size: 12px;"
-            )
-            self.error_lbl.setText("✓ Akun berhasil dibuat! Silakan login.")
+        if self.on_login:
+            self.on_login(user)
