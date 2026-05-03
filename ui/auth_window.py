@@ -27,18 +27,13 @@ class AuthWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
-        self.login_page = LoginPage(
-            on_login=self._handle_login,
-            on_switch_signup=self._show_signup,
-        )
-        self.signup_page = SignUpPage(
-            on_signup=self._handle_signup,
-            on_switch_login=self._show_login,
-        )
-
-        self.stack.addWidget(self.login_page)   # index 0
-        self.stack.addWidget(self.signup_page)  # index 1
-        self.stack.setCurrentIndex(self.LOGIN_INDEX)
+        # LoginPage sekarang QDialog, jalankan langsung
+        login = LoginPage(self)
+        if login.exec():
+            if self.on_auth_success:
+                self.on_auth_success(login.user)
+        else:
+            self.close()
 
     # ── navigation ──────────────────────────────────────────────────────────
     def _show_login(self):
