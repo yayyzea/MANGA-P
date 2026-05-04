@@ -621,6 +621,8 @@ class LibraryPage(QWidget):
 
     def _toggle_filter(self):
         self.filter_panel.toggle_visibility()
+        # Sembunyikan/tampilkan tombol + saat filter terbuka/tutup
+        self._add_btn.setVisible(not self.filter_panel.isVisible())
 
     def _open_add_form(self):
         """Buka dialog AddMangaForm untuk menambah manga manual."""
