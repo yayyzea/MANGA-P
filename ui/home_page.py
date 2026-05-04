@@ -156,7 +156,7 @@ class TopMangaLoader(QThread):
 # ── History panel (clickable) ─────────────────────────────────────────────────
 
 class HistoryPanel(QWidget):
-    # ★ Signal emitted when user clicks the panel
+    # Signal emitted when user clicks the panel
     manga_clicked = pyqtSignal(int)
 
     def __init__(self, parent=None):
@@ -164,7 +164,7 @@ class HistoryPanel(QWidget):
         self.setObjectName("HistoryPanel")
         self.setFixedWidth(220)
         self._loader   = None
-        self._manga_id = None   # stores current manga id for click navigation
+        self._manga_id = None
 
         self.setAutoFillBackground(True)
         pal = self.palette()
@@ -172,8 +172,6 @@ class HistoryPanel(QWidget):
         self.setPalette(pal)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"border-radius: {CARD_RADIUS}px;")
-
-        # ★ Pointer cursor — signals it's clickable
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         self._build()
@@ -195,6 +193,13 @@ class HistoryPanel(QWidget):
             "background: rgba(255,255,255,0.15); border-radius: 8px;"
         )
         self.cover_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        # Teks placeholder saat belum ada history
+        self.cover_lbl.setText("Belum ada\nhistory")
+        self.cover_lbl.setStyleSheet(
+            "background: rgba(255,255,255,0.15); border-radius: 8px;"
+            f"color: rgba(255,255,255,0.6); font-size: 12px;"
+        )
         layout.addWidget(self.cover_lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
 
         self.title_lbl = QLabel("")
@@ -221,6 +226,13 @@ class HistoryPanel(QWidget):
         self.title_lbl.setText(manga.title or "")
         synopsis = manga.synopsis or ""
         self.desc_lbl.setText(synopsis[:280] + ("…" if len(synopsis) > 280 else ""))
+
+        # Reset placeholder style
+        self.cover_lbl.setText("")
+        self.cover_lbl.setStyleSheet(
+            "background: rgba(255,255,255,0.15); border-radius: 8px;"
+        )
+
         if manga.cover_url:
             self._loader = ImageLoader(manga.cover_url)
             self._loader.loaded.connect(self._on_cover)
@@ -231,11 +243,10 @@ class HistoryPanel(QWidget):
         scaled = pixmap.scaled(
             190, 260,
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation
+            Qt.TransformationMode.SmoothTransformation,
         )
         self.cover_lbl.setPixmap(scaled)
 
-    # ★ Navigate to detail page on click
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self._manga_id:
             self.manga_clicked.emit(self._manga_id)
@@ -365,7 +376,7 @@ class HomePage(QWidget):
         left.addStretch()
         content_layout.addLayout(left, stretch=1)
 
-        # ★ Connect history panel click → go_detail
+        # History panel
         self.history = HistoryPanel()
         self.history.manga_clicked.connect(self.main_window.go_detail)
         content_layout.addWidget(self.history, alignment=Qt.AlignmentFlag.AlignTop)
@@ -373,7 +384,6 @@ class HomePage(QWidget):
         root.addWidget(self._build_footer())
 
     def _build_footer(self):
-        # Outer container: links row + cat row
         outer = QWidget()
         outer.setAutoFillBackground(True)
         pal = outer.palette()
@@ -384,7 +394,6 @@ class HomePage(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        # ── Links row ─────────────────────────────────────────────────────
         link_bar = QWidget()
         link_bar.setFixedHeight(30)
         link_bar.setStyleSheet("background: transparent;")
@@ -411,7 +420,6 @@ class HomePage(QWidget):
         layout.addStretch()
         v.addWidget(link_bar)
 
-        # ── Walking cat strip ──────────────────────────────────────────────
         self.walking_cat = WalkingCat()
         self.walking_cat.setStyleSheet("background: transparent;")
         v.addWidget(self.walking_cat)
@@ -448,8 +456,7 @@ class HomePage(QWidget):
         for row in (self.row1, self.row2):
             row.addStretch()
 
-        if manga_list:
-            self.history.load_manga(manga_list[0])
+        # ★ History tidak di-load otomatis — hanya update saat user klik manga
 
     def _clear_row(self, row_layout):
         while row_layout.count():
