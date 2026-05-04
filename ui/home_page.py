@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QLineEdit, QScrollArea, QSizePolicy,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer, QPointF
@@ -147,7 +147,7 @@ class TopMangaLoader(QThread):
     def run(self):
         try:
             from services.manga_service import MangaService
-            self.finished.emit(MangaService().get_top_manga(limit=8))
+            self.finished.emit(MangaService().get_top_manga(limit=48))
         except Exception as e:
             print(f"[HomePage] Load error: {e}")
             self.finished.emit([])
@@ -365,13 +365,13 @@ class HomePage(QWidget):
         )
         left.addWidget(lbl)
 
-        self.row1 = QHBoxLayout()
-        self.row1.setSpacing(16)
-        left.addLayout(self.row1)
-
-        self.row2 = QHBoxLayout()
-        self.row2.setSpacing(16)
-        left.addLayout(self.row2)
+        # Grid container — responsive, otomatis hitung kolom saat resize
+        self.grid_container = QWidget()
+        self.grid_container.setStyleSheet("background: transparent;")
+        self.manga_grid = QGridLayout(self.grid_container)
+        self.manga_grid.setSpacing(16)
+        self.manga_grid.setContentsMargins(0, 0, 0, 0)
+        left.addWidget(self.grid_container)
 
         left.addStretch()
         content_layout.addLayout(left, stretch=1)
@@ -433,34 +433,69 @@ class HomePage(QWidget):
         self._loader.start()
 
     def _show_placeholders(self):
-        for row_layout in (self.row1, self.row2):
-            for _ in range(4):
-                ph = QWidget()
-                ph.setFixedSize(CARD_W + 16, CARD_H)
-                ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-                ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
-                row_layout.addWidget(ph)
-            row_layout.addStretch()
+        self._clear_grid()
+        for _ in range(48):
+            ph = QWidget()
+            ph.setFixedSize(CARD_W + 16, CARD_H)
+            ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+            ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
+            self.manga_grid.addWidget(ph, 0, 0)  # posisi sementara
+        self._relayout()
 
     @pyqtSlot(list)
     def _on_loaded(self, manga_list):
         self._manga_list = manga_list
-        self._clear_row(self.row1)
-        self._clear_row(self.row2)
-
-        for i, manga in enumerate(manga_list[:8]):
+        self._clear_grid()
+        self._cards = []
+        for manga in manga_list:
             card = MangaCard(manga, show_labels=True)
             card.clicked.connect(self.main_window.go_detail)
+<<<<<<< HEAD
             (self.row1 if i < 4 else self.row2).addWidget(card)
 
         for row in (self.row1, self.row2):
             row.addStretch()
 
         # ★ History tidak di-load otomatis — hanya update saat user klik manga
+=======
+            self._cards.append(card)
+            self.manga_grid.addWidget(card, 0, 0)  # posisi sementara
+        self._relayout()
+        if manga_list:
+            self.history.load_manga(manga_list[0])
+>>>>>>> 035f10d37037db1bf1d1ead5632808aa9f606177
 
-    def _clear_row(self, row_layout):
-        while row_layout.count():
-            item = row_layout.takeAt(0)
+    def _relayout(self):
+        """Hitung ulang jumlah kolom berdasarkan lebar container."""
+        widgets = []
+        while self.manga_grid.count():
+            item = self.manga_grid.takeAt(0)
+            if item.widget():
+                widgets.append(item.widget())
+
+        if not widgets:
+            return
+
+        container_width = self.grid_container.width()
+        if container_width < 10:
+            container_width = self.width() - 250
+
+        card_total_w = CARD_W + 16 + 16
+        cols = max(1, container_width // card_total_w)
+
+        for i, widget in enumerate(widgets):
+            self.manga_grid.addWidget(widget, i // cols, i % cols)
+
+    def resizeEvent(self, event):
+        """Panggil _relayout setiap kali window diubah ukurannya."""
+        super().resizeEvent(event)
+        QTimer.singleShot(50, self._relayout)
+
+    def _clear_grid(self):
+        self._cards = getattr(self, '_cards', [])
+        self._cards = []
+        while self.manga_grid.count():
+            item = self.manga_grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 

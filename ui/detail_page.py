@@ -164,17 +164,7 @@ class CollectionPanel(QWidget):
         """)
         self._save_btn.clicked.connect(self._on_save)
 
-        self._rm_btn = QPushButton("Remove")
-        self._rm_btn.setFixedHeight(30)
-        self._rm_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: rgba(220,50,50,0.80); color: {WHITE};
-                border: none; border-radius: 7px;
-                font-size: 11px; font-weight: 700; padding: 0 12px;
-            }}
-        """)
-        self._rm_btn.clicked.connect(self._on_remove)
-        r3.addWidget(self._save_btn); r3.addWidget(self._rm_btn); r3.addStretch()
+        r3.addWidget(self._save_btn); r3.addStretch()
         ic.addLayout(r3)
 
         self._in_col.hide()
