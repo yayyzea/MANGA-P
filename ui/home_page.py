@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QScrollArea, QSizePolicy,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer, QPointF
@@ -17,7 +17,6 @@ from .widgets import MangaCard, ImageLoader
 # ── Walking Cat Animation ─────────────────────────────────────────────────────
 
 class WalkingCat(QWidget):
-    """Cat that walks back and forth across the footer. Drawn with QPainter."""
     SIZE  = 36
     SPEED = 2
     FRAMES = [0, 1, 2, 1]
@@ -74,25 +73,21 @@ class WalkingCat(QWidget):
         p.setPen(pen)
         p.setBrush(QBrush(body_col))
 
-        # Body
         body = QPainterPath()
         body.addRoundedRect(4, 12, 22, 14, 6, 6)
         p.drawPath(body)
 
-        # Head
         head = QPainterPath()
         head.addEllipse(QPointF(15, 10), 9, 9)
         p.drawPath(head)
 
-        # Ears
         for ex, ey in [(9, 4), (19, 4)]:
             p.drawLine(ex - 2, ey + 3, ex - 3, ey - 1)
             p.drawLine(ex - 2, ey + 3, ex + 1, ey)
 
-        # Eyes
         p.setBrush(QBrush(line_col))
         p.setPen(Qt.PenStyle.NoPen)
-        if f == 2:  # blink
+        if f == 2:
             p.setPen(QPen(line_col, 1.5))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawLine(11, 10, 13, 10)
@@ -101,7 +96,6 @@ class WalkingCat(QWidget):
             p.drawEllipse(QPointF(12, 10), 1.5, 1.5)
             p.drawEllipse(QPointF(18, 10), 1.5, 1.5)
 
-        # Nose
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(nose_col))
         nose = QPainterPath()
@@ -111,14 +105,12 @@ class WalkingCat(QWidget):
         nose.closeSubpath()
         p.drawPath(nose)
 
-        # Whiskers
         p.setPen(QPen(line_col, 1))
         p.drawLine(6, 13, 12, 14)
         p.drawLine(6, 15, 12, 15)
         p.drawLine(18, 14, 24, 13)
         p.drawLine(18, 15, 24, 15)
 
-        # Legs
         p.setPen(QPen(line_col, 2.2))
         p.setBrush(QBrush(body_col))
         leg_x_offsets = [0, 3, 0, -3]
@@ -129,7 +121,6 @@ class WalkingCat(QWidget):
             leg.quadTo(lx, ly + 3, lx + ox, ly + 8)
             p.drawPath(leg)
 
-        # Tail
         wag = [0, 5, 0, -5][self._frame]
         tail = QPainterPath()
         tail.moveTo(5, 18)
@@ -140,23 +131,21 @@ class WalkingCat(QWidget):
         p.end()
 
 
-
 class TopMangaLoader(QThread):
     finished = pyqtSignal(list)
 
     def run(self):
         try:
             from services.manga_service import MangaService
-            self.finished.emit(MangaService().get_top_manga(limit=48))
+            self.finished.emit(MangaService().get_top_manga(limit=8))
         except Exception as e:
             print(f"[HomePage] Load error: {e}")
             self.finished.emit([])
 
 
-# ── History panel (clickable) ─────────────────────────────────────────────────
+# ── History panel ─────────────────────────────────────────────────────────────
 
 class HistoryPanel(QWidget):
-    # Signal emitted when user clicks the panel
     manga_clicked = pyqtSignal(int)
 
     def __init__(self, parent=None):
@@ -189,12 +178,7 @@ class HistoryPanel(QWidget):
 
         self.cover_lbl = QLabel()
         self.cover_lbl.setFixedSize(190, 260)
-        self.cover_lbl.setStyleSheet(
-            "background: rgba(255,255,255,0.15); border-radius: 8px;"
-        )
         self.cover_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        # Teks placeholder saat belum ada history
         self.cover_lbl.setText("Belum ada\nhistory")
         self.cover_lbl.setStyleSheet(
             "background: rgba(255,255,255,0.15); border-radius: 8px;"
@@ -227,7 +211,6 @@ class HistoryPanel(QWidget):
         synopsis = manga.synopsis or ""
         self.desc_lbl.setText(synopsis[:280] + ("…" if len(synopsis) > 280 else ""))
 
-        # Reset placeholder style
         self.cover_lbl.setText("")
         self.cover_lbl.setStyleSheet(
             "background: rgba(255,255,255,0.15); border-radius: 8px;"
@@ -365,18 +348,17 @@ class HomePage(QWidget):
         )
         left.addWidget(lbl)
 
-        # Grid container — responsive, otomatis hitung kolom saat resize
-        self.grid_container = QWidget()
-        self.grid_container.setStyleSheet("background: transparent;")
-        self.manga_grid = QGridLayout(self.grid_container)
-        self.manga_grid.setSpacing(16)
-        self.manga_grid.setContentsMargins(0, 0, 0, 0)
-        left.addWidget(self.grid_container)
+        self.row1 = QHBoxLayout()
+        self.row1.setSpacing(16)
+        left.addLayout(self.row1)
+
+        self.row2 = QHBoxLayout()
+        self.row2.setSpacing(16)
+        left.addLayout(self.row2)
 
         left.addStretch()
         content_layout.addLayout(left, stretch=1)
 
-        # History panel
         self.history = HistoryPanel()
         self.history.manga_clicked.connect(self.main_window.go_detail)
         content_layout.addWidget(self.history, alignment=Qt.AlignmentFlag.AlignTop)
@@ -433,69 +415,34 @@ class HomePage(QWidget):
         self._loader.start()
 
     def _show_placeholders(self):
-        self._clear_grid()
-        for _ in range(48):
-            ph = QWidget()
-            ph.setFixedSize(CARD_W + 16, CARD_H)
-            ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-            ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
-            self.manga_grid.addWidget(ph, 0, 0)  # posisi sementara
-        self._relayout()
+        for row_layout in (self.row1, self.row2):
+            for _ in range(4):
+                ph = QWidget()
+                ph.setFixedSize(CARD_W + 16, CARD_H)
+                ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+                ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
+                row_layout.addWidget(ph)
+            row_layout.addStretch()
 
     @pyqtSlot(list)
     def _on_loaded(self, manga_list):
         self._manga_list = manga_list
-        self._clear_grid()
-        self._cards = []
-        for manga in manga_list:
+        self._clear_row(self.row1)
+        self._clear_row(self.row2)
+
+        for i, manga in enumerate(manga_list[:8]):
             card = MangaCard(manga, show_labels=True)
             card.clicked.connect(self.main_window.go_detail)
-<<<<<<< HEAD
             (self.row1 if i < 4 else self.row2).addWidget(card)
 
         for row in (self.row1, self.row2):
             row.addStretch()
 
-        # ★ History tidak di-load otomatis — hanya update saat user klik manga
-=======
-            self._cards.append(card)
-            self.manga_grid.addWidget(card, 0, 0)  # posisi sementara
-        self._relayout()
-        if manga_list:
-            self.history.load_manga(manga_list[0])
->>>>>>> 035f10d37037db1bf1d1ead5632808aa9f606177
+        # History tidak di-load otomatis — hanya update saat user klik manga
 
-    def _relayout(self):
-        """Hitung ulang jumlah kolom berdasarkan lebar container."""
-        widgets = []
-        while self.manga_grid.count():
-            item = self.manga_grid.takeAt(0)
-            if item.widget():
-                widgets.append(item.widget())
-
-        if not widgets:
-            return
-
-        container_width = self.grid_container.width()
-        if container_width < 10:
-            container_width = self.width() - 250
-
-        card_total_w = CARD_W + 16 + 16
-        cols = max(1, container_width // card_total_w)
-
-        for i, widget in enumerate(widgets):
-            self.manga_grid.addWidget(widget, i // cols, i % cols)
-
-    def resizeEvent(self, event):
-        """Panggil _relayout setiap kali window diubah ukurannya."""
-        super().resizeEvent(event)
-        QTimer.singleShot(50, self._relayout)
-
-    def _clear_grid(self):
-        self._cards = getattr(self, '_cards', [])
-        self._cards = []
-        while self.manga_grid.count():
-            item = self.manga_grid.takeAt(0)
+    def _clear_row(self, row_layout):
+        while row_layout.count():
+            item = row_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
