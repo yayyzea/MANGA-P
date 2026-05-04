@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
     QPushButton, QLineEdit, QScrollArea, QSizePolicy,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer, QPointF
@@ -137,7 +137,7 @@ class TopMangaLoader(QThread):
     def run(self):
         try:
             from services.manga_service import MangaService
-            self.finished.emit(MangaService().get_top_manga(limit=8))
+            self.finished.emit(MangaService().get_top_manga(limit=48))
         except Exception as e:
             print(f"[HomePage] Load error: {e}")
             self.finished.emit([])
@@ -416,7 +416,7 @@ class HomePage(QWidget):
 
     def _show_placeholders(self):
         for row_layout in (self.row1, self.row2):
-            for _ in range(4):
+            for _ in range(48):
                 ph = QWidget()
                 ph.setFixedSize(CARD_W + 16, CARD_H)
                 ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
