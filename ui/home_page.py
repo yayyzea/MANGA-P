@@ -328,18 +328,25 @@ class HomePage(QWidget):
         self.search_bar.filter_triggered.connect(self._on_filter)
         root.addWidget(self.search_bar)
 
+        # ── Outer row: kiri scrollable, kanan History fixed ──────────────────
+        outer_row = QWidget()
+        outer_row_layout = QHBoxLayout(outer_row)
+        outer_row_layout.setContentsMargins(0, 0, 0, 0)
+        outer_row_layout.setSpacing(0)
+        root.addWidget(outer_row, stretch=1)
+
+        # Kiri: hanya Top Manga yang di-scroll
         content_scroll = QScrollArea()
         content_scroll.setWidgetResizable(True)
         content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         content_widget = QWidget()
+        content_widget.setStyleSheet("background: transparent;")
         content_scroll.setWidget(content_widget)
-        root.addWidget(content_scroll, stretch=1)
+        outer_row_layout.addWidget(content_scroll, stretch=1)
 
-        content_layout = QHBoxLayout(content_widget)
-        content_layout.setContentsMargins(24, 20, 24, 20)
-        content_layout.setSpacing(24)
-
-        left = QVBoxLayout()
+        left = QVBoxLayout(content_widget)
+        left.setContentsMargins(24, 20, 8, 20)
         left.setSpacing(12)
 
         lbl = QLabel("Top Manga")
@@ -350,19 +357,26 @@ class HomePage(QWidget):
 
         self.grid_container = QWidget()
         self.grid_container.setStyleSheet("background: transparent;")
-        
+
         self.manga_grid = QGridLayout(self.grid_container)
         self.manga_grid.setSpacing(16)
         self.manga_grid.setContentsMargins(0, 0, 0, 0)
-        
+
         left.addWidget(self.grid_container)
-
         left.addStretch()
-        content_layout.addLayout(left, stretch=1)
 
+        # Kanan: History panel fixed, tidak ikut scroll
+        history_wrapper = QWidget()
+        history_wrapper.setStyleSheet("background: transparent;")
+        history_wrapper_layout = QVBoxLayout(history_wrapper)
+        history_wrapper_layout.setContentsMargins(0, 20, 24, 20)
+        history_wrapper_layout.setSpacing(0)
         self.history = HistoryPanel()
         self.history.manga_clicked.connect(self.main_window.go_detail)
-        content_layout.addWidget(self.history, alignment=Qt.AlignmentFlag.AlignTop)
+        history_wrapper_layout.addWidget(self.history, alignment=Qt.AlignmentFlag.AlignTop)
+        history_wrapper_layout.addStretch()
+        outer_row_layout.addWidget(history_wrapper)
+        # ─────────────────────────────────────────────────────────────────────
 
         root.addWidget(self._build_footer())
 
@@ -436,9 +450,10 @@ class HomePage(QWidget):
             card.clicked.connect(self.main_window.go_detail)
             self._cards.append(card)
             self.manga_grid.addWidget(card, 0, 0)
-        self._relayout()  # ← di luar for loop, sejajar dengan for
+        self._relayout()
 
         # History tidak di-load otomatis — hanya update saat user klik manga
+
     def _relayout(self):
         widgets = []
         while self.manga_grid.count():
@@ -465,7 +480,7 @@ class HomePage(QWidget):
             item = self.manga_grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-                
+
     def _on_search(self, query):
         if query:
             self.main_window.go_search(query)
