@@ -331,8 +331,8 @@ class HomePage(QWidget):
         # ── Outer row: kiri scrollable, kanan History fixed ──────────────────
         outer_row = QWidget()
         outer_row_layout = QHBoxLayout(outer_row)
-        outer_row_layout.setContentsMargins(0, 0, 0, 0)
-        outer_row_layout.setSpacing(0)
+        outer_row_layout.setContentsMargins(0, 20, 24, 0)
+        outer_row_layout.setSpacing(24)
         root.addWidget(outer_row, stretch=1)
 
         # Kiri: hanya Top Manga yang di-scroll
@@ -346,7 +346,7 @@ class HomePage(QWidget):
         outer_row_layout.addWidget(content_scroll, stretch=1)
 
         left = QVBoxLayout(content_widget)
-        left.setContentsMargins(24, 20, 8, 20)
+        left.setContentsMargins(24, 0, 8, 20)
         left.setSpacing(12)
 
         lbl = QLabel("Top Manga")
@@ -365,17 +365,10 @@ class HomePage(QWidget):
         left.addWidget(self.grid_container)
         left.addStretch()
 
-        # Kanan: History panel fixed, tidak ikut scroll
-        history_wrapper = QWidget()
-        history_wrapper.setStyleSheet("background: transparent;")
-        history_wrapper_layout = QVBoxLayout(history_wrapper)
-        history_wrapper_layout.setContentsMargins(0, 20, 24, 20)
-        history_wrapper_layout.setSpacing(0)
+        # Kanan: History panel langsung di outer_row, tidak ikut scroll
         self.history = HistoryPanel()
         self.history.manga_clicked.connect(self.main_window.go_detail)
-        history_wrapper_layout.addWidget(self.history, alignment=Qt.AlignmentFlag.AlignTop)
-        history_wrapper_layout.addStretch()
-        outer_row_layout.addWidget(history_wrapper)
+        outer_row_layout.addWidget(self.history, alignment=Qt.AlignmentFlag.AlignTop)
         # ─────────────────────────────────────────────────────────────────────
 
         root.addWidget(self._build_footer())
