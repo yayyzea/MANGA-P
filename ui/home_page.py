@@ -12,7 +12,7 @@ from .theme import (
     TEXT_DARK, TOPBAR_HEIGHT, CARD_W, CARD_H, CARD_RADIUS
 )
 from .widgets import MangaCard, ImageLoader
-from .search_page import FilterPanel
+from .search_page import FilterPanel, SearchLoader
 
 
 # ── Walking Cat Animation ─────────────────────────────────────────────────────
@@ -374,6 +374,7 @@ class HomePage(QWidget):
 
         # ★ Right side: filter panel (hidden by default) + history panel
         self.filter_panel = FilterPanel()
+        self.filter_panel.apply_clicked.connect(self._on_filter_apply)
         self.filter_panel.setVisible(False)
         outer_row_layout.addWidget(self.filter_panel)
 
@@ -487,6 +488,17 @@ class HomePage(QWidget):
             item = self.manga_grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+    def _on_filter_apply(self, genres, status, year):
+        self._clear_grid()
+        self._loader = SearchLoader(
+            query="",
+            genres=genres,
+            status=status,
+            year=year,
+        )
+        self._loader.finished.connect(self._on_loaded)
+        self._loader.start()
 
     def _on_search(self, query):
         if query:
