@@ -147,7 +147,7 @@ class TopMangaLoader(QThread):
     def run(self):
         try:
             from services.manga_service import MangaService
-            self.finished.emit(MangaService().get_top_manga(limit=8))
+            self.finished.emit(MangaService().get_top_manga(limit=48))
         except Exception as e:
             print(f"[HomePage] Load error: {e}")
             self.finished.emit([])

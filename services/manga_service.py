@@ -45,7 +45,7 @@ class MangaService:
         finally:
             session.close()
 
-    def get_top_manga(self, limit: int = 8) -> list[Manga]:
+    def get_top_manga(self, limit: int = 48) -> list[Manga]:
         session = get_session()
         try:
             cached = (
