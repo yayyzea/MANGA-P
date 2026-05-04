@@ -438,7 +438,7 @@ class HomePage(QWidget):
 
     def _show_placeholders(self):
         self._clear_grid()
-        for _ in range(48):
+        for _ in range(49):
             ph = QWidget()
             ph.setFixedSize(CARD_W + 16, CARD_H)
             ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
