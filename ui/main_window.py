@@ -63,12 +63,10 @@ class Sidebar(QWidget):
         self.setFixedWidth(SIDEBAR_WIDTH)
         self.on_navigate = on_navigate
 
-        # Force blue — QPalette bypasses stylesheet quirks in Qt6
         self.setAutoFillBackground(True)
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
         self.setPalette(pal)
-        # ★ Right border as separator between sidebar and content
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet("border-right: 2px solid rgba(255,255,255,0.18);")
 
@@ -108,13 +106,12 @@ class Sidebar(QWidget):
             btn.setToolTip(tip)
             btn.setCheckable(True)
             btn.setFixedSize(52, 52)
-            # Load PNG icon, colorize white via stylesheet
             px = QPixmap(str(_ICON_DIR / icon_file))
             if not px.isNull():
                 btn.setIcon(QIcon(px))
                 btn.setIconSize(QSize(26, 26))
             else:
-                btn.setText(tip[:1])  # fallback: first letter
+                btn.setText(tip[:1])
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: transparent;
@@ -124,7 +121,6 @@ class Sidebar(QWidget):
                 QPushButton:hover   {{ background: rgba(255,255,255,0.20); }}
                 QPushButton:checked {{ background: rgba(255,255,255,0.30); }}
             """)
-            # Invert icon color to white (icons are black on transparent)
             from PyQt6.QtWidgets import QGraphicsColorizeEffect
             effect = QGraphicsColorizeEffect()
             effect.setColor(QColor(255, 255, 255))
@@ -211,7 +207,16 @@ class MainWindow(QMainWindow):
         self.search_page.set_query(query)
         self._navigate(2)
 
-    def go_detail(self, manga_id):
+    def go_detail(self, manga_id: int):
+        # ★ Ambil data manga lalu update history sebelum pindah halaman
+        try:
+            from services.manga_service import MangaService
+            manga = MangaService().get_by_id(manga_id)
+            if manga:
+                self.home_page.history.load_manga(manga)
+        except Exception as e:
+            print(f"[MainWindow] History update error: {e}")
+
         self.detail_page.load_manga(manga_id)
         self._navigate(3)
 
