@@ -281,7 +281,7 @@ class MangaService:
         if query:
             q = q.filter(or_(
                 Manga.title.ilike(f"%{query}%"),
-                Manga.title_en.ilike(f"%{query}%"),
+                Manga.title_english.ilike(f"%{query}%"),
             ))
         if genres:
             for genre in genres:

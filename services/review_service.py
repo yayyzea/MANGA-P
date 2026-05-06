@@ -1,41 +1,29 @@
 from datetime import datetime
 from typing import Optional
+from sqlalchemy import func
 
 from models.review import Review
+from models.manga import Manga
 from database import get_session
 
 
 class ReviewService:
-    """Manages user reviews and ratings."""
 
-    # ── Create ────────────────────────────────────────────────────────────────
-
-    def add(
-        self,
-        manga_id: int,
-        collection_id: int,
-        rating: int,
-        review_text: str = None,
-    ) -> Optional[Review]:
-        """Add a review. One review per collection entry."""
+    def add(self, manga_id: int, collection_id: int, user_id: int,
+            rating: int, review_text: str = None):
         if not (1 <= rating <= 10):
             raise ValueError("Rating must be between 1 and 10.")
-
         session = get_session()
         try:
-            existing = (
-                session.query(Review)
-                .filter(Review.collection_id == collection_id)
-                .first()
-            )
+            existing = session.query(Review).filter(
+                Review.collection_id == collection_id
+            ).first()
             if existing:
-                return existing  # Already has a review — use update instead
-
+                return existing
             review = Review(
-                manga_id=manga_id,
-                collection_id=collection_id,
-                rating=rating,
-                review_text=review_text,
+                user_id=user_id, manga_id=manga_id,
+                collection_id=collection_id, rating=rating,
+                review_text=review_text
             )
             session.add(review)
             session.commit()
@@ -44,77 +32,33 @@ class ReviewService:
         finally:
             session.close()
 
-    # ── Read ──────────────────────────────────────────────────────────────────
-
-    def get_by_collection(self, collection_id: int) -> Optional[Review]:
-        """Get review for a specific collection entry."""
+    def get_by_manga(self, manga_id: int, user_id: int = None):
         session = get_session()
         try:
-            return (
-                session.query(Review)
-                .filter(Review.collection_id == collection_id)
-                .first()
-            )
+            q = session.query(Review).filter(Review.manga_id == manga_id)
+            if user_id is not None:
+                q = q.filter(Review.user_id == user_id)
+            return q.first()
         finally:
             session.close()
 
-    def get_by_manga(self, manga_id: int) -> Optional[Review]:
-        """Get review for a manga."""
-        session = get_session()
-        try:
-            return (
-                session.query(Review)
-                .filter(Review.manga_id == manga_id)
-                .first()
-            )
-        finally:
-            session.close()
-
-    def get_all(self) -> list[Review]:
-        """Get all reviews ordered by most recent."""
-        session = get_session()
-        try:
-            return (
-                session.query(Review)
-                .order_by(Review.updated_at.desc())
-                .all()
-            )
-        finally:
-            session.close()
-
-    # ── Update ────────────────────────────────────────────────────────────────
-
-    def update(
-        self,
-        review_id: int,
-        rating: int = None,
-        review_text: str = None,
-    ) -> Optional[Review]:
-        """Update an existing review."""
+    def update(self, review_id: int, rating: int = None, review_text: str = None):
         session = get_session()
         try:
             review = session.query(Review).filter(Review.id == review_id).first()
             if not review:
                 return None
-
             if rating is not None:
-                if not (1 <= rating <= 10):
-                    raise ValueError("Rating must be between 1 and 10.")
                 review.rating = rating
             if review_text is not None:
                 review.review_text = review_text
-
             review.updated_at = datetime.now()
             session.commit()
-            session.refresh(review)
             return review
         finally:
             session.close()
 
-    # ── Delete ────────────────────────────────────────────────────────────────
-
     def delete(self, review_id: int) -> bool:
-        """Delete a review."""
         session = get_session()
         try:
             review = session.query(Review).filter(Review.id == review_id).first()
@@ -126,15 +70,34 @@ class ReviewService:
         finally:
             session.close()
 
-    # ── Stats ─────────────────────────────────────────────────────────────────
-
-    def get_average_rating(self) -> Optional[float]:
-        """Calculate average rating across all reviews."""
+    def get_average_rating(self, user_id: int = None) -> Optional[float]:
         session = get_session()
         try:
-            reviews = session.query(Review).all()
-            if not reviews:
-                return None
-            return round(sum(r.rating for r in reviews) / len(reviews), 1)
+            q = session.query(func.avg(Review.rating))
+            if user_id is not None:
+                q = q.filter(Review.user_id == user_id)
+            result = q.filter(Review.rating != None).scalar()
+            return round(float(result), 1) if result else None
+        finally:
+            session.close()
+
+    def get_last_review_data(self, user_id: int) -> Optional[dict]:
+        session = get_session()
+        try:
+            result = session.query(Review, Manga).join(
+                Manga, Review.manga_id == Manga.id
+            ).filter(Review.user_id == user_id).order_by(
+                Review.updated_at.desc()
+            ).first()
+            if result:
+                r, m = result
+                return {
+                    "manga_id": r.manga_id,
+                    "title": m.title or "—",
+                    "cover_url": m.cover_url or "",
+                    "rating": r.rating,
+                    "review_text": r.review_text or "",
+                }
+            return None
         finally:
             session.close()
