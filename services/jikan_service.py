@@ -98,13 +98,26 @@ class JikanService:
             return None
         return self._clean_manga(data["data"])
 
-    def get_top_manga(self, limit: int = 8) -> list[dict]:
-        """Get top manga from MAL."""
-        params = {"limit": limit, "type": "manga"}
-        data = self._get("top/manga", params=params)
-        if not data or "data" not in data:
-            return []
-        return [self._clean_manga(item) for item in data["data"]]
+    def get_top_manga(self, limit: int = 48) -> list[dict]:
+        """Get top manga from MAL — fetch multiple pages if needed (max 25 per page)."""
+        results = []
+        page = 1
+        per_page = min(25, limit)  # Jikan max 25 per page
+
+        while len(results) < limit:
+            params = {"limit": per_page, "type": "manga", "page": page}
+            data = self._get("top/manga", params=params)
+            if not data or "data" not in data:
+                break
+            items = data["data"]
+            if not items:
+                break
+            results.extend([self._clean_manga(item) for item in items])
+            page += 1
+            if len(items) < per_page:
+                break  # tidak ada halaman berikutnya
+
+        return results[:limit]
 
     def get_manga_recommendations(self, mal_id: int) -> list[dict]:
         """Get manga recommendations based on a manga."""
