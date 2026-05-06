@@ -13,12 +13,11 @@ engine = create_engine(
 )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
 Base = declarative_base()
 
 
 def init_db():
-    """Create all tables if they don't exist."""
+    from models.user import User
     from models.manga import Manga
     from models.user_collection import UserCollection
     from models.review import Review
@@ -27,5 +26,4 @@ def init_db():
 
 
 def get_session():
-    """Return a new database session."""
     return SessionLocal()
