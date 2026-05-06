@@ -8,8 +8,9 @@ class UserCollection(Base):
     __tablename__ = "user_collection"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     manga_id = Column(Integer, ForeignKey("manga.id"), nullable=False)
-    status = Column(String(20), nullable=False)  # Plan to Read, Reading, Completed, Dropped
+    status = Column(String(20), nullable=False, default="Plan to Read")
     current_chapter = Column(Integer, default=0)
     score = Column(Integer, nullable=True)
     start_date = Column(Date, nullable=True)
@@ -18,6 +19,7 @@ class UserCollection(Base):
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
+    user = relationship("User", back_populates="collections")
     manga = relationship("Manga", back_populates="collections")
     reviews = relationship(
         "Review",
