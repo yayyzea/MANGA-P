@@ -346,9 +346,7 @@ class SearchPage(QWidget):
 
         self.search_bar = SearchBar()
         self.search_bar.search_triggered.connect(self._run_search)
-        self.search_bar.filter_triggered.connect(
-            lambda: self._run_search(self._current_query)
-        )
+        self.search_bar.filter_triggered.connect(self._toggle_filter)
         root.addWidget(self.search_bar)
 
         body = QHBoxLayout()
@@ -382,10 +380,14 @@ class SearchPage(QWidget):
 
         self.filter_panel = FilterPanel()
         self.filter_panel.apply_clicked.connect(self._on_filter_apply)
+        self.filter_panel.setVisible(False)
         body.addWidget(self.filter_panel)
 
         root.addLayout(body, stretch=1)
         self._show_placeholders(8)
+
+    def _toggle_filter(self):
+        self.filter_panel.setVisible(not self.filter_panel.isVisible())
 
     def _show_placeholders(self, count=8):
         self._clear_grid()
