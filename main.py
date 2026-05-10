@@ -16,7 +16,7 @@ def main():
         auth_win.close()
 
         from ui.main_window import MainWindow
-        main_win = MainWindow()
+        main_win = MainWindow(user=user)
         main_win.show()
         # Keep reference alive so it doesn't get garbage-collected
         main_win_ref["win"] = main_win
