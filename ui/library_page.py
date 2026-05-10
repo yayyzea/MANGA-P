@@ -367,39 +367,48 @@ class SelectableMangaCard(QWidget):
 
 
 class CardRow(QWidget):
+    """Menampilkan kartu manga dalam grid yang wrap otomatis — tidak ada scroll horizontal sendiri."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self._selectable_cards: list[SelectableMangaCard] = []
         self._build()
 
     def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 8, 0, 8)
+        self._grid.setSpacing(16)
+        self._grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll.setFixedHeight(CARD_H + 40)
-        self.scroll.setStyleSheet("background: transparent; border: none;")
+    def _cols(self):
+        """Hitung jumlah kolom berdasarkan lebar widget."""
+        w = self.width() if self.width() > 10 else 900
+        col_w = CARD_W + 16 + 16
+        return max(1, w // col_w)
 
-        self._inner = QWidget()
-        self._inner.setStyleSheet("background: transparent;")
-        self._row = QHBoxLayout(self._inner)
-        self._row.setContentsMargins(0, 8, 0, 8)
-        self._row.setSpacing(16)
-        self._row.addStretch()
+    def _relayout(self):
+        """Susun ulang semua widget ke grid sesuai lebar saat ini."""
+        widgets = []
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item.widget():
+                widgets.append(item.widget())
+        cols = self._cols()
+        for i, w in enumerate(widgets):
+            self._grid.addWidget(w, i // cols, i % cols)
 
-        self.scroll.setWidget(self._inner)
-        root.addWidget(self.scroll)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._relayout()
 
     def show_placeholders(self, count=6):
         self._clear()
-        for _ in range(count):
+        cols = self._cols()
+        for i in range(count):
             ph = QWidget()
             ph.setFixedSize(CARD_W + 16, CARD_H)
             ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
-            self._row.insertWidget(self._row.count() - 1, ph)
+            self._grid.addWidget(ph, i // cols, i % cols)
 
     def load_cards(self, entries, on_click):
         self._clear()
@@ -407,16 +416,17 @@ class CardRow(QWidget):
         if not entries:
             lbl = QLabel("No manga found.")
             lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 13px; background: transparent;")
-            self._row.insertWidget(0, lbl)
+            self._grid.addWidget(lbl, 0, 0)
             return
-        for entry in entries:
+        cols = self._cols()
+        for i, entry in enumerate(entries):
             manga = entry.manga
             if not manga:
                 continue
             card = SelectableMangaCard(manga, entry_id=entry.id, show_labels=True)
             card.clicked.connect(on_click)
             self._selectable_cards.append(card)
-            self._row.insertWidget(self._row.count() - 1, card)
+            self._grid.addWidget(card, i // cols, i % cols)
 
     def set_select_mode(self, active: bool):
         for card in self._selectable_cards:
@@ -427,8 +437,8 @@ class CardRow(QWidget):
 
     def _clear(self):
         self._selectable_cards = []
-        while self._row.count() > 1:
-            item = self._row.takeAt(0)
+        while self._grid.count():
+            item = self._grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
