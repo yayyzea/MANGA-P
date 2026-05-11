@@ -123,10 +123,25 @@ class MangaCard(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def _load_cover(self):
-        if self.manga.cover_url:
-            self._loader = ImageLoader(self.manga.cover_url)
-            self._loader.loaded.connect(self._on_image_loaded)
-            self._loader.start()
+        url = self.manga.cover_url
+        if not url:
+            return
+
+        # Cek apakah ini path file lokal (bukan http/https)
+        import os
+        is_local = not url.startswith("http://") and not url.startswith("https://")
+        if is_local:
+            # Load langsung dari disk — tidak perlu thread network
+            if os.path.isfile(url):
+                px = QPixmap(url)
+                if not px.isNull():
+                    self.cover.set_cover(px)
+            return
+
+        # URL remote → pakai thread seperti biasa
+        self._loader = ImageLoader(url)
+        self._loader.loaded.connect(self._on_image_loaded)
+        self._loader.start()
 
     @pyqtSlot(QPixmap)
     def _on_image_loaded(self, pixmap: QPixmap):
