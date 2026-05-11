@@ -1,14 +1,16 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QPushButton, QStackedWidget, QLabel, QGraphicsOpacityEffect
+    QPushButton, QStackedWidget, QLabel, QGraphicsOpacityEffect,
+    QFrame
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QPoint
 from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon
 from pathlib import Path
 
 _ICON_DIR = Path(__file__).parent.parent / "assets"
 
 from .theme import BLUE_PRIMARY, WHITE, SIDEBAR_WIDTH, APP_STYLESHEET
+from .font_size_manager import FontSizeManager
 
 
 class Toast(QLabel):
@@ -40,6 +42,87 @@ class Toast(QLabel):
         if p:
             pw, ph = p.width(), p.height()
             self.move((pw - self.width()) // 2, ph - self.height() - 50)
+
+
+class FontSizePopup(QFrame):
+    """
+    A small flyout panel that appears to the right of the sidebar when
+    the font-size button is clicked.  Shows two 'A' glyphs — small and
+    large — so the user can shrink or grow the UI text.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("FontSizePopup")
+        self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("""
+            #FontSizePopup {
+                background: #1565C0;
+                border-radius: 12px;
+                border: 1.5px solid rgba(255,255,255,0.30);
+            }
+        """)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(6)
+
+        # Small A button
+        self._btn_small = QPushButton("A")
+        self._btn_small.setFont(QFont("Segoe UI", 12, QFont.Weight.Bold))
+        self._btn_small.setFixedSize(38, 38)
+        self._btn_small.setToolTip("Perkecil teks")
+        self._btn_small.setStyleSheet(self._btn_style())
+        self._btn_small.clicked.connect(self._decrease)
+
+        # Large A button
+        self._btn_large = QPushButton("A")
+        self._btn_large.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        self._btn_large.setFixedSize(46, 46)
+        self._btn_large.setToolTip("Perbesar teks")
+        self._btn_large.setStyleSheet(self._btn_style())
+        self._btn_large.clicked.connect(self._increase)
+
+        layout.addWidget(self._btn_small, alignment=Qt.AlignmentFlag.AlignVCenter)
+        layout.addWidget(self._btn_large, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+        self.adjustSize()
+
+    @staticmethod
+    def _btn_style():
+        return """
+            QPushButton {
+                background: rgba(255,255,255,0.18);
+                border: none;
+                border-radius: 8px;
+                color: white;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.35);
+            }
+            QPushButton:pressed {
+                background: rgba(255,255,255,0.50);
+            }
+        """
+
+    def _decrease(self):
+        FontSizeManager.instance().decrease()
+        self.hide()
+
+    def _increase(self):
+        FontSizeManager.instance().increase()
+        self.hide()
+
+    def show_near(self, sidebar_widget: QWidget, trigger_btn: QWidget):
+        """Position the popup just to the right of the sidebar, aligned with the trigger button."""
+        # Global position of the trigger button
+        global_pos = trigger_btn.mapToGlobal(QPoint(0, 0))
+        x = global_pos.x() + sidebar_widget.width() + 4
+        y = global_pos.y() + (trigger_btn.height() - self.height()) // 2
+        self.move(x, y)
+        self.show()
+        self.raise_()
 
 
 class Sidebar(QWidget):
@@ -90,6 +173,32 @@ class Sidebar(QWidget):
             self._buttons.append((page_idx, btn))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch()
+
+        # ── Font Size Button ──────────────────────────────────────────────────
+        self._font_popup = FontSizePopup()
+        self._font_btn = QPushButton("A")
+        self._font_btn.setObjectName("FontSizeBtn")
+        self._font_btn.setToolTip("Ukuran Teks")
+        self._font_btn.setFixedSize(52, 52)
+        self._font_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self._font_btn.setCheckable(True)
+        self._font_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                border-radius: 10px;
+                color: white;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.20);
+            }
+            QPushButton:checked {
+                background: rgba(255,255,255,0.30);
+            }
+        """)
+        self._font_btn.clicked.connect(self._toggle_font_popup)
+        layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addSpacing(8)
         self._set_active(0)
 
     def _nav(self, page_idx): self._set_active(page_idx); self.on_navigate(page_idx)
@@ -98,6 +207,21 @@ class Sidebar(QWidget):
         for idx, btn in self._buttons: btn.setChecked(idx == page_idx)
 
     def set_active(self, page_idx): self._set_active(page_idx)
+
+    def _toggle_font_popup(self):
+        if self._font_popup.isVisible():
+            self._font_popup.hide()
+            self._font_btn.setChecked(False)
+        else:
+            self._font_popup.show_near(self, self._font_btn)
+            # Uncheck when popup closes
+            self._font_popup.installEventFilter(self)
+
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj is self._font_popup and event.type() == QEvent.Type.Hide:
+            self._font_btn.setChecked(False)
+        return super().eventFilter(obj, event)
 
 
 class MainWindow(QMainWindow):
@@ -108,6 +232,8 @@ class MainWindow(QMainWindow):
         self.resize(1140, 680)
         self.setMinimumSize(900, 580)
         self.setStyleSheet(APP_STYLESHEET)
+        # Initialize font size manager with the base stylesheet
+        FontSizeManager.instance().set_base_stylesheet(APP_STYLESHEET)
         self._build()
 
     def _build(self):
@@ -162,3 +288,6 @@ class MainWindow(QMainWindow):
         self.detail_page.load_manga(manga_id); self._navigate(3)
 
     def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
+
+    def go_detail(self, manga_id):
+        self.detail_page.load_manga(manga_id)
