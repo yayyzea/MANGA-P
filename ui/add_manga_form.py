@@ -2,10 +2,10 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox,
     QComboBox, QPushButton, QScrollArea, QWidget,
-    QMessageBox, QFrame
+    QMessageBox, QFrame, QFileDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QFont
+from PyQt6.QtGui import QFont, QPixmap
 
 from .theme import (
     BLUE_PRIMARY, BLUE_DARK, BLUE_LIGHT, BLUE_CARD,
@@ -220,12 +220,78 @@ class AddMangaForm(QDialog):
         self._score.setFixedWidth(160)
         form.addWidget(self._score)
 
-        # ── Field: Cover URL ──
-        form.addWidget(_label("URL Cover / Gambar"))
-        self._cover_url = QLineEdit()
-        self._cover_url.setPlaceholderText("https://cdn.myanimelist.net/images/manga/... (opsional)")
-        self._cover_url.setStyleSheet(_input_style())
-        form.addWidget(self._cover_url)
+        # ── Field: Cover — file picker lokal ──
+        form.addWidget(_label("Cover / Gambar"))
+        self._cover_path = None   # path lokal yang dipilih
+
+        cover_row = QHBoxLayout()
+        cover_row.setSpacing(10)
+
+        self._cover_preview = QLabel()
+        self._cover_preview.setFixedSize(60, 84)
+        self._cover_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._cover_preview.setStyleSheet(f"""
+            QLabel {{
+                border: 1.5px dashed {BLUE_LIGHT};
+                border-radius: 6px;
+                background: #F5F8FF;
+                color: {TEXT_MUTED};
+                font-size: 10px;
+            }}
+        """)
+        self._cover_preview.setText("Belum\ndipilih")
+        cover_row.addWidget(self._cover_preview)
+
+        cover_right = QVBoxLayout()
+        cover_right.setSpacing(6)
+
+        self._cover_name_lbl = QLabel("Belum ada gambar dipilih")
+        self._cover_name_lbl.setStyleSheet(
+            f"font-size: 12px; color: {TEXT_MUTED}; background: transparent;"
+        )
+        self._cover_name_lbl.setWordWrap(True)
+        cover_right.addWidget(self._cover_name_lbl)
+
+        pick_btn = QPushButton("📁  Pilih Gambar...")
+        pick_btn.setFixedHeight(36)
+        pick_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        pick_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {WHITE};
+                border: 1.5px solid {BLUE_LIGHT};
+                border-radius: 8px;
+                color: {BLUE_PRIMARY};
+                font-size: 13px;
+                font-weight: 600;
+                padding: 0 12px;
+            }}
+            QPushButton:hover {{
+                background: {BLUE_LIGHT};
+                color: {WHITE};
+            }}
+        """)
+        pick_btn.clicked.connect(self._pick_cover)
+        cover_right.addWidget(pick_btn)
+
+        clear_btn = QPushButton("Hapus Gambar")
+        clear_btn.setFixedHeight(28)
+        clear_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        clear_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: none;
+                color: {TEXT_MUTED};
+                font-size: 11px;
+                text-decoration: underline;
+            }}
+            QPushButton:hover {{ color: #E53935; }}
+        """)
+        clear_btn.clicked.connect(self._clear_cover)
+        cover_right.addWidget(clear_btn)
+        cover_right.addStretch()
+
+        cover_row.addLayout(cover_right)
+        form.addLayout(cover_row)
 
         # ── Field: Sinopsis ──
         form.addWidget(_label("Sinopsis"))
@@ -286,7 +352,57 @@ class AddMangaForm(QDialog):
         scroll.setWidget(body)
         root.addWidget(scroll)
 
-    # ── Ambil nilai dari form ──────────────────────────────────────────────────
+    # ── Cover picker ──────────────────────────────────────────────────────────
+
+    def _pick_cover(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Pilih Gambar Cover", "",
+            "Images (*.png *.jpg *.jpeg *.webp *.bmp)"
+        )
+        if not path:
+            return
+        px = QPixmap(path)
+        if px.isNull():
+            self._show_error("Gambar tidak dapat dibaca.")
+            return
+        self._cover_path = path
+        # Preview thumbnail
+        thumb = px.scaled(
+            60, 84,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = (thumb.width()  - 60) // 2
+        y = (thumb.height() - 84) // 2
+        self._cover_preview.setPixmap(thumb.copy(x, y, 60, 84))
+        self._cover_preview.setText("")
+        self._cover_preview.setStyleSheet(
+            "border: 1.5px solid #90CAF9; border-radius: 6px; background: transparent;"
+        )
+        # Tampilkan nama file
+        from pathlib import Path
+        self._cover_name_lbl.setText(Path(path).name)
+        self._cover_name_lbl.setStyleSheet(
+            f"font-size: 12px; color: {TEXT_DARK}; background: transparent;"
+        )
+
+    def _clear_cover(self):
+        self._cover_path = None
+        self._cover_preview.clear()
+        self._cover_preview.setText("Belum\ndipilih")
+        self._cover_preview.setStyleSheet(f"""
+            QLabel {{
+                border: 1.5px dashed {BLUE_LIGHT};
+                border-radius: 6px;
+                background: #F5F8FF;
+                color: {TEXT_MUTED};
+                font-size: 10px;
+            }}
+        """)
+        self._cover_name_lbl.setText("Belum ada gambar dipilih")
+        self._cover_name_lbl.setStyleSheet(
+            f"font-size: 12px; color: {TEXT_MUTED}; background: transparent;"
+        )
 
     def _get_genres(self) -> str:
         """Gabungkan genre utama + genre tambahan jadi satu string CSV."""
@@ -333,11 +449,13 @@ class AddMangaForm(QDialog):
         year       = self._year.value() if self._year.value() != 1900 else None
         chapters   = self._chapters.value() if self._chapters.value() > 0 else None
         score      = self._score.value() if self._score.value() > 0.0 else None
-        cover_url  = self._cover_url.text().strip() or None
+        cover_url  = self._cover_path or None
         synopsis   = self._synopsis.toPlainText().strip() or None
 
         try:
             from services.manga_service import MangaService
+            from services.collection_service import CollectionService
+
             svc   = MangaService()
             manga = svc.add_manual(
                 title=title,
@@ -351,8 +469,7 @@ class AddMangaForm(QDialog):
                 score=score,
             )
 
-            # Simpan juga title_en secara langsung (field tidak ada di add_manual,
-            # kita update sesudah insert)
+            # Simpan title_en jika diisi
             if title_en and manga:
                 from database import get_session
                 session = get_session()
@@ -365,8 +482,30 @@ class AddMangaForm(QDialog):
                 finally:
                     session.close()
 
+            # ── Tambahkan ke UserCollection agar muncul di My Library ──
+            user_id = None
+            parent = self.parent()
+            while parent is not None:
+                if hasattr(parent, "main_window"):
+                    mw = parent.main_window
+                    if hasattr(mw, "current_user") and mw.current_user:
+                        user_id = mw.current_user["id"]
+                    break
+                if hasattr(parent, "current_user") and parent.current_user:
+                    user_id = parent.current_user["id"]
+                    break
+                parent = parent.parent() if hasattr(parent, "parent") else None
+
+            if user_id is not None:
+                col_svc = CollectionService()
+                col_svc.add(
+                    user_id=user_id,
+                    manga_id=manga.id,
+                    status="Plan to Read",
+                )
+
             self.manga_added.emit(manga.id)
-            self.accept()  # tutup dialog dengan status Accepted
+            self.accept()
 
         except ValueError as e:
             self._show_error(str(e))

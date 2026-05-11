@@ -9,14 +9,13 @@ from pathlib import Path
 _ICON_DIR = Path(__file__).parent.parent / "assets"
 
 from .theme import (
-    BLUE_PRIMARY, BLUE_CARD, BLUE_LIGHT, WHITE,
+    BLUE_DARK, BLUE_PRIMARY, BLUE_CARD, BLUE_LIGHT, WHITE,
     TEXT_DARK, TEXT_MUTED,
     TOPBAR_HEIGHT, CARD_W, CARD_H, CARD_RADIUS
 )
 from .widgets import MangaCard
+from .add_manga_form import AddMangaForm
 
-
-# ── Konstanta ─────────────────────────────────────────────────────────────────
 
 GENRES = [
     "Action",        "Drama",
@@ -31,45 +30,6 @@ GENRES = [
 
 READ_STATUS_OPTIONS = ["Plan to Read", "Reading", "Completed", "Dropped"]
 
-
-# ── Background worker ─────────────────────────────────────────────────────────
-
-class CollectionLoader(QThread):
-    finished = pyqtSignal(list, list)   # last_read entries, my_books entries
-
-    def run(self):
-        try:
-            from database import get_session
-            from models.user_collection import UserCollection
-            from sqlalchemy.orm import joinedload
-
-            session = get_session()
-            try:
-                entries = (
-                    session.query(UserCollection)
-                    .options(joinedload(UserCollection.manga))
-                    .order_by(UserCollection.updated_at.desc())
-                    .all()
-                )
-
-                last_read = [
-                    e for e in entries
-                    if e.status in ("Reading", "Completed") and e.manga
-                ][:48]
-
-                my_books = [e for e in entries if e.manga]
-
-            finally:
-                session.close()
-
-            self.finished.emit(last_read, my_books)
-
-        except Exception as e:
-            print(f"[LibraryPage] Load error: {e}")
-            self.finished.emit([], [])
-
-
-# ── Filter helper ─────────────────────────────────────────────────────────────
 
 def _filter_entries(entries, query: str, genres: list, statuses: list, year: str):
     result = []
@@ -96,12 +56,58 @@ def _filter_entries(entries, query: str, genres: list, statuses: list, year: str
     return result
 
 
-# ── Search bar khusus Library ─────────────────────────────────────────────────
+class CollectionLoader(QThread):
+    finished = pyqtSignal(list, list)
+
+    def __init__(self, user_id: int):
+        super().__init__()
+        self.user_id = user_id
+
+    def run(self):
+        try:
+            from database import get_session
+            from models.user_collection import UserCollection
+            from sqlalchemy.orm import joinedload
+
+            session = get_session()
+            try:
+                entries = (
+                    session.query(UserCollection)
+                    .filter(UserCollection.user_id == self.user_id)
+                    .options(joinedload(UserCollection.manga))
+                    .order_by(UserCollection.updated_at.desc())
+                    .all()
+                )
+
+                for entry in entries:
+                    if entry.manga:
+                        _ = entry.manga.title
+                        _ = entry.manga.genres
+                        _ = entry.manga.cover_url
+
+            finally:
+                session.close()
+
+            last_read = [
+                e for e in entries
+                if e.status in ("Reading", "Completed") and e.manga
+            ][:48]
+
+            my_books = [e for e in entries if e.manga]
+
+            self.finished.emit(last_read, my_books)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[LibraryPage] Load error: {e}")
+            self.finished.emit([], [])
+
 
 class LibrarySearchBar(QWidget):
     search_triggered  = pyqtSignal(str)
     filter_toggled    = pyqtSignal()
-    delete_toggled    = pyqtSignal(bool)   # True = masuk mode delete
+    delete_toggled    = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -118,7 +124,6 @@ class LibrarySearchBar(QWidget):
         layout.setContentsMargins(16, 8, 16, 8)
         layout.setSpacing(10)
 
-        # Ikon search
         icon = QLabel()
         icon.setFixedSize(20, 20)
         _sx = QPixmap(str(_ICON_DIR / "search.png"))
@@ -131,7 +136,6 @@ class LibrarySearchBar(QWidget):
         icon.setStyleSheet("background: transparent;")
         layout.addWidget(icon)
 
-        # Input pencarian lokal
         self.input = QLineEdit()
         self.input.setObjectName("SearchInput")
         self.input.setPlaceholderText("Search Mangas...")
@@ -148,7 +152,6 @@ class LibrarySearchBar(QWidget):
         )
         layout.addWidget(self.input)
 
-        # Tombol filter (toggle)
         self.filter_btn = QPushButton()
         self.filter_btn.setObjectName("FilterBtn")
         self.filter_btn.setFixedSize(36, 36)
@@ -170,7 +173,6 @@ class LibrarySearchBar(QWidget):
         self.filter_btn.clicked.connect(self.filter_toggled)
         layout.addWidget(self.filter_btn)
 
-        # Tombol trash bin
         self.trash_btn = QPushButton("🗑")
         self.trash_btn.setObjectName("TrashBtn")
         self.trash_btn.setFixedSize(36, 36)
@@ -189,7 +191,6 @@ class LibrarySearchBar(QWidget):
         layout.addWidget(self.trash_btn)
 
     def reset_trash(self):
-        """Reset tombol trash ke state normal (tidak aktif)."""
         self.trash_btn.blockSignals(True)
         self.trash_btn.setChecked(False)
         self.trash_btn.blockSignals(False)
@@ -197,8 +198,6 @@ class LibrarySearchBar(QWidget):
     def get_text(self) -> str:
         return self.input.text().strip()
 
-
-# ── Filter panel khusus Library ───────────────────────────────────────────────
 
 class LibraryFilterPanel(QWidget):
     apply_clicked = pyqtSignal()
@@ -315,20 +314,13 @@ class LibraryFilterPanel(QWidget):
         self.setVisible(not self.isVisible())
 
 
-# ── Manga Card dengan Checkbox overlay (mode delete) ─────────────────────────
-
 class SelectableMangaCard(QWidget):
-    """
-    Wrapper MangaCard yang menampilkan checkbox di pojok kiri atas
-    saat mode delete aktif.
-    """
     clicked = pyqtSignal(int)
 
     def __init__(self, manga, entry_id: int, show_labels: bool = True, parent=None):
         super().__init__(parent)
         self.manga    = manga
-        self.entry_id = entry_id     # UserCollection.id untuk delete
-
+        self.entry_id = entry_id
         self._checkbox = None
 
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -374,63 +366,67 @@ class SelectableMangaCard(QWidget):
         return self._checkbox is not None and self._checkbox.isChecked()
 
 
-# ── Horizontal card row ───────────────────────────────────────────────────────
-
 class CardRow(QWidget):
+    """Menampilkan kartu manga dalam grid yang wrap otomatis — tidak ada scroll horizontal sendiri."""
     def __init__(self, parent=None):
         super().__init__(parent)
         self._selectable_cards: list[SelectableMangaCard] = []
         self._build()
 
     def _build(self):
-        root = QVBoxLayout(self)
-        root.setContentsMargins(0, 0, 0, 0)
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 8, 0, 8)
+        self._grid.setSpacing(16)
+        self._grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
-        self.scroll = QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.scroll.setFixedHeight(CARD_H + 40)
-        self.scroll.setStyleSheet("background: transparent; border: none;")
+    def _cols(self):
+        """Hitung jumlah kolom berdasarkan lebar widget."""
+        w = self.width() if self.width() > 10 else 900
+        col_w = CARD_W + 16 + 16
+        return max(1, w // col_w)
 
-        self._inner = QWidget()
-        self._inner.setStyleSheet("background: transparent;")
-        self._row = QHBoxLayout(self._inner)
-        self._row.setContentsMargins(0, 8, 0, 8)
-        self._row.setSpacing(16)
-        self._row.addStretch()
+    def _relayout(self):
+        """Susun ulang semua widget ke grid sesuai lebar saat ini."""
+        widgets = []
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item.widget():
+                widgets.append(item.widget())
+        cols = self._cols()
+        for i, w in enumerate(widgets):
+            self._grid.addWidget(w, i // cols, i % cols)
 
-        self.scroll.setWidget(self._inner)
-        root.addWidget(self.scroll)
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._relayout()
 
     def show_placeholders(self, count=6):
         self._clear()
-        for _ in range(count):
+        cols = self._cols()
+        for i in range(count):
             ph = QWidget()
             ph.setFixedSize(CARD_W + 16, CARD_H)
             ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
-            self._row.insertWidget(self._row.count() - 1, ph)
+            self._grid.addWidget(ph, i // cols, i % cols)
 
     def load_cards(self, entries, on_click):
-        """
-        entries: list of UserCollection entries.
-        on_click: callable(manga_id).
-        """
         self._clear()
         self._selectable_cards = []
         if not entries:
             lbl = QLabel("No manga found.")
             lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 13px; background: transparent;")
-            self._row.insertWidget(0, lbl)
+            self._grid.addWidget(lbl, 0, 0)
             return
-        for entry in entries:
+        cols = self._cols()
+        for i, entry in enumerate(entries):
             manga = entry.manga
             if not manga:
                 continue
             card = SelectableMangaCard(manga, entry_id=entry.id, show_labels=True)
             card.clicked.connect(on_click)
             self._selectable_cards.append(card)
-            self._row.insertWidget(self._row.count() - 1, card)
+            self._grid.addWidget(card, i // cols, i % cols)
 
     def set_select_mode(self, active: bool):
         for card in self._selectable_cards:
@@ -441,13 +437,11 @@ class CardRow(QWidget):
 
     def _clear(self):
         self._selectable_cards = []
-        while self._row.count() > 1:
-            item = self._row.takeAt(0)
+        while self._grid.count():
+            item = self._grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
 
-
-# ── Banner konfirmasi delete ───────────────────────────────────────────────────
 
 class DeleteConfirmBar(QWidget):
     cancelled = pyqtSignal()
@@ -456,8 +450,8 @@ class DeleteConfirmBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"background: {WHITE}; border-top: 1.5px solid #FFCDD2;")
-        self.setFixedHeight(64)
+        self.setStyleSheet(f"background: {WHITE};")
+        self.setFixedHeight(0)   # mulai dari 0 agar tidak ada sisa ruang/garis
         self._build()
         self.setVisible(False)
 
@@ -507,6 +501,10 @@ class DeleteConfirmBar(QWidget):
         self.delete_btn.clicked.connect(self.confirmed)
         layout.addWidget(self.delete_btn)
 
+    def setVisible(self, visible: bool):
+        self.setFixedHeight(64 if visible else 0)
+        super().setVisible(visible)
+
     def update_count(self, count: int):
         if count == 0:
             self.info_lbl.setText("Pilih manga yang ingin dihapus")
@@ -515,8 +513,6 @@ class DeleteConfirmBar(QWidget):
             self.info_lbl.setText(f"{count} manga dipilih")
             self.delete_btn.setEnabled(True)
 
-
-# ── Library page ──────────────────────────────────────────────────────────────
 
 class LibraryPage(QWidget):
     def __init__(self, main_window, parent=None):
@@ -533,14 +529,12 @@ class LibraryPage(QWidget):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Search bar ─────────────────────────────────────────────────────
         self.search_bar = LibrarySearchBar()
         self.search_bar.search_triggered.connect(self._apply_filters)
         self.search_bar.filter_toggled.connect(self._toggle_filter)
         self.search_bar.delete_toggled.connect(self._set_delete_mode)
         root.addWidget(self.search_bar)
 
-        # ── Body: konten + filter sidebar ──────────────────────────────────
         self.body = QHBoxLayout()
         self.body.setContentsMargins(0, 0, 0, 0)
         self.body.setSpacing(0)
@@ -555,7 +549,28 @@ class LibraryPage(QWidget):
         cl.setContentsMargins(24, 20, 24, 20)
         cl.setSpacing(20)
 
-        cl.addWidget(self._sec("Last Read"))
+        lr_header = QHBoxLayout()
+        lr_header.setContentsMargins(0, 0, 0, 0)
+        lr_header.addWidget(self._sec("Last Read"))
+        lr_header.addStretch()
+        self._add_btn = QPushButton("+")
+        self._add_btn.setFixedSize(32, 32)
+        self._add_btn.setToolTip("Tambah Manga Manual")
+        self._add_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {BLUE_PRIMARY};
+                border: none;
+                font-size: 26px;
+                font-weight: 300;
+                line-height: 1;
+            }}
+            QPushButton:hover {{ color: {BLUE_DARK}; }}
+        """)
+        self._add_btn.clicked.connect(self._open_add_form)
+        lr_header.addWidget(self._add_btn)
+        cl.addLayout(lr_header)
+
         self.last_read_row = CardRow()
         self.last_read_row.show_placeholders(6)
         cl.addWidget(self.last_read_row)
@@ -575,13 +590,11 @@ class LibraryPage(QWidget):
 
         root.addLayout(self.body, stretch=1)
 
-        # ── Banner konfirmasi delete ────────────────────────────────────────
         self.confirm_bar = DeleteConfirmBar()
         self.confirm_bar.cancelled.connect(self._cancel_delete_mode)
         self.confirm_bar.confirmed.connect(self._confirm_delete)
         root.addWidget(self.confirm_bar)
 
-        # Timer polling untuk update jumlah checkbox yang dicentang
         self._check_timer = QTimer(self)
         self._check_timer.setInterval(150)
         self._check_timer.timeout.connect(self._update_selection_count)
@@ -594,12 +607,23 @@ class LibraryPage(QWidget):
         )
         return lbl
 
-    # ── Filter sidebar ────────────────────────────────────────────────────────
-
     def _toggle_filter(self):
         self.filter_panel.toggle_visibility()
+        self._add_btn.setVisible(not self.filter_panel.isVisible())
 
-    # ── Delete mode ───────────────────────────────────────────────────────────
+    def _open_add_form(self):
+        try:
+            dialog = AddMangaForm(parent=self)
+            dialog.manga_added.connect(self._on_manga_added)
+            dialog.exec()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+
+    def _on_manga_added(self, manga_id: int):
+        self._start_loading()
+        if hasattr(self.main_window, 'show_toast'):
+            self.main_window.show_toast("Manga berhasil ditambahkan!")
 
     def _set_delete_mode(self, active: bool):
         self.last_read_row.set_select_mode(active)
@@ -612,7 +636,7 @@ class LibraryPage(QWidget):
             self._check_timer.stop()
 
     def _cancel_delete_mode(self):
-        self.search_bar.reset_trash()     # unchecks trash_btn tanpa memicu sinyal
+        self.search_bar.reset_trash()
         self._set_delete_mode(False)
 
     def _update_selection_count(self):
@@ -643,45 +667,27 @@ class LibraryPage(QWidget):
         msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
         msg.button(QMessageBox.StandardButton.Yes).setText("Ya, Hapus")
         msg.button(QMessageBox.StandardButton.Cancel).setText("Batal")
-        msg.setStyleSheet(f"""
-            QMessageBox {{ background: {WHITE}; }}
-            QLabel {{ color: {TEXT_DARK}; font-size: 14px; }}
-            QPushButton {{
-                min-width: 90px; min-height: 34px;
-                border-radius: 17px;
-                font-size: 13px; font-weight: 600;
-                padding: 0 12px;
-            }}
-        """)
 
         if msg.exec() == QMessageBox.StandardButton.Yes:
             self._do_delete(ids)
 
     def _do_delete(self, entry_ids: list):
-        from services.collection_service import CollectionService
-        svc = CollectionService()
-        deleted = sum(1 for eid in entry_ids if svc.delete(eid))
+        try:
+            from services.collection_service import CollectionService
+            svc = CollectionService()
+            uid = self.main_window.current_user["id"]
 
-        self._cancel_delete_mode()
-        self._start_loading()
-
-        if deleted:
-            ok = QMessageBox(self)
-            ok.setWindowTitle("Berhasil")
-            ok.setText(f"{deleted} manga berhasil dihapus dari My Library.")
-            ok.setStandardButtons(QMessageBox.StandardButton.Ok)
-            ok.setStyleSheet(f"""
-                QMessageBox {{ background: {WHITE}; }}
-                QLabel {{ color: {TEXT_DARK}; font-size: 14px; }}
-                QPushButton {{
-                    min-width: 80px; min-height: 32px;
-                    border-radius: 16px; font-size: 13px;
-                    background: {BLUE_PRIMARY}; color: {WHITE}; border: none;
-                }}
-            """)
-            ok.exec()
-
-    # ── Loading ───────────────────────────────────────────────────────────────
+            deleted = sum(1 for eid in entry_ids if svc.delete(eid, user_id=uid))
+            self._cancel_delete_mode()
+            self._start_loading()
+            if deleted:
+                ok = QMessageBox(self)
+                ok.setWindowTitle("Berhasil")
+                ok.setText(f"{deleted} manga berhasil dihapus dari My Library.")
+                ok.setStandardButtons(QMessageBox.StandardButton.Ok)
+                ok.exec()
+        except Exception as e:
+            print(f"[LibraryPage] Delete error: {e}")
 
     def _start_loading(self):
         if self._loader and self._loader.isRunning():
@@ -689,7 +695,8 @@ class LibraryPage(QWidget):
             self._loader.wait()
         self.last_read_row.show_placeholders(6)
         self.my_books_row.show_placeholders(6)
-        self._loader = CollectionLoader()
+        user_id = self.main_window.current_user["id"]
+        self._loader = CollectionLoader(user_id=user_id)
         self._loader.finished.connect(self._on_loaded)
         self._loader.start()
 
@@ -698,8 +705,6 @@ class LibraryPage(QWidget):
         self._all_last_read = lr_entries
         self._all_my_books  = mb_entries
         self._apply_filters()
-
-    # ── Filter & render ───────────────────────────────────────────────────────
 
     def _apply_filters(self, query: str = ""):
         if not isinstance(query, str):
@@ -715,11 +720,8 @@ class LibraryPage(QWidget):
         filtered_lr = _filter_entries(self._all_last_read, query, genres, statuses, year)
         filtered_mb = _filter_entries(self._all_my_books,  query, genres, statuses, year)
 
-        # Kirim list entries (bukan manga) agar entry.id tersedia untuk delete
         self.last_read_row.load_cards(filtered_lr[:12], self.main_window.go_detail)
         self.my_books_row.load_cards(filtered_mb,       self.main_window.go_detail)
-
-    # ── Public ────────────────────────────────────────────────────────────────
 
     def refresh(self):
         self._start_loading()
