@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QPushButton, QScrollArea, QWidget,
     QMessageBox, QFrame, QFileDialog
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QDate, pyqtSignal
 from PyQt6.QtGui import QFont, QPixmap
 
 from .theme import (
@@ -183,14 +183,16 @@ class AddMangaForm(QDialog):
         for s in STATUS_OPTIONS:
             self._status.addItem(s, s)
         self._status.setStyleSheet(_input_style())
+        self._status.currentIndexChanged.connect(self._on_status_changed)
         col_status.addWidget(self._status)
         row1.addLayout(col_status, stretch=2)
 
         col_year = QVBoxLayout()
         col_year.addWidget(_label("Tahun Terbit"))
         self._year = QSpinBox()
-        self._year.setRange(1900, 2099)
-        self._year.setValue(2024)
+        self._current_year = QDate.currentDate().year()
+        self._year.setRange(1900, self._current_year)
+        self._year.setValue(self._current_year)
         self._year.setSpecialValueText("—")
         self._year.setStyleSheet(_input_style())
         col_year.addWidget(self._year)
@@ -404,6 +406,19 @@ class AddMangaForm(QDialog):
             f"font-size: 12px; color: {TEXT_MUTED}; background: transparent;"
         )
 
+    def _on_status_changed(self):
+        """Sesuaikan batas maksimum tahun terbit berdasarkan status yang dipilih."""
+        status = self._status.currentData()
+        if status == "Not yet published":
+            # Bebaskan batas atas hingga 2099 untuk manga yang belum terbit
+            self._year.setMaximum(2099)
+        else:
+            # Batasi tahun terbit tidak boleh melebihi tahun saat ini
+            self._year.setMaximum(self._current_year)
+            # Jika nilai saat ini melebihi tahun sekarang, reset ke tahun sekarang
+            if self._year.value() > self._current_year:
+                self._year.setValue(self._current_year)
+
     def _get_genres(self) -> str:
         """Gabungkan genre utama + genre tambahan jadi satu string CSV."""
         parts = []
@@ -437,6 +452,19 @@ class AddMangaForm(QDialog):
         title = self._title.text().strip()
         if not title:
             self._show_error("Judul manga wajib diisi.")
+            self._save_btn.setEnabled(True)
+            self._save_btn.setText("Simpan Manga")
+            return
+
+        # Validasi tahun terbit
+        status_val = self._status.currentData()
+        year_val = self._year.value()
+        current_year = QDate.currentDate().year()
+        if year_val != 1900 and status_val != "Not yet published" and year_val > current_year:
+            self._show_error(
+                f"Tahun terbit ({year_val}) tidak boleh melebihi tahun saat ini ({current_year}). "
+                f"Jika manga belum terbit, pilih status \"Not yet published\"."
+            )
             self._save_btn.setEnabled(True)
             self._save_btn.setText("Simpan Manga")
             return
