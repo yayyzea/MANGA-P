@@ -2,8 +2,8 @@ from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout,
     QLabel, QLineEdit, QPushButton, QSizePolicy
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QPixmap, QFont, QPainter, QLinearGradient, QColor
+from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtGui import QPixmap, QFont, QPainter, QLinearGradient, QColor, QIcon
 from pathlib import Path
 
 from services.auth_service import AuthService
@@ -103,8 +103,46 @@ class LoginPage(QWidget):
         # Password field
         rl.addWidget(self._lbl("Enter Password"))
         rl.addSpacing(6)
-        self.pass_input = self._input(password=True)
-        rl.addWidget(self.pass_input)
+        
+        # Wrapper putih rounded yang berisi input + tombol mata
+        pass_container = QWidget()
+        pass_container.setFixedHeight(48)
+        pass_container.setStyleSheet("""
+            QWidget {
+                background: white;
+                border-radius: 24px;
+            }
+        """)
+        pass_row = QHBoxLayout(pass_container)
+        pass_row.setContentsMargins(20, 0, 8, 0)
+        pass_row.setSpacing(0)
+
+        self.pass_input = QLineEdit()
+        self.pass_input.setFixedHeight(48)
+        self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pass_input.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                font-size: 14px;
+                color: #1a1a1a;
+            }
+        """)
+        pass_row.addWidget(self.pass_input)
+
+        self._eye_icon_show = QIcon(QPixmap(str(_ASSET_DIR / "view.png")))
+        self._eye_icon_hide = QIcon(QPixmap(str(_ASSET_DIR / "hide.png")))
+
+        self._eye_btn = QPushButton()
+        self._eye_btn.setFixedSize(32, 32)
+        self._eye_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._eye_btn.setStyleSheet("background: transparent; border: none;")
+        self._eye_btn.setIcon(self._eye_icon_hide)
+        self._eye_btn.setIconSize(QSize(22, 22))
+        self._eye_btn.clicked.connect(self._toggle_password)
+        pass_row.addWidget(self._eye_btn)
+
+        rl.addWidget(pass_container)
         rl.addSpacing(8)
 
         # Error/success label
@@ -140,6 +178,7 @@ class LoginPage(QWidget):
         self.email_input.returnPressed.connect(self._do_login)
         self.pass_input.returnPressed.connect(self._do_login)
 
+    
     def _lbl(self, text):
         l = QLabel(text)
         l.setStyleSheet("color: white; background: transparent; font-size: 13px; font-weight: 500;")
@@ -160,6 +199,14 @@ class LoginPage(QWidget):
     def _go_signup(self):
         if self.on_switch_signup:
             self.on_switch_signup()
+
+    def _toggle_password(self):
+        if self.pass_input.echoMode() == QLineEdit.EchoMode.Password:
+            self.pass_input.setEchoMode(QLineEdit.EchoMode.Normal)
+            self._eye_btn.setIcon(self._eye_icon_show)
+        else:
+            self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self._eye_btn.setIcon(self._eye_icon_hide)
 
     def _do_login(self):
         self.error_lbl.setStyleSheet("color: #FADBD8; background: transparent; font-size: 12px;")
