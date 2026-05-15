@@ -450,8 +450,8 @@ class DeleteConfirmBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"background: {WHITE}; border-top: 1.5px solid #FFCDD2;")
-        self.setFixedHeight(64)
+        self.setStyleSheet(f"background: {WHITE};")
+        self.setFixedHeight(0)   # mulai dari 0 agar tidak ada sisa ruang/garis
         self._build()
         self.setVisible(False)
 
@@ -500,6 +500,10 @@ class DeleteConfirmBar(QWidget):
         """)
         self.delete_btn.clicked.connect(self.confirmed)
         layout.addWidget(self.delete_btn)
+
+    def setVisible(self, visible: bool):
+        self.setFixedHeight(64 if visible else 0)
+        super().setVisible(visible)
 
     def update_count(self, count: int):
         if count == 0:
