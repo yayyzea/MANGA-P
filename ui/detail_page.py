@@ -71,6 +71,7 @@ class CollectionPanel(QWidget):
         super().__init__(parent)
         self.setStyleSheet("background: transparent;")
         self._manga_id = self._col_id = None
+        self._manga_chapters = 0   # maks chapter manga yang sedang ditampilkan
         self._main_window = main_window
         self._build()
 
@@ -110,6 +111,7 @@ class CollectionPanel(QWidget):
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{ background: {BLUE_DARK}; color: {WHITE}; selection-background-color: {BLUE_PRIMARY}; }} """)
         r1.addWidget(lbl1); r1.addWidget(self._status_cb); r1.addStretch()
+        self._status_cb.currentIndexChanged.connect(self._on_status_changed)
         ic.addLayout(r1)
 
         r2 = QHBoxLayout()
@@ -123,6 +125,7 @@ class CollectionPanel(QWidget):
                 border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 6px; font-size: 11px; }}
             QSpinBox::up-button, QSpinBox::down-button {{ background: rgba(255,255,255,0.15); border: none; width: 16px; }} """)
         r2.addWidget(lbl2); r2.addWidget(self._ch_spin); r2.addStretch()
+        self._ch_spin.valueChanged.connect(self._on_chapter_changed)
         ic.addLayout(r2)
 
         r3 = QHBoxLayout(); r3.setSpacing(8)
@@ -146,16 +149,92 @@ class CollectionPanel(QWidget):
         self._in_col.hide()
         self._layout.addWidget(self._in_col)
 
-    def load(self, manga_id, entry):
+    def load(self, manga_id, entry, manga_chapters: int = 0):
         self._manga_id = manga_id
+        self._manga_chapters = manga_chapters or 0
         if entry:
             self._col_id = entry.id
+            # Set status dulu (tanpa trigger validasi chapter dua kali)
+            self._status_cb.blockSignals(True)
             self._status_cb.setCurrentText(entry.status or "Plan to Read")
-            self._ch_spin.setValue(entry.current_chapter or 0)
+            self._status_cb.blockSignals(False)
+            # Terapkan aturan chapter sesuai status
+            self._apply_chapter_rules(entry.current_chapter or 0)
             self._add_btn.hide(); self._in_col.show()
         else:
             self._col_id = None
             self._add_btn.show(); self._in_col.hide()
+
+    def _on_chapter_changed(self, value: int):
+        """Jika chapter mencapai maks, otomatis ubah status ke Completed."""
+        if self._manga_chapters and self._manga_chapters > 0 and value == self._manga_chapters:
+            if self._status_cb.currentText() != "Completed":
+                self._status_cb.setCurrentText("Completed")
+                # _apply_chapter_rules sudah dipanggil via currentIndexChanged
+
+    def _on_status_changed(self):
+        self._apply_chapter_rules()
+
+    def _on_chapter_changed(self, value: int):
+        """Jika chapter mencapai maks, otomatis ubah status menjadi Completed."""
+        if not self._manga_chapters or self._manga_chapters <= 0:
+            return
+        if value >= self._manga_chapters:
+            # Blok sinyal status agar tidak memicu _apply_chapter_rules dua kali
+            self._status_cb.blockSignals(True)
+            self._status_cb.setCurrentText("Completed")
+            self._status_cb.blockSignals(False)
+            self._apply_chapter_rules()
+
+    def _apply_chapter_rules(self, current_chapter: int = None):
+        """
+        Atur range dan nilai _ch_spin berdasarkan status aktif dan maks chapter manga.
+
+        - Plan to Read  : chapter dikunci ke 0, spinbox dinonaktifkan
+        - Reading       : chapter 1 – maks_chapter (atau 9999 jika maks tidak diketahui)
+        - Completed     : chapter otomatis = maks_chapter, spinbox dinonaktifkan
+        - Dropped       : chapter 1 – (maks_chapter - 1); jika maks ≤ 1 dikunci ke 0
+        """
+        status = self._status_cb.currentText()
+        mx = self._manga_chapters  # 0 berarti tidak diketahui
+
+        if status == "Plan to Read":
+            self._ch_spin.setRange(0, 0)
+            self._ch_spin.setValue(0)
+            self._ch_spin.setEnabled(False)
+
+        elif status == "Reading":
+            hi = mx if mx and mx > 0 else 9999
+            self._ch_spin.setRange(1, hi)
+            self._ch_spin.setEnabled(True)
+            if current_chapter is not None:
+                self._ch_spin.setValue(max(1, min(current_chapter, hi)))
+            elif self._ch_spin.value() < 1:
+                self._ch_spin.setValue(1)
+
+        elif status == "Completed":
+            val = mx if mx and mx > 0 else (self._ch_spin.value() or 0)
+            self._ch_spin.setRange(val, val)
+            self._ch_spin.setValue(val)
+            self._ch_spin.setEnabled(False)
+
+        elif status == "Dropped":
+            if mx and mx > 1:
+                hi = mx - 1
+                self._ch_spin.setRange(1, hi)
+                self._ch_spin.setEnabled(True)
+                if current_chapter is not None:
+                    self._ch_spin.setValue(max(1, min(current_chapter, hi)))
+                elif self._ch_spin.value() < 1:
+                    self._ch_spin.setValue(1)
+            else:
+                # Maks tidak diketahui atau ≤ 1 — izinkan input bebas mulai 1
+                self._ch_spin.setRange(1, 9999)
+                self._ch_spin.setEnabled(True)
+                if current_chapter is not None:
+                    self._ch_spin.setValue(max(1, current_chapter))
+                elif self._ch_spin.value() < 1:
+                    self._ch_spin.setValue(1)
 
     def _on_add(self):
         if not self._manga_id: return
@@ -166,8 +245,10 @@ class CollectionPanel(QWidget):
             entry = CollectionService().add(user_id=user_id, manga_id=self._manga_id)
             if entry:
                 self._col_id = entry.id
+                self._status_cb.blockSignals(True)
                 self._status_cb.setCurrentText(entry.status or "Plan to Read")
-                self._ch_spin.setValue(entry.current_chapter or 0)
+                self._status_cb.blockSignals(False)
+                self._apply_chapter_rules(entry.current_chapter or 0)
                 self._add_btn.hide(); self._in_col.show()
                 self.changed.emit()
                 self._toast("Berhasil ditambahkan ke koleksi")
@@ -475,7 +556,7 @@ class DetailPage(QWidget):
         self._add_meta("Status:", manga.status)
         self._add_meta("Score:", manga.score)
         self._add_meta("Chapters:", manga.chapters)
-        self._col_panel.load(manga.id, collection)
+        self._col_panel.load(manga.id, collection, manga_chapters=manga.chapters or 0)
         if collection:
             self._rev_panel.load(manga.id, collection.id, review)
         else:
