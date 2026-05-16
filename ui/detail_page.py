@@ -341,7 +341,7 @@ class TagBar(QWidget):
 
         self._add_btn = QPushButton("＋")
         self._add_btn.setFixedSize(26, 26)
-        self._add_btn.setToolTip("Tambah tag")
+        self._add_btn.setToolTip("Add tag")
         self._add_btn.setStyleSheet(
             "QPushButton{background:rgba(255,255,255,0.20);color:white;"
             "border:1px solid rgba(255,255,255,0.40);border-radius:13px;"
@@ -393,9 +393,9 @@ class TagBar(QWidget):
             txt_style  = f"color:{fg};font-size:10px;font-weight:600;background:transparent;"
             x_style    = f"QPushButton{{background:transparent;color:{fg};border:none;font-size:9px;font-weight:700;padding:0;}}QPushButton:hover{{color:white;}}"
         else:
-            pill_style = "QWidget{background:rgba(255,255,255,0.18);border-radius:10px;}"
-            txt_style  = "color:white;font-size:10px;font-weight:600;background:transparent;"
-            x_style    = "QPushButton{background:transparent;color:rgba(255,255,255,0.7);border:none;font-size:9px;font-weight:700;padding:0;}QPushButton:hover{color:white;}"
+            pill_style = "QWidget{background:#FFFFFF;border-radius:10px;}"
+            txt_style  = "color:#1A1A2E;font-size:10px;font-weight:600;background:transparent;"
+            x_style    = "QPushButton{background:transparent;color:#555555;border:none;font-size:9px;font-weight:700;padding:0;}QPushButton:hover{color:#000000;}"
 
         pill = QWidget()
         pill.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -426,7 +426,20 @@ class TagBar(QWidget):
     def _on_add(self):
         if self._locked:
             return
-        text, ok = QInputDialog.getText(self, "Tag Baru", "Nama tag:")
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle("New Tag")
+        dialog.setLabelText("Tag name:")
+        dialog.setStyleSheet("""
+            QInputDialog { background-color: #FFFFFF; }
+            QLabel { color: #1A1A2E; font-size: 12px; }
+            QLineEdit { background-color: #F5F5F5; color: #1A1A2E; border: 1px solid #CCCCCC;
+                        border-radius: 6px; padding: 4px 8px; font-size: 12px; }
+            QPushButton { background-color: #1565C0; color: white; border: none;
+                          border-radius: 6px; padding: 4px 14px; font-size: 11px; font-weight: 700; }
+            QPushButton:hover { background-color: #1976D2; }
+        """)
+        ok = dialog.exec()
+        text = dialog.textValue()
         tag = text.strip().lower()
         if ok and tag and tag not in self._tags:
             self._tags.append(tag)
