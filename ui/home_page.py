@@ -324,6 +324,15 @@ class HomePage(QWidget):
         self.main_window = main_window
         self._manga_list = []
         self._current_limit = 50  # default tampil 50
+        # Infinite scroll state (untuk mode filter)
+        self._filter_mode   = False
+        self._filter_page   = 1
+        self._filter_genres = []
+        self._filter_status = None
+        self._filter_year   = None
+        self._is_loading    = False
+        self._no_more       = False
+        self._card_count    = 0
         self._build()
         self._start_loading()
 
@@ -417,7 +426,19 @@ class HomePage(QWidget):
         self.manga_grid.setContentsMargins(0, 0, 0, 0)
 
         left.addWidget(self.grid_container)
+
+        self._home_loading_lbl = QLabel("Loading…")
+        self._home_loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._home_loading_lbl.setStyleSheet(
+            f"color: {WHITE}; font-size: 13px; background: transparent; padding: 12px;"
+        )
+        self._home_loading_lbl.setVisible(False)
+        left.addWidget(self._home_loading_lbl)
+
         left.addStretch()
+
+        # Connect infinite scroll
+        self.content_scroll.verticalScrollBar().valueChanged.connect(self._on_home_scroll)
 
         # ★ Right side: filter panel (hidden by default) + history panel
         self.filter_panel = FilterPanel()
@@ -504,12 +525,15 @@ class HomePage(QWidget):
     def _set_limit(self, limit: int):
         """Dipanggil saat user klik tombol Top 10/20/50/100."""
         self._current_limit = limit
+        self._filter_mode = False
+        # Tampilkan kembali semua tombol
+        for btn in self._top_buttons.values():
+            btn.setVisible(True)
         # Update state tombol
         for n, btn in self._top_buttons.items():
             btn.setChecked(n == limit)
         # Tampilkan kartu sesuai limit
         self._display_cards()
-         
 
     def _display_cards(self):
         self._clear_grid()
@@ -574,15 +598,69 @@ class HomePage(QWidget):
                 item.widget().deleteLater()
 
     def _on_filter_apply(self, genres, status, year):
+        self._filter_mode   = True
+        self._filter_page   = 1
+        self._filter_genres = genres
+        self._filter_status = status
+        self._filter_year   = year
+        self._no_more       = False
+        self._card_count    = 0
         self._clear_grid()
-        self._loader = SearchLoader(
+        # Sembunyikan tombol Top N saat filter aktif
+        for btn in self._top_buttons.values():
+            btn.setVisible(False)
+        self._start_filter_loader(page=1)
+
+    def _on_home_scroll(self, value):
+        if not self._filter_mode:
+            return
+        sb = self.content_scroll.verticalScrollBar()
+        if sb.maximum() > 0 and value >= sb.maximum() - 200:
+            if not self._is_loading and not self._no_more:
+                self._filter_page += 1
+                self._start_filter_loader(self._filter_page)
+
+    def _start_filter_loader(self, page: int):
+        if self._is_loading:
+            return
+        self._is_loading = True
+        self._home_loading_lbl.setVisible(True)
+        loader = SearchLoader(
             query="",
-            genres=genres,
-            status=status,
-            year=year,
+            genres=self._filter_genres,
+            status=self._filter_status,
+            year=self._filter_year,
+            page=page,
         )
-        self._loader.finished.connect(self._on_loaded)
-        self._loader.start()
+        loader.finished.connect(lambda results, p=page: self._on_filter_results(results, p))
+        loader.start()
+        self._loader = loader
+
+    def _on_filter_results(self, manga_list, page):
+        self._is_loading = False
+        self._home_loading_lbl.setVisible(False)
+
+        if page == 1 and not manga_list:
+            return
+
+        container_width = self.content_scroll.viewport().width() - 4
+        if container_width < 50:
+            container_width = self.width() - 80 - 220 - 72
+        spacing = self.manga_grid.spacing()
+        for cols in [5, 4, 3, 2, 1]:
+            if container_width >= cols * 130 + spacing * (cols - 1):
+                break
+
+        for manga in manga_list:
+            row = self._card_count // cols
+            col = self._card_count % cols
+            card = MangaCard(manga, show_labels=True)
+            card.clicked.connect(self.main_window.go_detail)
+            self.manga_grid.addWidget(card, row, col)
+            self._card_count += 1
+
+        if len(manga_list) < SearchLoader.PAGE_SIZE:
+            self._no_more = True
 
     def _on_search(self, query):
         if query:
