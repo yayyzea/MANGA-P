@@ -122,9 +122,10 @@ class MangaCard(QWidget):
             )
 
             genres    = self.manga.genres or ""
-            first_gen = genres.split(",")[0].strip() if genres else ""
-            self.lbl_genre = QLabel(first_gen)
+            all_genres = ", ".join(g.strip() for g in genres.split(",")) if genres else ""
+            self.lbl_genre = QLabel(all_genres)
             self.lbl_genre.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            self.lbl_genre.setWordWrap(True)
             self.lbl_genre.setStyleSheet(
                 "color: rgba(255,255,255,0.80); font-size: 10px; background: transparent;"
             )
