@@ -23,14 +23,14 @@ class AuthService:
 
     def register(self, username: str, email: str, password: str):
         if not username or not email or not password:
-            return False, "Semua field wajib diisi"
+            return False, "All fields are required"
         session = get_session()
         try:
             existing = session.query(User).filter(
                 (User.username == username) | (User.email == email)
             ).first()
             if existing:
-                return False, "Username atau email sudah digunakan"
+                return False, "Username or email is already taken"
             new_user = User(username=username, email=email, password=_hash(password))
             session.add(new_user)
             session.commit()

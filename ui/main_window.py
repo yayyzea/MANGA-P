@@ -1,16 +1,14 @@
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QHBoxLayout, QVBoxLayout,
-    QPushButton, QStackedWidget, QLabel, QGraphicsOpacityEffect,
-    QFrame
+    QPushButton, QStackedWidget, QLabel, QGraphicsOpacityEffect
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QPoint
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize
 from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon
 from pathlib import Path
 
 _ICON_DIR = Path(__file__).parent.parent / "assets"
 
 from .theme import BLUE_PRIMARY, WHITE, SIDEBAR_WIDTH, APP_STYLESHEET
-from .font_size_manager import FontSizeManager
 
 
 class Toast(QLabel):
@@ -44,6 +42,7 @@ class Toast(QLabel):
             self.move((pw - self.width()) // 2, ph - self.height() - 50)
 
 
+<<<<<<< HEAD
 class FontSizePopup(QFrame):
     """
     Flyout panel muncul di kanan sidebar saat tombol 'Aa' diklik.
@@ -264,13 +263,16 @@ class _AaButton(QWidget):
         super().keyPressEvent(event)
 
 
+=======
+>>>>>>> origin/main
 class Sidebar(QWidget):
-    def __init__(self, on_navigate, on_logo_click=None, parent=None):
+    def __init__(self, on_navigate, on_logo_click=None, on_logout=None, parent=None):
         super().__init__(parent)
         self.setObjectName("Sidebar")
         self.setFixedWidth(SIDEBAR_WIDTH)
         self.on_navigate = on_navigate
         self.on_logo_click = on_logo_click
+        self.on_logout = on_logout
         self.setAutoFillBackground(True)
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
@@ -313,6 +315,7 @@ class Sidebar(QWidget):
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch()
 
+<<<<<<< HEAD
         # ── Font Size Button ("Aa") ───────────────────────────────────────────
         self._font_popup = FontSizePopup()
         self._font_btn = _AaButton()
@@ -321,7 +324,33 @@ class Sidebar(QWidget):
         self._font_btn.clicked.connect(self._toggle_font_popup)
         layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addSpacing(8)
+=======
+        # ── Exit/Switch Account button (paling bawah) ──
+        exit_btn = QPushButton()
+        exit_btn.setObjectName("SidebarIcon")
+        exit_btn.setToolTip("Switch Account")
+        exit_btn.setFixedSize(52, 52)
+        px_exit = QPixmap(str(_ICON_DIR / "exit.png"))
+        if not px_exit.isNull():
+            exit_btn.setIcon(QIcon(px_exit))
+            exit_btn.setIconSize(QSize(26, 26))
+        else:
+            exit_btn.setText("↩")
+        exit_btn.setStyleSheet("""
+            QPushButton { background: transparent; border: none; border-radius: 10px; }
+            QPushButton:hover { background: rgba(255,255,255,0.20); }
+        """)
+        from PyQt6.QtWidgets import QGraphicsColorizeEffect as _GCE
+        eff = _GCE(); eff.setColor(QColor(255, 255, 255)); exit_btn.setGraphicsEffect(eff)
+        exit_btn.clicked.connect(self._on_logout)
+        layout.addWidget(exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+>>>>>>> origin/main
         self._set_active(0)
+
+    def _on_logout(self):
+        if self.on_logout:
+            self.on_logout()
 
     def _nav(self, page_idx): self._set_active(page_idx); self.on_navigate(page_idx)
 
@@ -329,21 +358,6 @@ class Sidebar(QWidget):
         for idx, btn in self._buttons: btn.setChecked(idx == page_idx)
 
     def set_active(self, page_idx): self._set_active(page_idx)
-
-    def _toggle_font_popup(self):
-        if self._font_popup.isVisible():
-            self._font_popup.hide()
-            self._font_btn.setChecked(False)
-        else:
-            self._font_popup.show_near(self, self._font_btn)
-            # Uncheck when popup closes
-            self._font_popup.installEventFilter(self)
-
-    def eventFilter(self, obj, event):
-        from PyQt6.QtCore import QEvent
-        if obj is self._font_popup and event.type() == QEvent.Type.Hide:
-            self._font_btn.setChecked(False)
-        return super().eventFilter(obj, event)
 
 
 class MainWindow(QMainWindow):
@@ -354,14 +368,12 @@ class MainWindow(QMainWindow):
         self.resize(1140, 680)
         self.setMinimumSize(900, 580)
         self.setStyleSheet(APP_STYLESHEET)
-        # Initialize font size manager with the base stylesheet
-        FontSizeManager.instance().set_base_stylesheet(APP_STYLESHEET)
         self._build()
 
     def _build(self):
         root = QWidget(); self.setCentralWidget(root)
         h = QHBoxLayout(root); h.setContentsMargins(0,0,0,0); h.setSpacing(0)
-        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile)
+        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile, on_logout=self._show_switch_account)
         h.addWidget(self.sidebar)
         self.stack = QStackedWidget(); h.addWidget(self.stack)
         from .home_page import HomePage; from .library_page import LibraryPage
@@ -395,8 +407,23 @@ class MainWindow(QMainWindow):
             from services.user_service import UserService
             data = UserService().get_profile(self.current_user["id"])
             if data:
-                self.profile_page.load_profile(name=data.name or "", email=data.email or "", bio=data.bio or "", avatar_path=data.avatar_path)
-        except Exception as e: print(f"[go_profile] error: {e}")
+                self.profile_page.load_profile(
+                    name=data.name or data.username or self.current_user.get("username", ""),
+                    email=data.email or self.current_user.get("email", ""),
+                    bio=data.bio or "",
+                    avatar_path=data.avatar_path
+                )
+            else:
+                self.profile_page.load_profile(
+                    name=self.current_user.get("username", ""),
+                    email=self.current_user.get("email", ""),
+                )
+        except Exception as e:
+            print(f"[go_profile] error: {e}")
+            self.profile_page.load_profile(
+                name=self.current_user.get("username", ""),
+                email=self.current_user.get("email", ""),
+            )
         self.stack.setCurrentWidget(self.profile_page)
 
     def go_search(self, query=""): self.search_page.set_query(query); self._navigate(2)
@@ -411,5 +438,30 @@ class MainWindow(QMainWindow):
 
     def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
 
+<<<<<<< HEAD
     def go_detail(self, manga_id):
         self.detail_page.load_manga(manga_id)
+=======
+    def _show_switch_account(self):
+        self._logout()
+
+    def _logout(self):
+        """Buka AuthWindow untuk login akun baru (add account)."""
+        from .auth_window import AuthWindow
+        self._auth_window = AuthWindow(on_auth_success=self._on_relogin)
+        self._auth_window.resize(self.size())
+        self._auth_window.show()
+        self.close()
+
+    def _on_relogin(self, user):
+        self._auth_window.close()
+        new_win = MainWindow(user=user)
+        new_win.show()
+        self._auth_window = None
+
+    def _switch_to_user(self, user: dict):
+        """Switch ke user lain tanpa harus login ulang lewat form."""
+        new_win = MainWindow(user=user)
+        new_win.show()
+        self.close()
+>>>>>>> origin/main

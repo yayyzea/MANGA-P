@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QPushButton, QLineEdit, QCheckBox, QGridLayout, QMessageBox,
 )
-from PyQt6.QtCore import Qt, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QSize, QTimer
 from PyQt6.QtGui import QColor, QPalette, QPixmap, QIcon
 from pathlib import Path
 
@@ -173,7 +173,13 @@ class LibrarySearchBar(QWidget):
         self.filter_btn.clicked.connect(self.filter_toggled)
         layout.addWidget(self.filter_btn)
 
-        self.trash_btn = QPushButton("🗑")
+        self.trash_btn = QPushButton()
+        _tx = QPixmap(str(_ICON_DIR / "trash.png"))
+        if not _tx.isNull():
+            self.trash_btn.setIcon(QIcon(_tx))
+            self.trash_btn.setIconSize(QSize(20, 20))
+        else:
+            self.trash_btn.setText("🗑")
         self.trash_btn.setObjectName("TrashBtn")
         self.trash_btn.setFixedSize(36, 36)
         self.trash_btn.setCheckable(True)
@@ -483,7 +489,15 @@ class DeleteConfirmBar(QWidget):
         cancel_btn.clicked.connect(self.cancelled)
         layout.addWidget(cancel_btn)
 
-        self.delete_btn = QPushButton("🗑  Hapus")
+        self.delete_btn = QPushButton()
+        icon_px = QPixmap(str(_ICON_DIR / "trash.png"))
+        if not icon_px.isNull():
+            self.delete_btn.setIcon(QIcon(icon_px))
+            self.delete_btn.setIconSize(QSize(18, 18))
+            self.delete_btn.setText("  Delete")
+        else:
+            self.delete_btn.setText("🗑  Delete")
+
         self.delete_btn.setFixedHeight(38)
         self.delete_btn.setMinimumWidth(100)
         self.delete_btn.setEnabled(False)

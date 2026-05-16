@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QScrollArea, QTextEdit, QSpinBox,
-    QComboBox, QFrame, QSizePolicy, QMessageBox
+    QComboBox, QFrame, QSizePolicy, QMessageBox,
+    QGraphicsOpacityEffect, QInputDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QPixmap
@@ -65,12 +66,14 @@ class CoverLabel(QLabel):
 
 class CollectionPanel(QWidget):
     changed = pyqtSignal()
+    status_changed = pyqtSignal(str)
     STATUS_OPTIONS = ["Plan to Read", "Reading", "Completed", "Dropped"]
 
     def __init__(self, main_window=None, parent=None):
         super().__init__(parent)
         self.setStyleSheet("background: transparent;")
         self._manga_id = self._col_id = None
+        self._manga_chapters = 0   # maks chapter manga yang sedang ditampilkan
         self._main_window = main_window
         self._build()
 
@@ -110,6 +113,7 @@ class CollectionPanel(QWidget):
             QComboBox::drop-down {{ border: none; }}
             QComboBox QAbstractItemView {{ background: {BLUE_DARK}; color: {WHITE}; selection-background-color: {BLUE_PRIMARY}; }} """)
         r1.addWidget(lbl1); r1.addWidget(self._status_cb); r1.addStretch()
+        self._status_cb.currentIndexChanged.connect(self._on_status_changed)
         ic.addLayout(r1)
 
         r2 = QHBoxLayout()
@@ -123,6 +127,7 @@ class CollectionPanel(QWidget):
                 border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 6px; font-size: 11px; }}
             QSpinBox::up-button, QSpinBox::down-button {{ background: rgba(255,255,255,0.15); border: none; width: 16px; }} """)
         r2.addWidget(lbl2); r2.addWidget(self._ch_spin); r2.addStretch()
+        self._ch_spin.valueChanged.connect(self._on_chapter_changed)
         ic.addLayout(r2)
 
         r3 = QHBoxLayout(); r3.setSpacing(8)
@@ -146,16 +151,93 @@ class CollectionPanel(QWidget):
         self._in_col.hide()
         self._layout.addWidget(self._in_col)
 
-    def load(self, manga_id, entry):
+    def load(self, manga_id, entry, manga_chapters: int = 0):
         self._manga_id = manga_id
+        self._manga_chapters = manga_chapters or 0
         if entry:
             self._col_id = entry.id
+            # Set status dulu (tanpa trigger validasi chapter dua kali)
+            self._status_cb.blockSignals(True)
             self._status_cb.setCurrentText(entry.status or "Plan to Read")
-            self._ch_spin.setValue(entry.current_chapter or 0)
+            self._status_cb.blockSignals(False)
+            # Terapkan aturan chapter sesuai status
+            self._apply_chapter_rules(entry.current_chapter or 0)
             self._add_btn.hide(); self._in_col.show()
         else:
             self._col_id = None
             self._add_btn.show(); self._in_col.hide()
+
+    def _on_chapter_changed(self, value: int):
+        """Jika chapter mencapai maks, otomatis ubah status ke Completed."""
+        if self._manga_chapters and self._manga_chapters > 0 and value == self._manga_chapters:
+            if self._status_cb.currentText() != "Completed":
+                self._status_cb.setCurrentText("Completed")
+                # _apply_chapter_rules sudah dipanggil via currentIndexChanged
+
+    def _on_status_changed(self):
+        self._apply_chapter_rules()
+        self.status_changed.emit(self._status_cb.currentText())
+
+    def _on_chapter_changed(self, value: int):
+        """Jika chapter mencapai maks, otomatis ubah status menjadi Completed."""
+        if not self._manga_chapters or self._manga_chapters <= 0:
+            return
+        if value >= self._manga_chapters:
+            # Blok sinyal status agar tidak memicu _apply_chapter_rules dua kali
+            self._status_cb.blockSignals(True)
+            self._status_cb.setCurrentText("Completed")
+            self._status_cb.blockSignals(False)
+            self._apply_chapter_rules()
+
+    def _apply_chapter_rules(self, current_chapter: int = None):
+        """
+        Atur range dan nilai _ch_spin berdasarkan status aktif dan maks chapter manga.
+
+        - Plan to Read  : chapter dikunci ke 0, spinbox dinonaktifkan
+        - Reading       : chapter 1 – maks_chapter (atau 9999 jika maks tidak diketahui)
+        - Completed     : chapter otomatis = maks_chapter, spinbox dinonaktifkan
+        - Dropped       : chapter 1 – (maks_chapter - 1); jika maks ≤ 1 dikunci ke 0
+        """
+        status = self._status_cb.currentText()
+        mx = self._manga_chapters  # 0 berarti tidak diketahui
+
+        if status == "Plan to Read":
+            self._ch_spin.setRange(0, 0)
+            self._ch_spin.setValue(0)
+            self._ch_spin.setEnabled(False)
+
+        elif status == "Reading":
+            hi = mx if mx and mx > 0 else 9999
+            self._ch_spin.setRange(1, hi)
+            self._ch_spin.setEnabled(True)
+            if current_chapter is not None:
+                self._ch_spin.setValue(max(1, min(current_chapter, hi)))
+            elif self._ch_spin.value() < 1:
+                self._ch_spin.setValue(1)
+
+        elif status == "Completed":
+            val = mx if mx and mx > 0 else (self._ch_spin.value() or 0)
+            self._ch_spin.setRange(val, val)
+            self._ch_spin.setValue(val)
+            self._ch_spin.setEnabled(False)
+
+        elif status == "Dropped":
+            if mx and mx > 1:
+                hi = mx - 1
+                self._ch_spin.setRange(1, hi)
+                self._ch_spin.setEnabled(True)
+                if current_chapter is not None:
+                    self._ch_spin.setValue(max(1, min(current_chapter, hi)))
+                elif self._ch_spin.value() < 1:
+                    self._ch_spin.setValue(1)
+            else:
+                # Maks tidak diketahui atau ≤ 1 — izinkan input bebas mulai 1
+                self._ch_spin.setRange(1, 9999)
+                self._ch_spin.setEnabled(True)
+                if current_chapter is not None:
+                    self._ch_spin.setValue(max(1, current_chapter))
+                elif self._ch_spin.value() < 1:
+                    self._ch_spin.setValue(1)
 
     def _on_add(self):
         if not self._manga_id: return
@@ -166,8 +248,10 @@ class CollectionPanel(QWidget):
             entry = CollectionService().add(user_id=user_id, manga_id=self._manga_id)
             if entry:
                 self._col_id = entry.id
+                self._status_cb.blockSignals(True)
                 self._status_cb.setCurrentText(entry.status or "Plan to Read")
-                self._ch_spin.setValue(entry.current_chapter or 0)
+                self._status_cb.blockSignals(False)
+                self._apply_chapter_rules(entry.current_chapter or 0)
                 self._add_btn.hide(); self._in_col.show()
                 self.changed.emit()
                 self._toast("Berhasil ditambahkan ke koleksi")
@@ -188,8 +272,19 @@ class CollectionPanel(QWidget):
 
     def _on_remove(self):
         if not self._col_id: return
-        reply = QMessageBox.question(self, "Remove", "Remove from collection?\n(Reviews will also be deleted.)",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Remove")
+        msg_box.setText("Remove from collection?\n(Reviews will also be deleted.)")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setStyleSheet("""
+            QLabel { color: white; }
+            QMessageBox { background-color: #1a1a1a; }
+            QPushButton { color: white; background-color: rgba(255,255,255,0.20); 
+                        border: 1px solid white; border-radius: 6px; 
+                        padding: 4px 12px; }
+            QPushButton:hover { background-color: rgba(255,255,255,0.35); }
+        """)
+        reply = msg_box.exec()
         if reply == QMessageBox.StandardButton.Yes:
             try:
                 from services.collection_service import CollectionService
@@ -202,6 +297,141 @@ class CollectionPanel(QWidget):
             except Exception as e:
                 print(f"[CollectionPanel] Remove error: {e}")
 
+
+
+
+_TAG_COLORS = {
+    "still reading": ("#1565C0", "#E3F2FD"),
+    "completed":     ("#1B5E20", "#E8F5E9"),
+    "dropped":       ("#B71C1C", "#FFEBEE"),
+}
+
+
+class TagBar(QWidget):
+    """Tag pills horizontal: auto-tag dari status + custom tag via tombol +."""
+
+    tags_changed = pyqtSignal(list)
+
+    STATUS_TAG_MAP = {
+        "Reading":   "still reading",
+        "Completed": "completed",
+        "Dropped":   "dropped",
+    }
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setStyleSheet("background: transparent;")
+        self._tags: list = []
+        self._auto_tag: str = ""
+        self._locked = False
+        self._build()
+
+    def _build(self):
+        outer = QHBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(6)
+
+        self._container = QWidget()
+        self._container.setStyleSheet("background: transparent;")
+        self._row = QHBoxLayout(self._container)
+        self._row.setContentsMargins(0, 0, 0, 0)
+        self._row.setSpacing(6)
+        self._row.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        outer.addWidget(self._container, stretch=1)
+
+        self._add_btn = QPushButton("＋")
+        self._add_btn.setFixedSize(26, 26)
+        self._add_btn.setToolTip("Tambah tag")
+        self._add_btn.setStyleSheet(
+            "QPushButton{background:rgba(255,255,255,0.20);color:white;"
+            "border:1px solid rgba(255,255,255,0.40);border-radius:13px;"
+            "font-size:13px;font-weight:700;}"
+            "QPushButton:hover{background:rgba(255,255,255,0.35);}"
+            "QPushButton:disabled{opacity:0.35;}"
+        )
+        self._add_btn.clicked.connect(self._on_add)
+        outer.addWidget(self._add_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
+
+    def set_status(self, status: str):
+        new_auto = self.STATUS_TAG_MAP.get(status, "")
+        if new_auto == self._auto_tag:
+            return
+        if self._auto_tag and self._auto_tag in self._tags:
+            self._tags.remove(self._auto_tag)
+        self._auto_tag = new_auto
+        if new_auto and new_auto not in self._tags:
+            self._tags.insert(0, new_auto)
+        self._refresh()
+
+    def load_tags(self, tags: list, status: str = ""):
+        self._auto_tag = self.STATUS_TAG_MAP.get(status, "")
+        others = [t for t in tags if t != self._auto_tag]
+        self._tags = ([self._auto_tag] if self._auto_tag else []) + others
+        self._refresh()
+
+    def get_tags(self) -> list:
+        return list(self._tags)
+
+    def set_locked(self, locked: bool):
+        self._locked = locked
+        self._add_btn.setEnabled(not locked)
+        self._refresh()
+
+    def _refresh(self):
+        while self._row.count():
+            item = self._row.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        for tag in self._tags:
+            self._row.addWidget(self._make_pill(tag))
+
+    def _make_pill(self, tag: str) -> QWidget:
+        colors = _TAG_COLORS.get(tag.lower())
+        if colors:
+            bg, fg = colors
+            pill_style = f"QWidget{{background:{bg};border-radius:10px;}}"
+            txt_style  = f"color:{fg};font-size:10px;font-weight:600;background:transparent;"
+            x_style    = f"QPushButton{{background:transparent;color:{fg};border:none;font-size:9px;font-weight:700;padding:0;}}QPushButton:hover{{color:white;}}"
+        else:
+            pill_style = "QWidget{background:rgba(255,255,255,0.18);border-radius:10px;}"
+            txt_style  = "color:white;font-size:10px;font-weight:600;background:transparent;"
+            x_style    = "QPushButton{background:transparent;color:rgba(255,255,255,0.7);border:none;font-size:9px;font-weight:700;padding:0;}QPushButton:hover{color:white;}"
+
+        pill = QWidget()
+        pill.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        pill.setStyleSheet(pill_style)
+        row = QHBoxLayout(pill)
+        row.setContentsMargins(8, 3, 6, 3)
+        row.setSpacing(3)
+
+        lbl = QLabel(tag)
+        lbl.setStyleSheet(txt_style)
+        row.addWidget(lbl)
+
+        is_auto = (tag == self._auto_tag)
+        if not is_auto and not self._locked:
+            x = QPushButton("✕")
+            x.setFixedSize(13, 13)
+            x.setStyleSheet(x_style)
+            x.clicked.connect(lambda _, t=tag: self._remove(t))
+            row.addWidget(x)
+        return pill
+
+    def _remove(self, tag: str):
+        if tag in self._tags:
+            self._tags.remove(tag)
+        self._refresh()
+        self.tags_changed.emit(self._tags)
+
+    def _on_add(self):
+        if self._locked:
+            return
+        text, ok = QInputDialog.getText(self, "Tag Baru", "Nama tag:")
+        tag = text.strip().lower()
+        if ok and tag and tag not in self._tags:
+            self._tags.append(tag)
+            self._refresh()
+            self.tags_changed.emit(self._tags)
 
 class ReviewPanel(QWidget):
     def __init__(self, main_window=None, parent=None):
@@ -255,16 +485,46 @@ class ReviewPanel(QWidget):
         r2.addWidget(self._save_btn); r2.addWidget(self._del_btn); r2.addStretch()
         layout.addLayout(r2)
 
-    def load(self, manga_id, col_id, review):
+        tag_hdr = QLabel("Tags")
+        tag_hdr.setStyleSheet("color:rgba(255,255,255,0.70);font-size:10px;font-weight:600;background:transparent;")
+        layout.addWidget(tag_hdr)
+        self._tag_bar = TagBar()
+        layout.addWidget(self._tag_bar)
+
+    def load(self, manga_id, col_id, review, status: str = ""):
         self._manga_id = manga_id; self._col_id = col_id
         self._review_id = review.id if review else None
         self._rating.setValue(review.rating if review else 7)
         self._text.setPlainText(review.review_text or "" if review else "")
         self._del_btn.setVisible(review is not None)
+        # Baca tags dari DB secara aman (kolom mungkin belum ada di DB lama)
+        try:
+            import json
+            raw = getattr(review, "tags", "[]") if review else "[]"
+            saved_tags = json.loads(raw or "[]")
+        except Exception:
+            saved_tags = []
+        self._tag_bar.load_tags(saved_tags, status=status)
 
     def clear(self):
         self._manga_id = self._col_id = self._review_id = None
         self._rating.setValue(7); self._text.clear(); self._del_btn.hide()
+        self._tag_bar.load_tags([], status="")
+
+    def set_locked(self, locked: bool):
+        self._rating.setEnabled(not locked)
+        self._text.setEnabled(not locked)
+        self._save_btn.setEnabled(not locked)
+        self._tag_bar.set_locked(locked)
+        effect = self.graphicsEffect()
+        if not isinstance(effect, QGraphicsOpacityEffect):
+            effect = QGraphicsOpacityEffect(self)
+            self.setGraphicsEffect(effect)
+        effect.setOpacity(0.35 if locked else 1.0)
+        self._text.setPlaceholderText(
+            'Set status selain "Plan to Read" untuk menulis review…'
+            if locked else "Write your review here…"
+        )
 
     def _on_save(self):
         if not self._manga_id or not self._col_id: return
@@ -273,12 +533,13 @@ class ReviewPanel(QWidget):
             svc = ReviewService()
             rating = self._rating.value()
             text = self._text.toPlainText().strip() or None
+            tags = self._tag_bar.get_tags()
             user_id = self._main_window.current_user["id"] if self._main_window else None
             if not user_id: return
             if self._review_id:
-                svc.update(self._review_id, rating=rating, review_text=text)
+                svc.update(self._review_id, rating=rating, review_text=text, tags=tags)
             else:
-                r = svc.add(manga_id=self._manga_id, collection_id=self._col_id, user_id=user_id, rating=rating, review_text=text)
+                r = svc.add(manga_id=self._manga_id, collection_id=self._col_id, user_id=user_id, rating=rating, review_text=text, tags=tags)
                 if r:
                     self._review_id = r.id; self._del_btn.show()
             self._toast("Review berhasil disimpan")
@@ -417,6 +678,7 @@ class DetailPage(QWidget):
         col_lbl.setStyleSheet(f"color: {WHITE}; font-size: 13px; font-weight: 700; background: transparent;")
         self._col_panel = CollectionPanel(main_window=self.main_window)
         self._col_panel.changed.connect(self._on_collection_changed)
+        self._col_panel.status_changed.connect(self._on_status_dropdown_changed)
         col_sec.addWidget(col_lbl); col_sec.addWidget(self._col_panel); col_sec.addStretch()
         bottom_row.addLayout(col_sec)
         rev_sec = QVBoxLayout(); rev_sec.setSpacing(6)
@@ -467,7 +729,7 @@ class DetailPage(QWidget):
             self._cover_ldr.start()
         self._title_lbl.setText(manga.title or "—")
         syn = manga.synopsis or "No synopsis available."
-        self._synopsis.setText(syn[:600] + ("…" if len(syn) > 600 else ""))
+        self._synopsis.setText(syn)
         self._clear_meta()
         self._add_meta("Genre:", manga.genres)
         self._add_meta("Author:", manga.authors)
@@ -475,11 +737,14 @@ class DetailPage(QWidget):
         self._add_meta("Status:", manga.status)
         self._add_meta("Score:", manga.score)
         self._add_meta("Chapters:", manga.chapters)
-        self._col_panel.load(manga.id, collection)
+        self._col_panel.load(manga.id, collection, manga_chapters=manga.chapters or 0)
         if collection:
-            self._rev_panel.load(manga.id, collection.id, review)
+            _status = (collection.status or "Plan to Read").strip()
+            self._rev_panel.load(manga.id, collection.id, review, status=_status)
+            self._rev_panel.set_locked(_status == "Plan to Read")
         else:
             self._rev_panel.clear()
+            self._rev_panel.set_locked(True)
         self._similar.load(similar, self.load_manga)
 
     def _on_collection_changed(self):
@@ -492,8 +757,17 @@ class DetailPage(QWidget):
             col = CollectionService().get_by_manga_id(self._manga_id, user_id=user_id)
             rev = ReviewService().get_by_manga(self._manga_id, user_id=user_id)
             if col:
-                self._rev_panel.load(self._manga_id, col.id, rev)
+                _status = (col.status or "Plan to Read").strip()
+                self._rev_panel.load(self._manga_id, col.id, rev, status=_status)
+                self._rev_panel.set_locked(_status == "Plan to Read")
             else:
                 self._rev_panel.clear()
+                self._rev_panel.set_locked(True)
         except Exception as e:
             print(f"[DetailPage] Refresh error: {e}")
+
+    def _on_status_dropdown_changed(self, status: str):
+        locked = status.strip() == "Plan to Read"
+        self._rev_panel.set_locked(locked)
+        if not locked:
+            self._rev_panel._tag_bar.set_status(status.strip())
