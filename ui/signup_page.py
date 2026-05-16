@@ -65,7 +65,7 @@ class SignUpPage(QWidget):
         rl.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         title = QLabel("Sign Up")
-        title.setFont(QFont("Segoe UI", 32, QFont.Weight.Bold))
+        title.setFont(QFont("Motley", 32, QFont.Weight.Bold))
         title.setStyleSheet("color: white; background: transparent;")
         rl.addWidget(title)
         rl.addSpacing(24)
@@ -159,7 +159,8 @@ class SignUpPage(QWidget):
         rl.addSpacing(12)
         back_row = QHBoxLayout()
         back_row.setSpacing(4)
-        have = QLabel("Sudah punya akun?")
+        back_row.addStretch()
+        have = QLabel("Already have an account?")
         have.setStyleSheet("color: rgba(255,255,255,0.85); background: transparent; font-size: 12px;")
         back_btn = QPushButton("Login")
         back_btn.setStyleSheet("""
