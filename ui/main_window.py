@@ -173,8 +173,23 @@ class MainWindow(QMainWindow):
             from services.user_service import UserService
             data = UserService().get_profile(self.current_user["id"])
             if data:
-                self.profile_page.load_profile(name=data.name or "", email=data.email or "", bio=data.bio or "", avatar_path=data.avatar_path)
-        except Exception as e: print(f"[go_profile] error: {e}")
+                self.profile_page.load_profile(
+                    name=data.name or data.username or self.current_user.get("username", ""),
+                    email=data.email or self.current_user.get("email", ""),
+                    bio=data.bio or "",
+                    avatar_path=data.avatar_path
+                )
+            else:
+                self.profile_page.load_profile(
+                    name=self.current_user.get("username", ""),
+                    email=self.current_user.get("email", ""),
+                )
+        except Exception as e:
+            print(f"[go_profile] error: {e}")
+            self.profile_page.load_profile(
+                name=self.current_user.get("username", ""),
+                email=self.current_user.get("email", ""),
+            )
         self.stack.setCurrentWidget(self.profile_page)
 
     def go_search(self, query=""): self.search_page.set_query(query); self._navigate(2)

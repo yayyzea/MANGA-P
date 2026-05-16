@@ -428,4 +428,16 @@ class ProfilePage(QWidget):
             pix = QPixmap(avatar_path)
             if not pix.isNull(): self.avatar.set_image(pix); self._avatar_path = avatar_path
 
-    def refresh(self): pass
+    def refresh(self):
+        try:
+            from services.user_service import UserService
+            data = UserService().get_profile(self.main_window.current_user["id"])
+            if data:
+                self.load_profile(
+                    name=data.name or "",
+                    email=data.email or "",
+                    bio=data.bio or "",
+                    avatar_path=data.avatar_path
+                )
+        except Exception as e:
+            print(f"[ProfilePage] refresh error: {e}")
