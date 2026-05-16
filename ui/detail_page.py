@@ -269,8 +269,19 @@ class CollectionPanel(QWidget):
 
     def _on_remove(self):
         if not self._col_id: return
-        reply = QMessageBox.question(self, "Remove", "Remove from collection?\n(Reviews will also be deleted.)",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("Remove")
+        msg_box.setText("Remove from collection?\n(Reviews will also be deleted.)")
+        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        msg_box.setStyleSheet("""
+            QLabel { color: white; }
+            QMessageBox { background-color: #1a1a1a; }
+            QPushButton { color: white; background-color: rgba(255,255,255,0.20); 
+                        border: 1px solid white; border-radius: 6px; 
+                        padding: 4px 12px; }
+            QPushButton:hover { background-color: rgba(255,255,255,0.35); }
+        """)
+        reply = msg_box.exec()
         if reply == QMessageBox.StandardButton.Yes:
             try:
                 from services.collection_service import CollectionService
