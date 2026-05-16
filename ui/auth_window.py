@@ -45,4 +45,4 @@ class AuthWindow(QMainWindow):
         # Setelah signup berhasil, balik ke login dan isi email
         self._show_login()
         self.login_page.email_input.setText(registered_email)
-        self.login_page.show_success("✓ Akun berhasil dibuat! Silakan login.")
+        self.login_page.show_success("✓ Account created successfully! Please log in.")

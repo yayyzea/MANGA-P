@@ -54,7 +54,7 @@ class SignUpPage(QWidget):
         logo.setStyleSheet("background: transparent;")
         px = QPixmap(str(_ASSET_DIR / "logo_kucing.png"))
         if not px.isNull():
-            logo.setPixmap(px.scaled(240, 260,
+            logo.setPixmap(px.scaled(380, 400,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation))
         else:
