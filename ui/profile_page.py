@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QTextEdit, QScrollArea,
-    QFileDialog, QSizePolicy, QFrame, QMessageBox
+    QFileDialog, QSizePolicy, QFrame, QMessageBox,
+    QDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import (
@@ -50,11 +51,11 @@ class AvatarLabel(QLabel):
         if self._pixmap:
             p.drawPixmap(0, 0, self._pixmap)
         else:
-            p.fillPath(path, QColor(BLUE_LIGHT))
+            p.fillPath(path, QColor(BLUE_CARD))
             cat_px = QPixmap(str(_ICON_DIR / "logo_kucing.png"))
             if not cat_px.isNull():
-                cat_px = cat_px.scaled(self._size - 4, self._size - 4,
-                    Qt.AspectRatioMode.KeepAspectRatio,
+                cat_px = cat_px.scaled(self._size, self._size,
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                     Qt.TransformationMode.SmoothTransformation)
                 x = (self._size - cat_px.width()) // 2
                 y = (self._size - cat_px.height()) // 2
@@ -83,6 +84,175 @@ class ProfileTopBar(QWidget):
         title = QLabel("My Profile")
         title.setStyleSheet(f"color: {WHITE}; font-size: 18px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
         layout.addWidget(title); layout.addStretch()
+
+
+class SwitchAccountDialog(QDialog):
+    """Dialog switch account bergaya Instagram."""
+
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.setWindowTitle("Switch Account")
+        self.setFixedWidth(380)
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {BLUE_DARK};
+                border-radius: 16px;
+            }}
+        """)
+        self._build()
+
+    def _build(self):
+        from .login_page import _load_remember
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # ── Account list ──
+        body = QWidget()
+        body.setStyleSheet(f"background: {BLUE_DARK};")
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(16, 16, 16, 8)
+        body_layout.setSpacing(8)
+
+        data = _load_remember()
+        accounts = data.get("accounts", [])
+        current_email = self.main_window.current_user.get("email", "")
+
+        if accounts:
+            for acc in accounts:
+                is_active = acc["email"] == current_email
+                row = self._make_account_row(acc, is_active)
+                body_layout.addWidget(row)
+        else:
+            empty = QLabel("No saved accounts.")
+            empty.setStyleSheet(f"color: rgba(255,255,255,0.60); font-size: 13px; background: transparent;")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            body_layout.addWidget(empty)
+
+        # ── Add account button ──
+        body_layout.addSpacing(8)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("background: rgba(255,255,255,0.15); border: none; max-height: 1px;")
+        body_layout.addWidget(sep)
+        body_layout.addSpacing(8)
+
+        add_btn = QPushButton("＋  Add Account")
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setFixedHeight(42)
+        add_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.10);
+                color: {WHITE};
+                border: 1.5px solid rgba(255,255,255,0.35);
+                border-radius: 21px;
+                font-size: 13px;
+                font-weight: 600;
+                font-family: '{FONT_FAMILY}';
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,0.20); }}
+        """)
+        add_btn.clicked.connect(self._on_add_account)
+        body_layout.addWidget(add_btn)
+        body_layout.addSpacing(8)
+
+        layout.addWidget(body)
+
+    def _make_account_row(self, acc: dict, is_active: bool) -> QWidget:
+        row = QWidget()
+        row.setCursor(Qt.CursorShape.PointingHandCursor)
+        row.setFixedHeight(60)
+        row.setStyleSheet(f"""
+            QWidget {{
+                background: {"rgba(255,255,255,0.15)" if is_active else "rgba(255,255,255,0.06)"};
+                border-radius: 12px;
+            }}
+            QWidget:hover {{
+                background: rgba(255,255,255,0.22);
+            }}
+        """)
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(12, 0, 12, 0)
+        rl.setSpacing(12)
+
+        # Avatar circle
+        avatar = QLabel()
+        avatar.setFixedSize(38, 38)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setStyleSheet(f"""
+            background: {BLUE_PRIMARY};
+            border-radius: 19px;
+            color: {WHITE};
+            font-size: 15px;
+            font-weight: 700;
+            font-family: '{FONT_FAMILY}';
+        """)
+        avatar.setText(acc.get("username", "?")[0].upper())
+        rl.addWidget(avatar)
+
+        # Username & email
+        info = QVBoxLayout()
+        info.setSpacing(2)
+        uname = QLabel(acc.get("username", ""))
+        uname.setStyleSheet(f"color: {WHITE}; font-size: 13px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        email_lbl = QLabel(acc.get("email", ""))
+        email_lbl.setStyleSheet(f"color: rgba(255,255,255,0.65); font-size: 11px; background: transparent; font-family: '{FONT_FAMILY}';")
+        info.addWidget(uname)
+        info.addWidget(email_lbl)
+        rl.addLayout(info)
+        rl.addStretch()
+
+        # Active badge or switch button
+        if is_active:
+            badge = QLabel("Active")
+            badge.setStyleSheet(f"""
+                background: rgba(255,255,255,0.25);
+                color: {WHITE};
+                border-radius: 10px;
+                padding: 2px 10px;
+                font-size: 11px;
+                font-weight: 600;
+                font-family: '{FONT_FAMILY}';
+            """)
+            rl.addWidget(badge)
+        else:
+            switch_btn = QPushButton("Switch")
+            switch_btn.setFixedHeight(28)
+            switch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            switch_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {WHITE};
+                    color: {BLUE_DARK};
+                    border: none;
+                    border-radius: 14px;
+                    padding: 0 14px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    font-family: '{FONT_FAMILY}';
+                }}
+                QPushButton:hover {{ background: {BLUE_LIGHT}; }}
+            """)
+            switch_btn.clicked.connect(lambda _, a=acc: self._do_switch(a))
+            rl.addWidget(switch_btn)
+
+        return row
+
+    def _do_switch(self, acc: dict):
+        """Login ke akun lain dan reload MainWindow."""
+        from services.auth_service import AuthService
+        user = AuthService().login(acc["email"], acc["password"])
+        if not user:
+            self.main_window.show_toast("⚠ Failed to switch account, please log in again.")
+            self.reject()
+            return
+        self.reject()
+        self.main_window._switch_to_user(user)
+
+    def _on_add_account(self):
+        """Buka AuthWindow untuk login akun baru."""
+        self.reject()
+        self.main_window._logout()
 
 
 class ProfilePage(QWidget):
@@ -155,14 +325,30 @@ class ProfilePage(QWidget):
         btn_row.addStretch(); btn_row.addWidget(cancel_btn); btn_row.addWidget(save_btn)
         card_layout.addLayout(btn_row)
 
-        # Logout button
+        # Switch Account button
         card_layout.addSpacing(8)
-        logout_btn = QPushButton("Logout")
-        logout_btn.setCursor(Qt.CursorShape.PointingHandCursor); logout_btn.setFixedHeight(40)
-        logout_btn.setStyleSheet(f"QPushButton {{ background: rgba(220, 50, 50, 0.85); color: {WHITE}; border: none; border-radius: 20px; padding: 0 22px; font-size: 13px; font-weight: 700; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(200, 30, 30, 1); }}")
-        logout_btn.clicked.connect(self._on_logout)
-        logout_row = QHBoxLayout(); logout_row.addStretch(); logout_row.addWidget(logout_btn); logout_row.addStretch()
-        card_layout.addLayout(logout_row)
+        switch_btn = QPushButton("🔄  Switch Account")
+        switch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        switch_btn.setFixedHeight(40)
+        switch_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.18);
+                color: {WHITE};
+                border: 1.5px solid rgba(255,255,255,0.55);
+                border-radius: 20px;
+                padding: 0 22px;
+                font-size: 13px;
+                font-weight: 700;
+                font-family: '{FONT_FAMILY}';
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,0.30); }}
+        """)
+        switch_btn.clicked.connect(self._on_switch_account)
+        switch_row = QHBoxLayout()
+        switch_row.addStretch()
+        switch_row.addWidget(switch_btn)
+        switch_row.addStretch()
+        card_layout.addLayout(switch_row)
 
         outer.addWidget(card); outer.addStretch()
         root.addWidget(self._build_footer())
@@ -207,15 +393,9 @@ class ProfilePage(QWidget):
         UserService().update_profile(user_id=self.main_window.current_user["id"], name=name, email=email, password=pwd if pwd else None, bio=bio, avatar_path=self._avatar_path)
         self._toast("Profile saved successfully ✓")
 
-    def _on_logout(self):
-        reply = QMessageBox.question(self, "Logout", "Are you sure you want to logout?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
-        if reply == QMessageBox.StandardButton.Yes:
-            from PyQt6.QtWidgets import QApplication
-            import sys, os
-            QApplication.instance().quit()
-            python = sys.executable
-            os.execl(python, python, *sys.argv)
+    def _on_switch_account(self):
+        dialog = SwitchAccountDialog(self.main_window, parent=self)
+        dialog.exec()
 
     def _toast(self, msg: str):
         if hasattr(self.main_window, "show_toast"): self.main_window.show_toast(msg)
@@ -227,4 +407,16 @@ class ProfilePage(QWidget):
             pix = QPixmap(avatar_path)
             if not pix.isNull(): self.avatar.set_image(pix); self._avatar_path = avatar_path
 
-    def refresh(self): pass
+    def refresh(self):
+        try:
+            from services.user_service import UserService
+            data = UserService().get_profile(self.main_window.current_user["id"])
+            if data:
+                self.load_profile(
+                    name=data.name or "",
+                    email=data.email or "",
+                    bio=data.bio or "",
+                    avatar_path=data.avatar_path
+                )
+        except Exception as e:
+            print(f"[ProfilePage] refresh error: {e}")

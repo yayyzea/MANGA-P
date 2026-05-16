@@ -22,7 +22,22 @@ def init_db():
     from models.user_collection import UserCollection
     from models.review import Review
     Base.metadata.create_all(bind=engine)
+    _migrate(engine)
     print(f"[DB] Database initialized at: {DB_PATH}")
+
+
+def _migrate(eng):
+    """Jalankan migrasi kolom baru secara otomatis (idempotent)."""
+    from sqlalchemy import text, inspect
+    with eng.connect() as conn:
+        inspector = inspect(eng)
+
+       
+        review_cols = [c["name"] for c in inspector.get_columns("reviews")]
+        if "tags" not in review_cols:
+            conn.execute(text("ALTER TABLE reviews ADD COLUMN tags TEXT DEFAULT '[]'"))
+            conn.commit()
+            print("[DB] Migrasi: kolom 'tags' ditambahkan ke tabel reviews.")
 
 
 def get_session():
