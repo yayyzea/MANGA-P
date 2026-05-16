@@ -1,10 +1,15 @@
 {
   "last": {
     "username": "kyo",
-    "email": "kyo",
+    "email": "kyo@gmail.com",
     "password": "kyo"
   },
   "accounts": [
+    {
+      "username": "kyo",
+      "email": "kyo@gmail.com",
+      "password": "kyo"
+    },
     {
       "username": "kyo",
       "email": "kyo",
