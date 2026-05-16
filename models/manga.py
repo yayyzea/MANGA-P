@@ -9,12 +9,13 @@ class Manga(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     mal_id = Column(Integer, unique=True, nullable=True)
-    title = Column(String(255), nullable=False)
-    title_en = Column(String(255), nullable=True)
+    title = Column(String(500), nullable=False)
+    title_english = Column(String(500), nullable=True)
+    title_en = Column(String(255), nullable=True)  # backward compat
     synopsis = Column(Text, nullable=True)
-    cover_url = Column(String(500), nullable=True)
-    authors = Column(String(255), nullable=True)
-    genres = Column(String(255), nullable=True)
+    cover_url = Column(String(1000), nullable=True)
+    authors = Column(String(500), nullable=True)
+    genres = Column(String(500), nullable=True)
     status = Column(String(50), nullable=True)
     score = Column(Float, nullable=True)
     chapters = Column(Integer, nullable=True)
@@ -22,6 +23,7 @@ class Manga(Base):
     is_manual = Column(Boolean, default=False)
     fetched_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
     collections = relationship(
         "UserCollection",

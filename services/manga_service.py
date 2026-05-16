@@ -45,7 +45,7 @@ class MangaService:
         finally:
             session.close()
 
-    def get_top_manga(self, limit: int = 48) -> list[Manga]:
+    def get_top_manga(self, limit: int = 100) -> list[Manga]:
         session = get_session()
         try:
             cached = (
@@ -281,7 +281,7 @@ class MangaService:
         if query:
             q = q.filter(or_(
                 Manga.title.ilike(f"%{query}%"),
-                Manga.title_en.ilike(f"%{query}%"),
+                Manga.title_english.ilike(f"%{query}%"),
             ))
         if genres:
             for genre in genres:

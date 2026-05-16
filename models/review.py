@@ -11,13 +11,15 @@ class Review(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     manga_id = Column(Integer, ForeignKey("manga.id"), nullable=False)
-    collection_id = Column(Integer, ForeignKey("user_collection.id"), nullable=False)
+    collection_id = Column(Integer, ForeignKey("user_collection.id"), nullable=True)
     rating = Column(Integer, nullable=False)
     review_text = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 
+    user = relationship("User", back_populates="reviews")
     manga = relationship("Manga", back_populates="reviews")
     collection = relationship("UserCollection", back_populates="reviews")
 
