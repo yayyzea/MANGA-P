@@ -50,11 +50,11 @@ class AvatarLabel(QLabel):
         if self._pixmap:
             p.drawPixmap(0, 0, self._pixmap)
         else:
-            p.fillPath(path, QColor(BLUE_LIGHT))
+            p.fillPath(path, QColor(BLUE_CARD))
             cat_px = QPixmap(str(_ICON_DIR / "logo_kucing.png"))
             if not cat_px.isNull():
-                cat_px = cat_px.scaled(self._size - 4, self._size - 4,
-                    Qt.AspectRatioMode.KeepAspectRatio,
+                cat_px = cat_px.scaled(self._size, self._size,
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                     Qt.TransformationMode.SmoothTransformation)
                 x = (self._size - cat_px.width()) // 2
                 y = (self._size - cat_px.height()) // 2
