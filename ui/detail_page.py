@@ -559,7 +559,7 @@ class DetailPage(QWidget):
             self._cover_ldr.start()
         self._title_lbl.setText(manga.title or "—")
         syn = manga.synopsis or "No synopsis available."
-        self._synopsis.setText(syn[:600] + ("…" if len(syn) > 600 else ""))
+        self._synopsis.setText(syn)
         self._clear_meta()
         self._add_meta("Genre:", manga.genres)
         self._add_meta("Author:", manga.authors)
