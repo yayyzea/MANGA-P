@@ -1,14 +1,51 @@
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QLineEdit, QPushButton, QSizePolicy
+    QLabel, QLineEdit, QPushButton, QSizePolicy,
+    QCheckBox, QComboBox
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QPixmap, QFont, QPainter, QLinearGradient, QColor, QIcon
 from pathlib import Path
+import json
 
 from services.auth_service import AuthService
 
-_ASSET_DIR = Path(__file__).parent.parent / "assets"
+_ASSET_DIR   = Path(__file__).parent.parent / "assets"
+_REMEMBER_FILE = Path(__file__).parent.parent / "remember_me.json"
+
+
+# ── Remember Me helpers ──────────────────────────────────────────────────────
+
+def _load_remember() -> dict:
+    """
+    Kembalikan dict berisi:
+      last   : {"email": ..., "password_hash": ...}  ← akun terakhir login
+      accounts: [{"username": ..., "email": ...}, ...]  ← semua akun yang pernah remember
+    """
+    if _REMEMBER_FILE.exists():
+        try:
+            return json.loads(_REMEMBER_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    return {"last": None, "accounts": []}
+
+
+def _save_remember(email: str, username: str, password_plain: str):
+    """Simpan akun terakhir login ke file JSON (password disimpan plaintext lokal)."""
+    data = _load_remember()
+    entry = {"username": username, "email": email, "password": password_plain}
+    # Update last
+    data["last"] = entry
+    # Tambah/update ke daftar accounts (unik berdasarkan email)
+    data["accounts"] = [a for a in data.get("accounts", []) if a["email"] != email]
+    data["accounts"].insert(0, entry)
+    _REMEMBER_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def _clear_remember():
+    """Hapus file remember me."""
+    if _REMEMBER_FILE.exists():
+        _REMEMBER_FILE.unlink()
 
 
 class LoginPage(QWidget):
@@ -17,7 +54,9 @@ class LoginPage(QWidget):
         self.on_login = on_login
         self.on_switch_signup = on_switch_signup
         self._auth = AuthService()
+        self._remember_data = _load_remember()
         self._build()
+        self._apply_remember()   # auto-fill setelah UI selesai
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -153,6 +192,59 @@ class LoginPage(QWidget):
         rl.addWidget(self.error_lbl)
         rl.addSpacing(16)
 
+        # ── Remember Me row ───────────────────────────────────────────────
+        remember_row = QHBoxLayout()
+        remember_row.setSpacing(8)
+        remember_row.setContentsMargins(4, 0, 0, 0)
+
+        self._remember_cb = QCheckBox("Remember me")
+        self._remember_cb.setStyleSheet("""
+            QCheckBox {
+                color: rgba(255,255,255,0.92);
+                background: transparent;
+                font-size: 13px;
+                spacing: 8px;
+            }
+            QCheckBox::indicator {
+                width: 18px; height: 18px;
+                border: 2px solid rgba(255,255,255,0.70);
+                border-radius: 4px;
+                background: rgba(255,255,255,0.15);
+            }
+            QCheckBox::indicator:checked {
+                background: white;
+                border-color: white;
+                image: url(none);
+            }
+        """)
+        remember_row.addWidget(self._remember_cb)
+        remember_row.addStretch()
+
+        # Dropdown pilih akun lain (hanya tampil kalau ada ≥ 2 akun tersimpan)
+        self._account_combo = QComboBox()
+        self._account_combo.setFixedHeight(32)
+        self._account_combo.setStyleSheet("""
+            QComboBox {
+                background: rgba(255,255,255,0.20);
+                color: white;
+                border: 1.5px solid rgba(255,255,255,0.50);
+                border-radius: 16px;
+                padding: 2px 12px;
+                font-size: 12px;
+            }
+            QComboBox::drop-down { border: none; width: 20px; }
+            QComboBox QAbstractItemView {
+                background: #1565C0;
+                color: white;
+                selection-background-color: #1E90FF;
+            }
+        """)
+        self._account_combo.currentIndexChanged.connect(self._on_account_selected)
+        remember_row.addWidget(self._account_combo)
+
+        rl.addLayout(remember_row)
+        rl.addSpacing(16)
+
         # Sign In button
         self.signin_btn = QPushButton("Sign In")
         self.signin_btn.setFixedHeight(48)
@@ -196,6 +288,39 @@ class LoginPage(QWidget):
         """)
         return w
 
+    # ── Remember Me logic ─────────────────────────────────────────────────────
+
+    def _apply_remember(self):
+        """Isi form dari data remember me yang tersimpan."""
+        data = self._remember_data
+        accounts = data.get("accounts", [])
+
+        # Populate dropdown akun
+        self._account_combo.blockSignals(True)
+        self._account_combo.clear()
+        if len(accounts) >= 1:
+            for acc in accounts:
+                label = f"{acc['username']} ({acc['email']})"
+                self._account_combo.addItem(label, acc)
+        self._account_combo.blockSignals(False)
+
+        # Sembunyikan dropdown kalau hanya 0-1 akun
+        self._account_combo.setVisible(len(accounts) > 1)
+
+        # Auto-fill dari last
+        last = data.get("last")
+        if last:
+            self._remember_cb.setChecked(True)
+            self.email_input.setText(last.get("email", ""))
+            self.pass_input.setText(last.get("password", ""))
+
+    def _on_account_selected(self, idx: int):
+        """Saat user pilih akun lain dari dropdown."""
+        acc = self._account_combo.itemData(idx)
+        if acc:
+            self.email_input.setText(acc.get("email", ""))
+            self.pass_input.setText(acc.get("password", ""))
+
     def _go_signup(self):
         if self.on_switch_signup:
             self.on_switch_signup()
@@ -226,6 +351,23 @@ class LoginPage(QWidget):
             self.error_lbl.setText("⚠  Username/email atau password salah.")
             self.pass_input.clear()
             return
+
+        # ── Simpan atau hapus Remember Me ──────────────────────────────────
+        if self._remember_cb.isChecked():
+            _save_remember(
+                email=self.email_input.text().strip(),
+                username=user["username"],
+                password_plain=self.pass_input.text(),
+            )
+            self._remember_data = _load_remember()
+        else:
+            # Kalau user uncheck, hapus akun ini dari daftar tapi biarkan yang lain
+            data = _load_remember()
+            email_now = self.email_input.text().strip()
+            data["accounts"] = [a for a in data.get("accounts", []) if a["email"] != email_now]
+            if data["last"] and data["last"]["email"] == email_now:
+                data["last"] = data["accounts"][0] if data["accounts"] else None
+            _REMEMBER_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
         if self.on_login:
             self.on_login(user)
