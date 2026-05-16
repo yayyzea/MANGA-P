@@ -348,7 +348,7 @@ class LoginPage(QWidget):
         self.signin_btn.setText("Sign In")
 
         if not user:
-            self.error_lbl.setText("⚠  Username/email atau password salah.")
+            self.error_lbl.setText("⚠ Invalid username/email or password!")
             self.pass_input.clear()
             return
 

@@ -27,7 +27,7 @@ class AvatarLabel(QLabel):
         self.setFixedSize(size, size)
         self._pixmap = None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip("Klik untuk ganti foto profil")
+        self.setToolTip("Click to change profile photo")
 
     def set_image(self, pixmap: QPixmap):
         if pixmap and not pixmap.isNull():
@@ -51,16 +51,24 @@ class AvatarLabel(QLabel):
             p.drawPixmap(0, 0, self._pixmap)
         else:
             p.fillPath(path, QColor(BLUE_LIGHT))
-            p.setPen(QColor(WHITE))
-            f = QFont(FONT_FAMILY, int(self._size * 0.4))
-            f.setBold(True); p.setFont(f)
-            p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "👤")
+            cat_px = QPixmap(str(_ICON_DIR / "logo_kucing.png"))
+            if not cat_px.isNull():
+                cat_px = cat_px.scaled(self._size - 4, self._size - 4,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation)
+                x = (self._size - cat_px.width()) // 2
+                y = (self._size - cat_px.height()) // 2
+                p.drawPixmap(x, y, cat_px)
+            else:
+                p.setPen(QColor(WHITE))
+                f = QFont(FONT_FAMILY, int(self._size * 0.4))
+                f.setBold(True); p.setFont(f)
+                p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "🐱")
         p.setClipping(False)
         pen = QPen(QColor(WHITE), 4)
         p.setPen(pen); p.setBrush(Qt.BrushStyle.NoBrush)
         p.drawEllipse(2, 2, self._size - 4, self._size - 4)
         p.end()
-
 
 class ProfileTopBar(QWidget):
     def __init__(self, parent=None):
@@ -113,7 +121,7 @@ class ProfilePage(QWidget):
         avatar_row.addWidget(self.avatar); avatar_row.addStretch()
         card_layout.addLayout(avatar_row)
 
-        change_btn = QPushButton("Ganti Foto")
+        change_btn = QPushButton("Change Photo")
         change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         change_btn.setStyleSheet(f"QPushButton {{ background: rgba(255,255,255,0.20); color: {WHITE}; border: 1px solid rgba(255,255,255,0.55); border-radius: 14px; padding: 6px 16px; font-size: 12px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(255,255,255,0.32); }}")
         change_btn.clicked.connect(self._on_change_avatar)
@@ -121,26 +129,26 @@ class ProfilePage(QWidget):
         card_layout.addLayout(change_row)
         card_layout.addSpacing(8)
 
-        self.name_input = self._make_field(card_layout, "Nama", "Masukkan nama lengkap")
-        self.email_input = self._make_field(card_layout, "Email", "nama@email.com")
+        self.name_input = self._make_field(card_layout, "Username", "Insert username here...")
+        self.email_input = self._make_field(card_layout, "Email", "Insert email here...")
         self.pass_input = self._make_field(card_layout, "Password", "••••••••", is_password=True)
 
         bio_label = QLabel("Short Bio")
         bio_label.setStyleSheet(f"color: {WHITE}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
         card_layout.addWidget(bio_label)
         self.bio_input = QTextEdit()
-        self.bio_input.setPlaceholderText("Ceritakan sedikit tentang dirimu...")
+        self.bio_input.setPlaceholderText("Tell us a little about yourself...")
         self.bio_input.setFixedHeight(90)
         self.bio_input.setStyleSheet(f"QTextEdit {{ background: {WHITE}; border: none; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: {TEXT_DARK}; font-family: '{FONT_FAMILY}'; }}")
         card_layout.addWidget(self.bio_input)
         card_layout.addSpacing(10)
 
         btn_row = QHBoxLayout(); btn_row.setSpacing(10)
-        cancel_btn = QPushButton("Kembali")
+        cancel_btn = QPushButton("Back")
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor); cancel_btn.setFixedHeight(38)
         cancel_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {WHITE}; border: 1.5px solid {WHITE}; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(255,255,255,0.15); }}")
         cancel_btn.clicked.connect(self.main_window.go_home)
-        save_btn = QPushButton("Simpan Profil")
+        save_btn = QPushButton("Save Profile")
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor); save_btn.setFixedHeight(38)
         save_btn.setStyleSheet(f"QPushButton {{ background: {WHITE}; color: {BLUE_DARK}; border: none; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 700; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: {BLUE_FOOTER}; }}")
         save_btn.clicked.connect(self._on_save)
@@ -184,7 +192,7 @@ class ProfilePage(QWidget):
         return outer
 
     def _on_change_avatar(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Pilih Foto Profil", "", "Gambar (*.png *.jpg *.jpeg *.bmp *.webp)")
+        path, _ = QFileDialog.getOpenFileName(self, "Select Profile Photo", "", "Image (*.png *.jpg *.jpeg *.bmp *.webp)")
         if path:
             pix = QPixmap(path)
             if not pix.isNull(): self.avatar.set_image(pix); self._avatar_path = path
@@ -192,15 +200,15 @@ class ProfilePage(QWidget):
     def _on_save(self):
         name = self.name_input.text().strip(); email = self.email_input.text().strip()
         pwd = self.pass_input.text(); bio = self.bio_input.toPlainText().strip()
-        if not name: self._toast("Nama tidak boleh kosong"); return
-        if "@" not in email or "." not in email: self._toast("Email tidak valid"); return
-        if pwd and len(pwd) < 6: self._toast("Password minimal 6 karakter"); return
+        if not name: self._toast("Username cannot be empty"); return
+        if "@" not in email or "." not in email: self._toast("Invalid email"); return
+        if pwd and len(pwd) < 6: self._toast("Password must be at least 6 characters"); return
         from services.user_service import UserService
         UserService().update_profile(user_id=self.main_window.current_user["id"], name=name, email=email, password=pwd if pwd else None, bio=bio, avatar_path=self._avatar_path)
-        self._toast("Profil berhasil disimpan ✓")
+        self._toast("Profile saved successfully ✓")
 
     def _on_logout(self):
-        reply = QMessageBox.question(self, "Logout", "Apakah Anda yakin ingin logout?",
+        reply = QMessageBox.question(self, "Logout", "Are you sure you want to logout?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
         if reply == QMessageBox.StandardButton.Yes:
             from PyQt6.QtWidgets import QApplication
