@@ -2,11 +2,11 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QTextEdit, QScrollArea,
     QFileDialog, QSizePolicy, QFrame, QMessageBox,
-    QDialog
+    QDialog, QInputDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import (
-    QPixmap, QPainter, QPainterPath, QColor, QPalette, QFont, QPen
+    QPixmap, QPainter, QPainterPath, QColor, QPalette, QFont, QPen, QIcon, QAction
 )
 from pathlib import Path
 
@@ -29,12 +29,23 @@ class AvatarLabel(QLabel):
         self._pixmap = None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip("Click to change profile photo")
+        self.setStyleSheet("background: transparent;")
 
     def set_image(self, pixmap: QPixmap):
         if pixmap and not pixmap.isNull():
-            self._pixmap = pixmap.scaled(self._size, self._size,
+
+            scaled = pixmap.scaled(
+                self._size,
+                self._size,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation)
+                Qt.TransformationMode.SmoothTransformation
+            )
+
+            x = (scaled.width() - self._size) // 2
+            y = (scaled.height() - self._size) // 2
+
+            self._pixmap = scaled.copy(x, y, self._size, self._size)
+
             self.update()
 
     def mousePressEvent(self, event):
@@ -87,7 +98,6 @@ class ProfileTopBar(QWidget):
 
 
 class SwitchAccountDialog(QDialog):
-    """Dialog switch account bergaya Instagram."""
 
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
@@ -301,7 +311,7 @@ class ProfilePage(QWidget):
 
         self.name_input = self._make_field(card_layout, "Username", "Insert username here...")
         self.email_input = self._make_field(card_layout, "Email", "Insert email here...")
-        self.pass_input = self._make_field(card_layout, "Password", "••••••••", is_password=True)
+        self._build_password_field(card_layout)
 
         bio_label = QLabel("Short Bio")
         bio_label.setStyleSheet(f"color: {WHITE}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
@@ -364,6 +374,61 @@ class ProfilePage(QWidget):
         parent_layout.addWidget(field)
         return field
 
+    def _build_password_field(self, parent_layout):
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        label = QLabel("Password")
+        label.setStyleSheet(f"color: {WHITE}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        header_layout.addWidget(label)
+        header_layout.addStretch()
+        
+        self.change_pwd_btn = QPushButton("Change Password")
+        self.change_pwd_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.change_pwd_btn.setStyleSheet(f"QPushButton {{ background: transparent; border: none; color: {WHITE}; font-size: 11px; font-weight: 600; text-decoration: underline; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ color: {BLUE_LIGHT}; }}")
+        self.change_pwd_btn.clicked.connect(self._on_ganti_password)
+        header_layout.addWidget(self.change_pwd_btn)
+        
+        parent_layout.addLayout(header_layout)
+        
+        self.pass_input = QLineEdit()
+        self.pass_input.setPlaceholderText("••••••••")
+        self.pass_input.setFixedHeight(36)
+        self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pass_input.setReadOnly(True)
+        self.pass_input.setStyleSheet(f"QLineEdit {{ background: #E0E0E0; border: none; border-radius: 18px; padding: 0 14px; font-size: 13px; color: #888888; font-family: '{FONT_FAMILY}'; }} QLineEdit:focus {{ border: 1.5px solid {BLUE_DARK}; }}")
+        
+        self.toggle_pwd_action = self.pass_input.addAction(QIcon(str(_ICON_DIR / "hide.png")), QLineEdit.ActionPosition.TrailingPosition)
+        self.toggle_pwd_action.triggered.connect(self._toggle_password_visibility)
+        
+        parent_layout.addWidget(self.pass_input)
+
+    def _toggle_password_visibility(self):
+        if self.pass_input.echoMode() == QLineEdit.EchoMode.Password:
+            self.pass_input.setEchoMode(QLineEdit.EchoMode.Normal)
+            self.toggle_pwd_action.setIcon(QIcon(str(_ICON_DIR / "view.png")))
+        else:
+            self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self.toggle_pwd_action.setIcon(QIcon(str(_ICON_DIR / "hide.png")))
+
+    def _on_ganti_password(self):
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle("Confirm Password")
+        dialog.setLabelText("Enter your old password:")
+        dialog.setTextEchoMode(QLineEdit.EchoMode.Password)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            old_pwd = dialog.textValue()
+            if old_pwd:
+                from services.auth_service import AuthService
+                current_email = self.main_window.current_user.get("email", "")
+                user = AuthService().login(current_email, old_pwd)
+                if user:
+                    self._toast("Old password verified. Please enter your new password and click Save Profile.")
+                    self.pass_input.setReadOnly(False)
+                    self.pass_input.setStyleSheet(f"QLineEdit {{ background: {WHITE}; border: none; border-radius: 18px; padding: 0 14px; font-size: 13px; color: {TEXT_DARK}; font-family: '{FONT_FAMILY}'; }} QLineEdit:focus {{ border: 1.5px solid {BLUE_DARK}; }}")
+                    self.pass_input.setFocus()
+                else:
+                    self._toast("Incorrect old password!")
+
     def _build_footer(self):
         outer = QWidget()
         outer.setAutoFillBackground(True)
@@ -378,10 +443,22 @@ class ProfilePage(QWidget):
         return outer
 
     def _on_change_avatar(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Select Profile Photo", "", "Image (*.png *.jpg *.jpeg *.bmp *.webp)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Profile Photo",
+            "",
+            "Image (*.png *.jpg *.jpeg *.bmp *.webp)"
+        )
+
         if path:
             pix = QPixmap(path)
-            if not pix.isNull(): self.avatar.set_image(pix); self._avatar_path = path
+
+            if not pix.isNull():
+                self.avatar.set_image(pix)
+                self._avatar_path = path
+
+                # UPDATE LOGO SIDEBAR LANGSUNG
+                self.main_window.update_sidebar_avatar(path)
 
     def _on_save(self):
         name = self.name_input.text().strip(); email = self.email_input.text().strip()
@@ -391,6 +468,9 @@ class ProfilePage(QWidget):
         if pwd and len(pwd) < 6: self._toast("Password must be at least 6 characters"); return
         from services.user_service import UserService
         UserService().update_profile(user_id=self.main_window.current_user["id"], name=name, email=email, password=pwd if pwd else None, bio=bio, avatar_path=self._avatar_path)
+        if self._avatar_path:
+            self.main_window.current_user["avatar_path"] = self._avatar_path
+            self.main_window.update_sidebar_avatar(self._avatar_path)
         self._toast("Profile saved successfully ✓")
 
     def _on_switch_account(self):
@@ -413,10 +493,13 @@ class ProfilePage(QWidget):
             data = UserService().get_profile(self.main_window.current_user["id"])
             if data:
                 self.load_profile(
-                    name=data.name or "",
+                    name=data.name or data.username or "",
                     email=data.email or "",
                     bio=data.bio or "",
                     avatar_path=data.avatar_path
                 )
+                
+                self.pass_input.clear()
+                    
         except Exception as e:
             print(f"[ProfilePage] refresh error: {e}")
