@@ -476,7 +476,7 @@ class GenrePage(QWidget):
         cols = max(1, (container_width + spacing) // (card_w + spacing))
 
         for i, manga in enumerate(manga_list):
-            card = MangaCardCompact(manga)
+            card = MangaCardSmall(manga)
             card.clicked.connect(self.main_window.go_detail)
             row, col = divmod(i, cols)
             self._grid_layout.addWidget(card, row, col, alignment=Qt.AlignmentFlag.AlignCenter)
