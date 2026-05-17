@@ -1,10 +1,25 @@
 {
   "last": {
-    "username": "kyo",
-    "email": "kyo@gmail.com",
-    "password": "kyo"
+    "username": "a",
+    "email": "a",
+    "password": "a"
   },
   "accounts": [
+    {
+      "username": "a",
+      "email": "a",
+      "password": "a"
+    },
+    {
+      "username": "zahra",
+      "email": "zahra@gmail.com",
+      "password": "zahra"
+    },
+    {
+      "username": "zimri",
+      "email": "zahra.azkiya.tif425@polban.ac.id",
+      "password": "zimri11"
+    },
     {
       "username": "kyo",
       "email": "kyo@gmail.com",
