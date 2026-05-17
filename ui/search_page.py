@@ -215,6 +215,22 @@ class FilterPanel(QWidget):
             g_grid.addWidget(cb, i // 3, i % 3)
         root.addLayout(g_grid)
 
+        root.addWidget(self._subheading("Other genre"))
+        self._custom_genre_input = QLineEdit()
+        self._custom_genre_input.setFixedHeight(32)
+        self._custom_genre_input.setMaximumWidth(160)
+        self._custom_genre_input.setPlaceholderText("e.g. Isekai")
+        self._custom_genre_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: {WHITE};
+                border: 1.5px solid {BLUE_LIGHT};
+                border-radius: 6px; padding: 4px 10px;
+                font-size: 13px; color: {TEXT_DARK};
+            }}
+            QLineEdit:focus {{ border-color: {BLUE_PRIMARY}; }}
+        """)
+        root.addWidget(self._custom_genre_input)
+
         # ── Status ─────────────────────────────────────────────────────────
         root.addWidget(self._subheading("Status"))
         s_row = QHBoxLayout()
@@ -316,8 +332,12 @@ class FilterPanel(QWidget):
 
     # ── Getters ───────────────────────────────────────────────────────────
 
-    def selected_genres(self):
-        return [g for g, cb in self._genre_cbs.items() if cb.isChecked()]
+    def selected_genres(self) -> list:
+        genres = [g for g, cb in self._genre_cbs.items() if cb.isChecked()]
+        custom = self._custom_genre_input.text().strip()
+        if custom:
+            genres.append(custom)
+        return genres
 
     def selected_status(self):
         checked = [s for s, cb in self._status_cbs.items() if cb.isChecked()]
