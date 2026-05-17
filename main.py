@@ -12,10 +12,10 @@ def main():
     # Set stylesheet di level QApplication lewat FontSizeManager
     # supaya perubahan font size bisa terpropagasi ke semua widget
     from ui.theme import APP_STYLESHEET
-    from ui.font_size_manager import FontSizeManager
+    from ui.font_size_manager import FontSizeManager, FONT_BASE_PX
     fsm = FontSizeManager.instance()
     fsm.set_base_stylesheet(APP_STYLESHEET)
-    fsm.apply(1.0)   # apply scale normal sekaligus set stylesheet ke QApplication
+    fsm.apply_px(FONT_BASE_PX)   # apply default px sekaligus set stylesheet ke QApplication
 
     main_win_ref = {}   # mutable container to hold reference
 
