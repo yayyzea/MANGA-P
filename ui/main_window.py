@@ -6,12 +6,13 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QPoint
 from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon
 from pathlib import Path
-
+ 
 _ICON_DIR = Path(__file__).parent.parent / "assets"
-
+ 
 from .theme import BLUE_PRIMARY, WHITE, SIDEBAR_WIDTH, APP_STYLESHEET
-
-
+from .font_size_manager import FontSizeManager
+ 
+ 
 class Toast(QLabel):
     def __init__(self, parent, message: str, duration: int = 2000):
         super().__init__(message, parent)
@@ -35,24 +36,25 @@ class Toast(QLabel):
         self._anim.setEasingCurve(QEasingCurve.Type.InQuad)
         self._anim.finished.connect(self.deleteLater)
         QTimer.singleShot(duration, self._anim.start)
-
+ 
     def _reposition(self):
         p = self.parent()
         if p:
             pw, ph = p.width(), p.height()
             self.move((pw - self.width()) // 2, ph - self.height() - 50)
-
-
+ 
+ 
 class FontSizePopup(QFrame):
     """
     Flyout panel muncul di kanan sidebar saat tombol 'Aa' diklik.
     Menampilkan tombol '-' dan '+' untuk memperkecil/memperbesar font,
     beserta indikator level font saat ini.
     """
-
+ 
+    # Label level font yang ditampilkan ke user
     _LEVEL_LABELS = ["Kecil", "Normal", "Besar", "X-Besar"]
     _LEVELS       = [0.85, 1.0, 1.20, 1.45]
-
+ 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("FontSizePopup")
@@ -65,46 +67,52 @@ class FontSizePopup(QFrame):
                 border: 1.5px solid rgba(255,255,255,0.30);
             }
         """)
-
+ 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(14, 12, 14, 12)
         outer.setSpacing(8)
-
+ 
+        # ── Judul popup ────────────────────────────────────────────────
         title_lbl = QLabel("Ukuran Teks")
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_lbl.setFont(QFont("Segoe UI", 9))
         title_lbl.setStyleSheet("color: rgba(255,255,255,0.70); background: transparent;")
         outer.addWidget(title_lbl)
-
+ 
+        # ── Baris kontrol: [−] [label level] [+] ──────────────────────
         ctrl_row = QHBoxLayout()
         ctrl_row.setSpacing(10)
         ctrl_row.setContentsMargins(0, 0, 0, 0)
-
+ 
+        # Tombol minus
         self._btn_dec = QPushButton("−")
         self._btn_dec.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         self._btn_dec.setFixedSize(40, 40)
         self._btn_dec.setToolTip("Perkecil teks")
         self._btn_dec.setStyleSheet(self._action_btn_style())
         self._btn_dec.clicked.connect(self._decrease)
-
+ 
+        # Label level saat ini
         self._level_lbl = QLabel("Normal")
         self._level_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._level_lbl.setFixedWidth(62)
         self._level_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
         self._level_lbl.setStyleSheet("color: white; background: transparent;")
-
+ 
+        # Tombol plus
         self._btn_inc = QPushButton("+")
         self._btn_inc.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
         self._btn_inc.setFixedSize(40, 40)
         self._btn_inc.setToolTip("Perbesar teks")
         self._btn_inc.setStyleSheet(self._action_btn_style())
         self._btn_inc.clicked.connect(self._increase)
-
+ 
         ctrl_row.addWidget(self._btn_dec)
         ctrl_row.addWidget(self._level_lbl)
         ctrl_row.addWidget(self._btn_inc)
         outer.addLayout(ctrl_row)
-
+ 
+        # ── Indikator titik level ──────────────────────────────────────
         dot_row = QHBoxLayout()
         dot_row.setSpacing(6)
         dot_row.setContentsMargins(0, 0, 0, 0)
@@ -117,10 +125,11 @@ class FontSizePopup(QFrame):
             self._dots.append(dot)
             dot_row.addWidget(dot)
         outer.addLayout(dot_row)
-
+ 
         self.adjustSize()
         self._refresh_ui()
-
+ 
+    # ── Gaya tombol aksi ──────────────────────────────────────────────
     @staticmethod
     def _action_btn_style():
         return """
@@ -141,9 +150,9 @@ class FontSizePopup(QFrame):
                 color: rgba(255,255,255,0.30);
             }
         """
-
+ 
+    # ── Perbarui label & indikator sesuai skala saat ini ─────────────
     def _refresh_ui(self):
-        from .font_size_manager import FontSizeManager
         mgr = FontSizeManager.instance()
         idx = min(range(len(self._LEVELS)),
                   key=lambda i: abs(self._LEVELS[i] - mgr.scale()))
@@ -156,17 +165,15 @@ class FontSizePopup(QFrame):
                 if i == idx else
                 "color: rgba(255,255,255,0.30); background: transparent;"
             )
-
+ 
     def _decrease(self):
-        from .font_size_manager import FontSizeManager
         FontSizeManager.instance().decrease()
         self._refresh_ui()
-
+ 
     def _increase(self):
-        from .font_size_manager import FontSizeManager
         FontSizeManager.instance().increase()
         self._refresh_ui()
-
+ 
     def show_near(self, sidebar_widget: QWidget, trigger_btn: QWidget):
         """Tampilkan popup di kanan sidebar, sejajar dengan tombol pemicu."""
         self._refresh_ui()
@@ -176,91 +183,103 @@ class FontSizePopup(QFrame):
         self.move(x, y)
         self.show()
         self.raise_()
-
-
+ 
+ 
+ 
 class _AaButton(QWidget):
     """
     Tombol sidebar berbentuk 'Aa' — huruf kecil dan besar berdampingan.
     Memancarkan sinyal clicked() saat diklik / ditekan Enter.
     Mendukung state aktif (checked) dengan highlight background.
     """
-
+ 
     from PyQt6.QtCore import pyqtSignal as _sig
     clicked = _sig()
-
+ 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("AaButton")
         self._checked = False
         self._hovered = False
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # PENTING: jangan pakai WA_StyledBackground — biarkan paintEvent yang handle background
+        self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
+        self.setAutoFillBackground(False)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
+ 
     def setChecked(self, state: bool):
         self._checked = state
         self.update()
-
+ 
     def isChecked(self) -> bool:
         return self._checked
-
+ 
     def paintEvent(self, event):
         from PyQt6.QtGui import QPainter, QBrush, QPen, QColor as QC
         p = QPainter(self)
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
-
+ 
+        # Gambar background sidebar dulu (BIRU) agar tidak putih
+        from .theme import BLUE_PRIMARY
+        p.setBrush(QBrush(QC(BLUE_PRIMARY)))
+        p.setPen(QPen(QC(0, 0, 0, 0)))
+        p.drawRect(0, 0, w, h)
+ 
+        # Overlay highlight saat checked atau hover
         if self._checked:
             p.setBrush(QBrush(QC(255, 255, 255, 76)))
-        else:
-            p.setBrush(QBrush(QC(0, 0, 0, 0)))
-        p.setPen(QPen(QC(0, 0, 0, 0)))
-        p.drawRoundedRect(4, 4, w - 8, h - 8, 10, 10)
-
+            p.drawRoundedRect(4, 4, w - 8, h - 8, 10, 10)
+        elif self._hovered:
+            p.setBrush(QBrush(QC(255, 255, 255, 40)))
+            p.drawRoundedRect(4, 4, w - 8, h - 8, 10, 10)
+ 
+        # "a" kecil — kiri bawah
         fa = QFont("Segoe UI", 10, QFont.Weight.Bold)
         p.setFont(fa)
         p.setPen(QPen(QC(255, 255, 255, 200)))
         p.drawText(5, 0, w // 2 + 2, h, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight, "a")
-
+ 
+        # "A" besar — kanan tengah
         fA = QFont("Segoe UI", 17, QFont.Weight.Bold)
         p.setFont(fA)
         p.setPen(QPen(QC(255, 255, 255, 255)))
         p.drawText(w // 2 - 4, 0, w // 2 + 4, h, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "A")
-
+ 
         p.end()
-
+ 
     def enterEvent(self, event):
         self._hovered = True
         self.update()
         super().enterEvent(event)
-
+ 
     def leaveEvent(self, event):
         self._hovered = False
         self.update()
         super().leaveEvent(event)
-
+ 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._checked = not self._checked
             self.update()
             self.clicked.emit()
         super().mousePressEvent(event)
-
+ 
     def keyPressEvent(self, event):
-        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Space):
+        from PyQt6.QtCore import Qt as Qt_
+        if event.key() in (Qt_.Key.Key_Return, Qt_.Key.Key_Space):
             self._checked = not self._checked
             self.update()
             self.clicked.emit()
         super().keyPressEvent(event)
-
-
+ 
+ 
 class Sidebar(QWidget):
-    def __init__(self, on_navigate, on_logo_click=None, on_logout=None, parent=None):
+    def __init__(self, on_navigate, on_logo_click=None, parent=None):
         super().__init__(parent)
         self.setObjectName("Sidebar")
         self.setFixedWidth(SIDEBAR_WIDTH)
         self.on_navigate = on_navigate
         self.on_logo_click = on_logo_click
-        self.on_logout = on_logout
         self.setAutoFillBackground(True)
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
@@ -268,13 +287,12 @@ class Sidebar(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet("border-right: 2px solid rgba(255,255,255,0.18);")
         self._build()
-
+ 
     def _build(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 12, 8, 12)
         layout.setSpacing(8)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-
         logo = QLabel()
         logo.setFixedSize(48, 48)
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -288,9 +306,8 @@ class Sidebar(QWidget):
             logo.mousePressEvent = lambda e: self.on_logo_click() if e.button() == Qt.MouseButton.LeftButton else None
         layout.addWidget(logo, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addSpacing(16)
-
         self._buttons = []
-        nav_items = [("home.png", "Home", 0), ("library.png", "Library", 1), ("dashboard.png", "Dashboard", 5), ("about.png", "About", 4)]
+        nav_items = [("home.png","Home",0),("library.png","Library",1),("dashboard.png","Dashboard",5),("about.png","About",4)]
         for icon_file, tip, page_idx in nav_items:
             btn = QPushButton()
             btn.setObjectName("SidebarIcon"); btn.setToolTip(tip); btn.setCheckable(True); btn.setFixedSize(52, 52)
@@ -303,9 +320,8 @@ class Sidebar(QWidget):
             btn.clicked.connect(lambda _, idx=page_idx: self._nav(idx))
             self._buttons.append((page_idx, btn))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
-
         layout.addStretch()
-
+ 
         # ── Font Size Button ("Aa") ───────────────────────────────────────────
         self._font_popup = FontSizePopup()
         self._font_btn = _AaButton()
@@ -314,49 +330,31 @@ class Sidebar(QWidget):
         self._font_btn.clicked.connect(self._toggle_font_popup)
         layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addSpacing(8)
-
-        # ── Exit/Switch Account button (paling bawah) ──
-        exit_btn = QPushButton()
-        exit_btn.setObjectName("SidebarIcon")
-        exit_btn.setToolTip("Switch Account")
-        exit_btn.setFixedSize(52, 52)
-        px_exit = QPixmap(str(_ICON_DIR / "exit.png"))
-        if not px_exit.isNull():
-            exit_btn.setIcon(QIcon(px_exit))
-            exit_btn.setIconSize(QSize(26, 26))
-        else:
-            exit_btn.setText("↩")
-        exit_btn.setStyleSheet("""
-            QPushButton { background: transparent; border: none; border-radius: 10px; }
-            QPushButton:hover { background: rgba(255,255,255,0.20); }
-        """)
-        from PyQt6.QtWidgets import QGraphicsColorizeEffect as _GCE
-        eff = _GCE(); eff.setColor(QColor(255, 255, 255)); exit_btn.setGraphicsEffect(eff)
-        exit_btn.clicked.connect(self._on_logout)
-        layout.addWidget(exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
-
         self._set_active(0)
-
+ 
+    def _nav(self, page_idx): self._set_active(page_idx); self.on_navigate(page_idx)
+ 
+    def _set_active(self, page_idx):
+        for idx, btn in self._buttons: btn.setChecked(idx == page_idx)
+ 
+    def set_active(self, page_idx): self._set_active(page_idx)
+ 
     def _toggle_font_popup(self):
         if self._font_popup.isVisible():
             self._font_popup.hide()
             self._font_btn.setChecked(False)
         else:
             self._font_popup.show_near(self, self._font_btn)
-            self._font_btn.setChecked(True)
-
-    def _on_logout(self):
-        if self.on_logout:
-            self.on_logout()
-
-    def _nav(self, page_idx): self._set_active(page_idx); self.on_navigate(page_idx)
-
-    def _set_active(self, page_idx):
-        for idx, btn in self._buttons: btn.setChecked(idx == page_idx)
-
-    def set_active(self, page_idx): self._set_active(page_idx)
-
-
+            # Uncheck when popup closes
+            self._font_popup.installEventFilter(self)
+ 
+    def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if obj is self._font_popup and event.type() == QEvent.Type.Hide:
+            self._font_btn.setChecked(False)
+        return super().eventFilter(obj, event)
+ 
+ 
 class MainWindow(QMainWindow):
     def __init__(self, user=None):
         super().__init__()
@@ -364,14 +362,17 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("MANGA:P")
         self.resize(1140, 680)
         self.setMinimumSize(900, 580)
-        # JANGAN set stylesheet di sini — biarkan FontSizeManager yang kelola
-        # lewat QApplication agar perubahan font size bisa terpropagasi ke semua widget
+        self.setStyleSheet(APP_STYLESHEET)
+        # Initialize font size manager
+        mgr = FontSizeManager.instance()
+        mgr.set_base_stylesheet(APP_STYLESHEET)
+        mgr.register_window(self)
         self._build()
-
+ 
     def _build(self):
         root = QWidget(); self.setCentralWidget(root)
-        h = QHBoxLayout(root); h.setContentsMargins(0, 0, 0, 0); h.setSpacing(0)
-        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile, on_logout=self._show_switch_account)
+        h = QHBoxLayout(root); h.setContentsMargins(0,0,0,0); h.setSpacing(0)
+        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile)
         h.addWidget(self.sidebar)
         self.stack = QStackedWidget(); h.addWidget(self.stack)
         from .home_page import HomePage; from .library_page import LibraryPage
@@ -387,45 +388,30 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.about_page); self.stack.addWidget(self.dashboard_page)
         self.stack.addWidget(self.profile_page)
         self.stack.setCurrentIndex(0)
-
+ 
     def _navigate(self, idx):
         if idx == 1: self.library_page.refresh()
         if idx == 5: self.dashboard_page.refresh()
         if idx == 6: self.profile_page.refresh()
         self.stack.setCurrentIndex(idx)
-        if idx in (0, 1, 5): self.sidebar.set_active(idx)
-
+        if idx in (0,1,5): self.sidebar.set_active(idx)
+ 
     def go_home(self): self._navigate(0)
     def go_library(self): self._navigate(1)
     def go_about(self): self._navigate(4)
     def go_dashboard(self): self._navigate(5)
-
+ 
     def go_profile(self):
         try:
             from services.user_service import UserService
             data = UserService().get_profile(self.current_user["id"])
             if data:
-                self.profile_page.load_profile(
-                    name=data.name or data.username or self.current_user.get("username", ""),
-                    email=data.email or self.current_user.get("email", ""),
-                    bio=data.bio or "",
-                    avatar_path=data.avatar_path
-                )
-            else:
-                self.profile_page.load_profile(
-                    name=self.current_user.get("username", ""),
-                    email=self.current_user.get("email", ""),
-                )
-        except Exception as e:
-            print(f"[go_profile] error: {e}")
-            self.profile_page.load_profile(
-                name=self.current_user.get("username", ""),
-                email=self.current_user.get("email", ""),
-            )
+                self.profile_page.load_profile(name=data.name or "", email=data.email or "", bio=data.bio or "", avatar_path=data.avatar_path)
+        except Exception as e: print(f"[go_profile] error: {e}")
         self.stack.setCurrentWidget(self.profile_page)
-
+ 
     def go_search(self, query=""): self.search_page.set_query(query); self._navigate(2)
-
+ 
     def go_detail(self, manga_id: int):
         try:
             from services.manga_service import MangaService
@@ -433,28 +419,6 @@ class MainWindow(QMainWindow):
             if manga: self.home_page.history.load_manga(manga)
         except Exception as e: print(f"[MainWindow] History update error: {e}")
         self.detail_page.load_manga(manga_id); self._navigate(3)
-
+ 
     def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
-
-    def _show_switch_account(self):
-        self._logout()
-
-    def _logout(self):
-        """Buka AuthWindow untuk login akun baru (add account)."""
-        from .auth_window import AuthWindow
-        self._auth_window = AuthWindow(on_auth_success=self._on_relogin)
-        self._auth_window.resize(self.size())
-        self._auth_window.show()
-        self.close()
-
-    def _on_relogin(self, user):
-        self._auth_window.close()
-        new_win = MainWindow(user=user)
-        new_win.show()
-        self._auth_window = None
-
-    def _switch_to_user(self, user: dict):
-        """Switch ke user lain tanpa harus login ulang lewat form."""
-        new_win = MainWindow(user=user)
-        new_win.show()
-        self.close()
+ 
