@@ -9,6 +9,14 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("MANGA:P")
 
+    # Set stylesheet di level QApplication lewat FontSizeManager
+    # supaya perubahan font size bisa terpropagasi ke semua widget
+    from ui.theme import APP_STYLESHEET
+    from ui.font_size_manager import FontSizeManager
+    fsm = FontSizeManager.instance()
+    fsm.set_base_stylesheet(APP_STYLESHEET)
+    fsm.apply(1.0)   # apply scale normal sekaligus set stylesheet ke QApplication
+
     main_win_ref = {}   # mutable container to hold reference
 
     def on_auth_success(user):
