@@ -42,13 +42,15 @@ class Toast(QLabel):
             self.move((pw - self.width()) // 2, ph - self.height() - 50)
 
 
+
 class Sidebar(QWidget):
-    def __init__(self, on_navigate, on_logo_click=None, parent=None):
+    def __init__(self, on_navigate, on_logo_click=None, on_logout=None, parent=None):
         super().__init__(parent)
         self.setObjectName("Sidebar")
         self.setFixedWidth(SIDEBAR_WIDTH)
         self.on_navigate = on_navigate
         self.on_logo_click = on_logo_click
+        self.on_logout = on_logout
         self.setAutoFillBackground(True)
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
@@ -90,7 +92,33 @@ class Sidebar(QWidget):
             self._buttons.append((page_idx, btn))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch()
+
+        # ── Exit/Switch Account button (paling bawah) ──
+        exit_btn = QPushButton()
+        exit_btn.setObjectName("SidebarIcon")
+        exit_btn.setToolTip("Switch Account")
+        exit_btn.setFixedSize(52, 52)
+        px_exit = QPixmap(str(_ICON_DIR / "exit.png"))
+        if not px_exit.isNull():
+            exit_btn.setIcon(QIcon(px_exit))
+            exit_btn.setIconSize(QSize(26, 26))
+        else:
+            exit_btn.setText("↩")
+        exit_btn.setStyleSheet("""
+            QPushButton { background: transparent; border: none; border-radius: 10px; }
+            QPushButton:hover { background: rgba(255,255,255,0.20); }
+        """)
+        from PyQt6.QtWidgets import QGraphicsColorizeEffect as _GCE
+        eff = _GCE(); eff.setColor(QColor(255, 255, 255)); exit_btn.setGraphicsEffect(eff)
+        exit_btn.clicked.connect(self._on_logout)
+        layout.addWidget(exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+
         self._set_active(0)
+
+    def _on_logout(self):
+        if self.on_logout:
+            self.on_logout()
 
     def _nav(self, page_idx): self._set_active(page_idx); self.on_navigate(page_idx)
 
@@ -113,7 +141,7 @@ class MainWindow(QMainWindow):
     def _build(self):
         root = QWidget(); self.setCentralWidget(root)
         h = QHBoxLayout(root); h.setContentsMargins(0,0,0,0); h.setSpacing(0)
-        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile)
+        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile, on_logout=self._show_switch_account)
         h.addWidget(self.sidebar)
         self.stack = QStackedWidget(); h.addWidget(self.stack)
         from .home_page import HomePage; from .library_page import LibraryPage
@@ -147,8 +175,23 @@ class MainWindow(QMainWindow):
             from services.user_service import UserService
             data = UserService().get_profile(self.current_user["id"])
             if data:
-                self.profile_page.load_profile(name=data.name or "", email=data.email or "", bio=data.bio or "", avatar_path=data.avatar_path)
-        except Exception as e: print(f"[go_profile] error: {e}")
+                self.profile_page.load_profile(
+                    name=data.name or data.username or self.current_user.get("username", ""),
+                    email=data.email or self.current_user.get("email", ""),
+                    bio=data.bio or "",
+                    avatar_path=data.avatar_path
+                )
+            else:
+                self.profile_page.load_profile(
+                    name=self.current_user.get("username", ""),
+                    email=self.current_user.get("email", ""),
+                )
+        except Exception as e:
+            print(f"[go_profile] error: {e}")
+            self.profile_page.load_profile(
+                name=self.current_user.get("username", ""),
+                email=self.current_user.get("email", ""),
+            )
         self.stack.setCurrentWidget(self.profile_page)
 
     def go_search(self, query=""): self.search_page.set_query(query); self._navigate(2)
@@ -162,3 +205,26 @@ class MainWindow(QMainWindow):
         self.detail_page.load_manga(manga_id); self._navigate(3)
 
     def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
+
+    def _show_switch_account(self):
+        self._logout()
+
+    def _logout(self):
+        """Buka AuthWindow untuk login akun baru (add account)."""
+        from .auth_window import AuthWindow
+        self._auth_window = AuthWindow(on_auth_success=self._on_relogin)
+        self._auth_window.resize(self.size())
+        self._auth_window.show()
+        self.close()
+
+    def _on_relogin(self, user):
+        self._auth_window.close()
+        new_win = MainWindow(user=user)
+        new_win.show()
+        self._auth_window = None
+
+    def _switch_to_user(self, user: dict):
+        """Switch ke user lain tanpa harus login ulang lewat form."""
+        new_win = MainWindow(user=user)
+        new_win.show()
+        self.close()

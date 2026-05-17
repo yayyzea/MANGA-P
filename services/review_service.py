@@ -10,7 +10,8 @@ from database import get_session
 class ReviewService:
 
     def add(self, manga_id: int, collection_id: int, user_id: int,
-            rating: int, review_text: str = None):
+            rating: int, review_text: str = None, tags: list = None):
+        import json
         if not (1 <= rating <= 10):
             raise ValueError("Rating must be between 1 and 10.")
         session = get_session()
@@ -23,7 +24,8 @@ class ReviewService:
             review = Review(
                 user_id=user_id, manga_id=manga_id,
                 collection_id=collection_id, rating=rating,
-                review_text=review_text
+                review_text=review_text,
+                tags=json.dumps(tags or [], ensure_ascii=False)
             )
             session.add(review)
             session.commit()
@@ -42,7 +44,8 @@ class ReviewService:
         finally:
             session.close()
 
-    def update(self, review_id: int, rating: int = None, review_text: str = None):
+    def update(self, review_id: int, rating: int = None, review_text: str = None, tags: list = None):
+        import json
         session = get_session()
         try:
             review = session.query(Review).filter(Review.id == review_id).first()
@@ -52,6 +55,8 @@ class ReviewService:
                 review.rating = rating
             if review_text is not None:
                 review.review_text = review_text
+            if tags is not None:
+                review.tags = json.dumps(tags, ensure_ascii=False)
             review.updated_at = datetime.now()
             session.commit()
             return review
@@ -90,13 +95,19 @@ class ReviewService:
                 Review.updated_at.desc()
             ).first()
             if result:
+                import json
                 r, m = result
+                try:
+                    tags = json.loads(r.tags) if r.tags else []
+                except Exception:
+                    tags = []
                 return {
                     "manga_id": r.manga_id,
                     "title": m.title or "—",
                     "cover_url": m.cover_url or "",
                     "rating": r.rating,
                     "review_text": r.review_text or "",
+                    "tags": tags,
                 }
             return None
         finally:

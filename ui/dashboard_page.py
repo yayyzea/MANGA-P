@@ -260,6 +260,14 @@ class LastReviewCard(QWidget):
         self._text.setStyleSheet(f"color:rgba(255,255,255,0.85);font-size:12px;background:transparent;")
         self._text.setWordWrap(True)
         right.addWidget(self._text)
+        # ── Tags row ──
+        self._tags_row = QHBoxLayout()
+        self._tags_row.setSpacing(5)
+        self._tags_row.setContentsMargins(0, 2, 0, 0)
+        self._tags_placeholder = QWidget()
+        self._tags_placeholder.setLayout(self._tags_row)
+        self._tags_placeholder.setStyleSheet("background: transparent;")
+        right.addWidget(self._tags_placeholder)
         right.addStretch()
         outer.addLayout(right, stretch=1)
 
@@ -272,6 +280,7 @@ class LastReviewCard(QWidget):
             self._cover.clear()
             self._hint.setVisible(False)
             self.setCursor(Qt.CursorShape.ArrowCursor)
+            self._clear_tags()
             return
         self._manga_id = int(review_data.get("manga_id", 0))
         self._title_lbl.setText(str(review_data.get("title", "—")))
@@ -279,12 +288,40 @@ class LastReviewCard(QWidget):
         self._text.setText(str(review_data.get("review_text", "(no review text)")))
         self._hint.setVisible(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        # ── Render tags ──
+        self._clear_tags()
+        tags = review_data.get("tags", [])
+        if isinstance(tags, list):
+            for tag in tags:
+                tag = str(tag).strip()
+                if not tag:
+                    continue
+                chip = QLabel(tag)
+                chip.setStyleSheet("""
+                    QLabel {
+                        background: rgba(255,255,255,0.20);
+                        color: white;
+                        border-radius: 8px;
+                        padding: 1px 8px;
+                        font-size: 11px;
+                        font-weight: 600;
+                    }
+                """)
+                chip.setFixedHeight(18)
+                self._tags_row.addWidget(chip)
+        self._tags_row.addStretch()
         cover_url = review_data.get("cover_url", "")
         if cover_url:
             from .widgets import ImageLoader
             self._img_loader = ImageLoader(str(cover_url))
             self._img_loader.loaded.connect(self._on_cover)
             self._img_loader.start()
+
+    def _clear_tags(self):
+        while self._tags_row.count():
+            item = self._tags_row.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
 
     def _on_cover(self, pixmap):
         self._cover.setPixmap(pixmap.scaled(60, 85, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
@@ -402,6 +439,7 @@ class DashboardPage(QWidget):
                 "cover_url": str(last_review.get("cover_url", "")),
                 "rating": last_review.get("rating"),
                 "review_text": str(last_review.get("review_text", "")),
+                "tags": last_review.get("tags", []),
             }
         self._total.set_value(total)
         self._rating.set_value(f"{avg:.1f}" if avg else "—")

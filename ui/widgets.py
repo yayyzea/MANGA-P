@@ -39,30 +39,45 @@ class MangaCoverLabel(QLabel):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedSize(CARD_W, CARD_H)
+        self._raw_pixmap = None  # simpan original pixmap sebelum scaling
         self._pixmap = None
 
     def set_cover(self, pixmap: QPixmap):
+        self._raw_pixmap = pixmap  # simpan untuk re-scale saat resize
+        w, h = self.width() or CARD_W, self.height() or CARD_H
         self._pixmap = pixmap.scaled(
-            CARD_W, CARD_H,
+            w, h,
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             Qt.TransformationMode.SmoothTransformation,
         )
         self.update()
 
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if self._raw_pixmap:
+            w, h = self.width(), self.height()
+            self._pixmap = self._raw_pixmap.scaled(
+                w, h,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            self.update()
+
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
+        w, h = self.width(), self.height()
         inner_r = max(CARD_RADIUS - _PAD, 4)
         path = QPainterPath()
-        path.addRoundedRect(0, 0, CARD_W, CARD_H, inner_r, inner_r)
+        path.addRoundedRect(0, 0, w, h, inner_r, inner_r)
         painter.setClipPath(path)
 
         if self._pixmap:
             pw, ph = self._pixmap.width(), self._pixmap.height()
-            x = (pw - CARD_W) // 2
-            y = (ph - CARD_H) // 2
-            painter.drawPixmap(0, 0, self._pixmap, x, y, CARD_W, CARD_H)
+            x = (pw - w) // 2
+            y = (ph - h) // 2
+            painter.drawPixmap(0, 0, self._pixmap, x, y, w, h)
         else:
             painter.fillPath(path, QColor("#64B5F6"))  # lighter blue placeholder
 
@@ -107,9 +122,10 @@ class MangaCard(QWidget):
             )
 
             genres    = self.manga.genres or ""
-            first_gen = genres.split(",")[0].strip() if genres else ""
-            self.lbl_genre = QLabel(first_gen)
+            all_genres = ", ".join(g.strip() for g in genres.split(",")) if genres else ""
+            self.lbl_genre = QLabel(all_genres)
             self.lbl_genre.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            self.lbl_genre.setWordWrap(True)
             self.lbl_genre.setStyleSheet(
                 "color: rgba(255,255,255,0.80); font-size: 10px; background: transparent;"
             )
@@ -123,10 +139,25 @@ class MangaCard(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def _load_cover(self):
-        if self.manga.cover_url:
-            self._loader = ImageLoader(self.manga.cover_url)
-            self._loader.loaded.connect(self._on_image_loaded)
-            self._loader.start()
+        url = self.manga.cover_url
+        if not url:
+            return
+
+        # Cek apakah ini path file lokal (bukan http/https)
+        import os
+        is_local = not url.startswith("http://") and not url.startswith("https://")
+        if is_local:
+            # Load langsung dari disk — tidak perlu thread network
+            if os.path.isfile(url):
+                px = QPixmap(url)
+                if not px.isNull():
+                    self.cover.set_cover(px)
+            return
+
+        # URL remote → pakai thread seperti biasa
+        self._loader = ImageLoader(url)
+        self._loader.loaded.connect(self._on_image_loaded)
+        self._loader.start()
 
     @pyqtSlot(QPixmap)
     def _on_image_loaded(self, pixmap: QPixmap):

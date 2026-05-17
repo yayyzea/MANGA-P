@@ -19,22 +19,6 @@ class AboutPage(QWidget):
         root.setContentsMargins(40, 32, 40, 32)
         root.setSpacing(24)
 
-        # Back button
-        back = QPushButton("‹‹")
-        back.setFixedSize(40, 32)
-        back.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent;
-                border: none;
-                color: {BLUE_PRIMARY};
-                font-size: 18px;
-                font-weight: 700;
-            }}
-            QPushButton:hover {{ color: #0D47A1; }}
-        """)
-        back.clicked.connect(self.main_window.go_home)
-        root.addWidget(back, alignment=Qt.AlignmentFlag.AlignLeft)
-
         # Title
         title = QLabel("ABOUT")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)

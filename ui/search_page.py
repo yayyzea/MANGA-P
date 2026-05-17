@@ -65,12 +65,15 @@ STATUS_OPTIONS = ["Publishing", "Finished", "On Hiatus"]
 class SearchLoader(QThread):
     finished = pyqtSignal(list)
 
-    def __init__(self, query="", genres=None, status=None, year=None):
+    PAGE_SIZE = 20
+
+    def __init__(self, query="", genres=None, status=None, year=None, page=1):
         super().__init__()
         self.query  = query
         self.genres = genres or []
         self.status = status
         self.year   = year
+        self.page   = page
 
     def run(self):
         try:
@@ -83,10 +86,13 @@ class SearchLoader(QThread):
                     genres=self.genres if self.genres else None,
                     status=self.status,
                     year=self.year,
-                    limit=16,
+                    page=self.page,
+                    limit=self.PAGE_SIZE,
                 )
             else:
-                results = svc.get_top_manga(limit=16)
+                all_top = svc.get_top_manga(limit=500)
+                offset = (self.page - 1) * self.PAGE_SIZE
+                results = all_top[offset: offset + self.PAGE_SIZE]
             self.finished.emit(results)
         except Exception as e:
             print(f"[SearchPage] Load error: {e}")
@@ -337,6 +343,10 @@ class SearchPage(QWidget):
         self.main_window    = main_window
         self._loader        = None
         self._current_query = ""
+        self._current_page  = 1
+        self._is_loading    = False
+        self._no_more       = False
+        self._card_count    = 0
         self._build()
 
     def _build(self):
@@ -354,9 +364,10 @@ class SearchPage(QWidget):
         body.setSpacing(0)
 
         # Kiri: grid hasil
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.verticalScrollBar().valueChanged.connect(self._on_scroll)
         sc = QWidget()
         self._grid_root = QVBoxLayout(sc)
         self._grid_root.setContentsMargins(24, 20, 24, 20)
@@ -373,10 +384,19 @@ class SearchPage(QWidget):
         self._grid.setSpacing(16)
         self._grid.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self._grid_root.addWidget(self._grid_container)
+
+        self._loading_lbl = QLabel("Loading…")
+        self._loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._loading_lbl.setStyleSheet(
+            f"color: {TEXT_MUTED}; font-size: 13px; background: transparent; padding: 12px;"
+        )
+        self._loading_lbl.setVisible(False)
+        self._grid_root.addWidget(self._loading_lbl)
+
         self._grid_root.addStretch()
 
-        scroll.setWidget(sc)
-        body.addWidget(scroll, stretch=1)
+        self._scroll.setWidget(sc)
+        body.addWidget(self._scroll, stretch=1)
 
         self.filter_panel = FilterPanel()
         self.filter_panel.apply_clicked.connect(self._on_filter_apply)
@@ -399,10 +419,22 @@ class SearchPage(QWidget):
             self._grid.addWidget(ph, i // self.COLS, i % self.COLS)
 
     def _clear_grid(self):
+        self._card_count = 0
         while self._grid.count():
             item = self._grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+    def _on_scroll(self, value):
+        sb = self._scroll.verticalScrollBar()
+        if sb.maximum() > 0 and value >= sb.maximum() - 200:
+            self._load_next_page()
+
+    def _load_next_page(self):
+        if self._is_loading or self._no_more:
+            return
+        self._current_page += 1
+        self._start_loader(self._current_page)
 
     # ── Public ────────────────────────────────────────────────────────────────
 
@@ -418,6 +450,8 @@ class SearchPage(QWidget):
 
     def _run_search(self, query=""):
         self._current_query = query
+        self._current_page  = 1
+        self._no_more       = False
         self.section_lbl.setText(f'Results for "{query}"' if query else "Top Manga")
         self._show_placeholders(8)
 
@@ -425,29 +459,54 @@ class SearchPage(QWidget):
             self._loader.quit()
             self._loader.wait()
 
-        self._loader = SearchLoader(
-            query=query,
+        self._start_loader(1)
+
+    def _start_loader(self, page: int):
+        if self._is_loading:
+            return
+        self._is_loading = True
+        self._loading_lbl.setVisible(True)
+
+        loader = SearchLoader(
+            query=self._current_query,
             genres=self.filter_panel.selected_genres(),
             status=self.filter_panel.selected_status(),
             year=self.filter_panel.selected_year(),
+            page=page,
         )
-        self._loader.finished.connect(self._on_results)
-        self._loader.start()
+        loader.finished.connect(lambda results, p=page: self._on_results(results, p))
+        loader.start()
+        self._loader = loader
 
     def _on_filter_apply(self, genres, status, year):
         self._run_search(self._current_query)
 
     @pyqtSlot(list)
-    def _on_results(self, manga_list):
-        self._clear_grid()
+    def _on_results(self, manga_list, page=1):
+        self._is_loading = False
+        self._loading_lbl.setVisible(False)
+
+        if page == 1:
+            self._clear_grid()
+
         if not manga_list:
-            empty = QLabel("No results found.")
-            empty.setStyleSheet(
-                f"color: {TEXT_MUTED}; font-size: 14px; background: transparent;"
-            )
-            self._grid.addWidget(empty, 0, 0)
+            self._no_more = True
+            if self._card_count == 0:
+                empty = QLabel("No results found.")
+                empty.setStyleSheet(
+                    f"color: {TEXT_MUTED}; font-size: 14px; background: transparent;"
+                )
+                self._grid.addWidget(empty, 0, 0)
             return
-        for i, manga in enumerate(manga_list):
+
+        for manga in manga_list:
+            row = self._card_count // self.COLS
+            col = self._card_count % self.COLS
             card = MangaCard(manga, show_labels=True)
             card.clicked.connect(self.main_window.go_detail)
-            self._grid.addWidget(card, i // self.COLS, i % self.COLS)
+            self._grid.addWidget(card, row, col)
+            self._card_count += 1
+
+        # Jika hasil kurang dari PAGE_SIZE berarti sudah habis
+        if len(manga_list) < SearchLoader.PAGE_SIZE:
+            self._no_more = True

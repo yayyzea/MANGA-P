@@ -98,11 +98,12 @@ class JikanService:
             return None
         return self._clean_manga(data["data"])
 
-    def get_top_manga(self, limit: int = 48) -> list[dict]:
+    # SESUDAH
+    def get_top_manga(self, limit: int = 100) -> list[dict]:
         """Get top manga from MAL — fetch multiple pages if needed (max 25 per page)."""
         results = []
         page = 1
-        per_page = min(25, limit)  # Jikan max 25 per page
+        per_page = 25  # Jikan max 25 per page
 
         while len(results) < limit:
             params = {"limit": per_page, "type": "manga", "page": page}
@@ -115,7 +116,8 @@ class JikanService:
             results.extend([self._clean_manga(item) for item in items])
             page += 1
             if len(items) < per_page:
-                break  # tidak ada halaman berikutnya
+                break
+            time.sleep(1.0)  # ← tambah jeda 1 detik antar halaman supaya tidak kena rate limit
 
         return results[:limit]
 

@@ -148,7 +148,8 @@ class TopMangaLoader(QThread):
     def run(self):
         try:
             from services.manga_service import MangaService
-            self.finished.emit(MangaService().get_top_manga(limit=48))
+            # Fetch 105 supaya setelah filtering/dedup tetap dapat 100 penuh
+            self.finished.emit(MangaService().get_top_manga(limit=105))
         except Exception as e:
             print(f"[HomePage] Load error: {e}")
             self.finished.emit([])
@@ -322,6 +323,16 @@ class HomePage(QWidget):
         super().__init__(parent)
         self.main_window = main_window
         self._manga_list = []
+        self._current_limit = 50  # default tampil 50
+        # Infinite scroll state (untuk mode filter)
+        self._filter_mode   = False
+        self._filter_page   = 1
+        self._filter_genres = []
+        self._filter_status = None
+        self._filter_year   = None
+        self._is_loading    = False
+        self._no_more       = False
+        self._card_count    = 0
         self._build()
         self._start_loading()
 
@@ -342,25 +353,70 @@ class HomePage(QWidget):
         outer_row_layout.setSpacing(24)
         root.addWidget(outer_row, stretch=1)
 
-        # Left: QScrollArea wraps only the Top Manga grid
-        content_scroll = QScrollArea()
+        # ── Kolom kiri: wrapper vertical (header + tombol fixed + scroll) ──
+        left_wrapper = QWidget()
+        left_wrapper.setStyleSheet("background: transparent;")
+        left_wrapper_layout = QVBoxLayout(left_wrapper)
+        left_wrapper_layout.setContentsMargins(0, 0, 0, 0)
+        left_wrapper_layout.setSpacing(8)
+        outer_row_layout.addWidget(left_wrapper, stretch=1)
+
+        # "Top Manga" label — di luar scroll, tidak hilang saat scroll
+        lbl = QLabel("Top Manga")
+        lbl.setStyleSheet(
+            f"color: {BLUE_PRIMARY}; font-size: 16px; font-weight: 700; background: transparent;"
+        )
+        left_wrapper_layout.addWidget(lbl)
+
+        # ── Tombol Top 10 / 20 / 50 / 100 — FIXED, tidak ikut scroll ──────
+        btn_container = QWidget()
+        btn_container.setStyleSheet("background: transparent;")
+        self._top_btn_row = QHBoxLayout(btn_container)
+        self._top_btn_row.setSpacing(10)
+        self._top_btn_row.setContentsMargins(0, 0, 0, 4)
+        self._top_buttons = {}
+        for n in [10, 20, 50, 100]:
+            btn = QPushButton(f"Top {n}")
+            btn.setFixedHeight(32)
+            btn.setFixedWidth(75)
+            btn.setCheckable(True)
+            btn.setChecked(n == 50)  # default Top 50 aktif
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {BLUE_PRIMARY};
+                    color: white;
+                    border: none;
+                    border-radius: 16px;
+                    font-size: 13px;
+                    font-weight: 600;
+                }}
+                QPushButton:hover {{ background: #1565C0; }}
+                QPushButton:checked {{
+                    background: white;
+                    color: {BLUE_PRIMARY};
+                    border: 2px solid {BLUE_PRIMARY};
+                }}
+            """)
+            btn.clicked.connect(lambda _, lim=n: self._set_limit(lim))
+            self._top_buttons[n] = btn
+            self._top_btn_row.addWidget(btn)
+        self._top_btn_row.addStretch()
+        left_wrapper_layout.addWidget(btn_container)
+
+        # Left: QScrollArea wraps hanya grid manga
+        self.content_scroll = QScrollArea()
+        content_scroll = self.content_scroll
         content_scroll.setWidgetResizable(True)
         content_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         content_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
         content_widget = QWidget()
         content_widget.setStyleSheet("background: transparent;")
         content_scroll.setWidget(content_widget)
-        outer_row_layout.addWidget(content_scroll, stretch=1)
+        left_wrapper_layout.addWidget(content_scroll, stretch=1)
 
         left = QVBoxLayout(content_widget)
         left.setContentsMargins(0, 0, 0, 0)
         left.setSpacing(12)
-
-        lbl = QLabel("Top Manga")
-        lbl.setStyleSheet(
-            f"color: {BLUE_PRIMARY}; font-size: 16px; font-weight: 700; background: transparent;"
-        )
-        left.addWidget(lbl)
 
         self.grid_container = QWidget()
         self.grid_container.setStyleSheet("background: transparent;")
@@ -370,7 +426,19 @@ class HomePage(QWidget):
         self.manga_grid.setContentsMargins(0, 0, 0, 0)
 
         left.addWidget(self.grid_container)
+
+        self._home_loading_lbl = QLabel("Loading…")
+        self._home_loading_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._home_loading_lbl.setStyleSheet(
+            f"color: {WHITE}; font-size: 13px; background: transparent; padding: 12px;"
+        )
+        self._home_loading_lbl.setVisible(False)
+        left.addWidget(self._home_loading_lbl)
+
         left.addStretch()
+
+        # Connect infinite scroll
+        self.content_scroll.verticalScrollBar().valueChanged.connect(self._on_home_scroll)
 
         # ★ Right side: filter panel (hidden by default) + history panel
         self.filter_panel = FilterPanel()
@@ -438,7 +506,7 @@ class HomePage(QWidget):
 
     def _show_placeholders(self):
         self._clear_grid()
-        for _ in range(49):
+        for _ in range(self._current_limit):
             ph = QWidget()
             ph.setFixedSize(CARD_W + 16, CARD_H)
             ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -449,18 +517,35 @@ class HomePage(QWidget):
     @pyqtSlot(list)
     def _on_loaded(self, manga_list):
         self._manga_list = manga_list
+        self._display_cards()
+
+        if manga_list:
+            self.history.load_manga(manga_list[0])
+
+    def _set_limit(self, limit: int):
+        """Dipanggil saat user klik tombol Top 10/20/50/100."""
+        self._current_limit = limit
+        self._filter_mode = False
+        # Tampilkan kembali semua tombol
+        for btn in self._top_buttons.values():
+            btn.setVisible(True)
+        # Update state tombol
+        for n, btn in self._top_buttons.items():
+            btn.setChecked(n == limit)
+        # Tampilkan kartu sesuai limit
+        self._display_cards()
+
+    def _display_cards(self):
         self._clear_grid()
         self._cards = []
+        to_show = self._manga_list[:self._current_limit]
 
-        for manga in manga_list:
+        for manga in to_show:
             card = MangaCard(manga, show_labels=True)
             card.clicked.connect(self.main_window.go_detail)
             self._cards.append(card)
             self.manga_grid.addWidget(card, 0, 0)
         self._relayout()
-
-        if manga_list:
-            self.history.load_manga(manga_list[0])
 
     def _relayout(self):
         widgets = []
@@ -470,12 +555,35 @@ class HomePage(QWidget):
                 widgets.append(item.widget())
         if not widgets:
             return
-        container_width = self.grid_container.width()
-        if container_width < 10:
-            container_width = self.width() - 270
-        card_total_w = CARD_W + 16 + 16
-        cols = max(1, container_width // card_total_w)
+
+        # Ambil lebar dari viewport scroll area (akurat, tidak terpengaruh konten)
+        container_width = self.content_scroll.viewport().width() - 4
+        if container_width < 50:
+            # Fallback: hitung dari lebar window
+            container_width = self.width() - 80 - 220 - 72
+
+        # Default 5 kolom, turun kalau window dikecilkan
+        spacing = self.manga_grid.spacing()
+        for cols in [5, 4, 3, 2, 1]:
+            if container_width >= cols * 130 + spacing * (cols - 1):
+                break
+
+        # Card mengisi rata lebar container, tapi dibatasi max 160px
+        card_w = min(160, (container_width - spacing * (cols - 1)) // cols)
+        card_h = int(card_w * 1.5)
+
+        cover_w = max(80, card_w - 16)
+        cover_h = card_h
+
         for i, widget in enumerate(widgets):
+            if hasattr(widget, "cover"):
+                widget.cover.setFixedSize(cover_w, cover_h)
+                widget.cover.update()
+            widget.setFixedWidth(card_w)
+            if hasattr(widget, "lbl_title"):
+                widget.lbl_title.setFixedWidth(cover_w)
+            if hasattr(widget, "lbl_genre"):
+                widget.lbl_genre.setFixedWidth(cover_w)
             self.manga_grid.addWidget(widget, i // cols, i % cols)
 
     def resizeEvent(self, event):
@@ -490,15 +598,69 @@ class HomePage(QWidget):
                 item.widget().deleteLater()
 
     def _on_filter_apply(self, genres, status, year):
+        self._filter_mode   = True
+        self._filter_page   = 1
+        self._filter_genres = genres
+        self._filter_status = status
+        self._filter_year   = year
+        self._no_more       = False
+        self._card_count    = 0
         self._clear_grid()
-        self._loader = SearchLoader(
+        # Sembunyikan tombol Top N saat filter aktif
+        for btn in self._top_buttons.values():
+            btn.setVisible(False)
+        self._start_filter_loader(page=1)
+
+    def _on_home_scroll(self, value):
+        if not self._filter_mode:
+            return
+        sb = self.content_scroll.verticalScrollBar()
+        if sb.maximum() > 0 and value >= sb.maximum() - 200:
+            if not self._is_loading and not self._no_more:
+                self._filter_page += 1
+                self._start_filter_loader(self._filter_page)
+
+    def _start_filter_loader(self, page: int):
+        if self._is_loading:
+            return
+        self._is_loading = True
+        self._home_loading_lbl.setVisible(True)
+        loader = SearchLoader(
             query="",
-            genres=genres,
-            status=status,
-            year=year,
+            genres=self._filter_genres,
+            status=self._filter_status,
+            year=self._filter_year,
+            page=page,
         )
-        self._loader.finished.connect(self._on_loaded)
-        self._loader.start()
+        loader.finished.connect(lambda results, p=page: self._on_filter_results(results, p))
+        loader.start()
+        self._loader = loader
+
+    def _on_filter_results(self, manga_list, page):
+        self._is_loading = False
+        self._home_loading_lbl.setVisible(False)
+
+        if page == 1 and not manga_list:
+            return
+
+        container_width = self.content_scroll.viewport().width() - 4
+        if container_width < 50:
+            container_width = self.width() - 80 - 220 - 72
+        spacing = self.manga_grid.spacing()
+        for cols in [5, 4, 3, 2, 1]:
+            if container_width >= cols * 130 + spacing * (cols - 1):
+                break
+
+        for manga in manga_list:
+            row = self._card_count // cols
+            col = self._card_count % cols
+            card = MangaCard(manga, show_labels=True)
+            card.clicked.connect(self.main_window.go_detail)
+            self.manga_grid.addWidget(card, row, col)
+            self._card_count += 1
+
+        if len(manga_list) < SearchLoader.PAGE_SIZE:
+            self._no_more = True
 
     def _on_search(self, query):
         if query:
