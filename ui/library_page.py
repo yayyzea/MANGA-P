@@ -210,12 +210,13 @@ class LibraryFilterPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(280)
+        self.setFixedWidth(300)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"background: {WHITE};")
         self._genre_cbs  = {}
         self._status_cbs = {}
         self._year_input = None
+        self._custom_genre_input = None
         self._build()
         self.setVisible(False)
 
@@ -234,7 +235,7 @@ class LibraryFilterPanel(QWidget):
             cb = QCheckBox(g)
             cb.setStyleSheet(self._cb_style())
             self._genre_cbs[g] = cb
-            g_grid.addWidget(cb, i // 3, i % 3)
+            g_grid.addWidget(cb, i // 2, i % 2)
         root.addLayout(g_grid)
 
         root.addWidget(self._subheading("Other genre"))
@@ -330,10 +331,12 @@ class LibraryFilterPanel(QWidget):
 
     def selected_genres(self) -> list:
         genres = [g for g, cb in self._genre_cbs.items() if cb.isChecked()]
-        custom = self._custom_genre_input.text().strip()
-        if custom:
-            genres.append(custom)
+        if self._custom_genre_input:
+            custom = self._custom_genre_input.text().strip()
+            if custom:
+                genres.append(custom)
         return genres
+
     def selected_statuses(self) -> list: return [s for s, cb in self._status_cbs.items() if cb.isChecked()]
     def selected_year(self)     -> str:  return (self._year_input.text() or "").strip()
 
@@ -478,7 +481,7 @@ class DeleteConfirmBar(QWidget):
         super().__init__(parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"background: {WHITE};")
-        self.setFixedHeight(0)   # mulai dari 0 agar tidak ada sisa ruang/garis
+        self.setFixedHeight(0)
         self._build()
         self.setVisible(False)
 
