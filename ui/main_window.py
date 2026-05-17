@@ -10,7 +10,7 @@ from pathlib import Path
 _ICON_DIR = Path(__file__).parent.parent / "assets"
  
 from .theme import BLUE_PRIMARY, WHITE, SIDEBAR_WIDTH, APP_STYLESHEET
-from .font_size_manager import FontSizeManager
+from .font_size_manager import FontSizeManager, FONT_MIN_PX, FONT_MAX_PX, FONT_BASE_PX
  
  
 class Toast(QLabel):
@@ -46,143 +46,169 @@ class Toast(QLabel):
  
 class FontSizePopup(QFrame):
     """
-    Flyout panel muncul di kanan sidebar saat tombol 'Aa' diklik.
-    Menampilkan tombol '-' dan '+' untuk memperkecil/memperbesar font,
-    beserta indikator level font saat ini.
+    Flyout popup to change font size in px steps.
+    Shows: [−]  13 px  [+]  with a thin progress bar.
     """
- 
-    # Label level font yang ditampilkan ke user
-    _LEVEL_LABELS = ["Kecil", "Normal", "Besar", "X-Besar"]
-    _LEVELS       = [0.85, 1.0, 1.20, 1.45]
- 
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("FontSizePopup")
         self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setFixedWidth(200)
         self.setStyleSheet("""
             #FontSizePopup {
-                background: #1565C0;
-                border-radius: 14px;
-                border: 1.5px solid rgba(255,255,255,0.30);
+                background: #1A237E;
+                border-radius: 16px;
+                border: 1.5px solid rgba(255,255,255,0.22);
             }
         """)
- 
+
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(14, 12, 14, 12)
-        outer.setSpacing(8)
- 
-        # ── Judul popup ────────────────────────────────────────────────
-        title_lbl = QLabel("Ukuran Teks")
-        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_lbl.setFont(QFont("Segoe UI", 9))
-        title_lbl.setStyleSheet("color: rgba(255,255,255,0.70); background: transparent;")
-        outer.addWidget(title_lbl)
- 
-        # ── Baris kontrol: [−] [label level] [+] ──────────────────────
-        ctrl_row = QHBoxLayout()
-        ctrl_row.setSpacing(10)
-        ctrl_row.setContentsMargins(0, 0, 0, 0)
- 
-        # Tombol minus
-        self._btn_dec = QPushButton("−")
-        self._btn_dec.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
-        self._btn_dec.setFixedSize(40, 40)
-        self._btn_dec.setToolTip("Perkecil teks")
-        self._btn_dec.setStyleSheet(self._action_btn_style())
-        self._btn_dec.clicked.connect(self._decrease)
- 
-        # Label level saat ini
-        self._level_lbl = QLabel("Normal")
-        self._level_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._level_lbl.setFixedWidth(62)
-        self._level_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
-        self._level_lbl.setStyleSheet("color: white; background: transparent;")
- 
-        # Tombol plus
-        self._btn_inc = QPushButton("+")
-        self._btn_inc.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
-        self._btn_inc.setFixedSize(40, 40)
-        self._btn_inc.setToolTip("Perbesar teks")
-        self._btn_inc.setStyleSheet(self._action_btn_style())
-        self._btn_inc.clicked.connect(self._increase)
- 
-        ctrl_row.addWidget(self._btn_dec)
-        ctrl_row.addWidget(self._level_lbl)
-        ctrl_row.addWidget(self._btn_inc)
-        outer.addLayout(ctrl_row)
- 
-        # ── Indikator titik level ──────────────────────────────────────
-        dot_row = QHBoxLayout()
-        dot_row.setSpacing(6)
-        dot_row.setContentsMargins(0, 0, 0, 0)
-        dot_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._dots = []
-        for _ in self._LEVELS:
-            dot = QLabel("●")
-            dot.setFont(QFont("Segoe UI", 8))
-            dot.setStyleSheet("color: rgba(255,255,255,0.35); background: transparent;")
-            self._dots.append(dot)
-            dot_row.addWidget(dot)
-        outer.addLayout(dot_row)
- 
-        self.adjustSize()
-        self._refresh_ui()
- 
-    # ── Gaya tombol aksi ──────────────────────────────────────────────
-    @staticmethod
-    def _action_btn_style():
-        return """
+        outer.setContentsMargins(16, 14, 16, 14)
+        outer.setSpacing(10)
+
+        # ── Title ──
+        title = QLabel("Text Size")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet(
+            "color: rgba(255,255,255,0.55); font-size: 11px;"
+            "font-weight: 600; letter-spacing: 1px; background: transparent;"
+        )
+        outer.addWidget(title)
+
+        # ── Controls row: [−]  [px label]  [+] ──
+        btn_style = """
             QPushButton {
-                background: rgba(255,255,255,0.18);
-                border: none;
-                border-radius: 10px;
-                color: white;
+                background: rgba(255,255,255,0.12);
+                border: none; border-radius: 14px;
+                color: white; font-size: 20px; font-weight: 700;
             }
-            QPushButton:hover {
-                background: rgba(255,255,255,0.35);
-            }
-            QPushButton:pressed {
-                background: rgba(255,255,255,0.55);
-            }
-            QPushButton:disabled {
-                background: rgba(255,255,255,0.07);
-                color: rgba(255,255,255,0.30);
+            QPushButton:hover   { background: rgba(255,255,255,0.25); }
+            QPushButton:pressed { background: rgba(255,255,255,0.40); }
+            QPushButton:disabled{
+                background: rgba(255,255,255,0.05);
+                color: rgba(255,255,255,0.20);
             }
         """
- 
-    # ── Perbarui label & indikator sesuai skala saat ini ─────────────
+        self._btn_dec = QPushButton("−")
+        self._btn_dec.setFixedSize(36, 36)
+        self._btn_dec.setStyleSheet(btn_style)
+        self._btn_dec.clicked.connect(self._decrease)
+
+        self._px_lbl = QLabel("13 px")
+        self._px_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._px_lbl.setStyleSheet(
+            "color: white; font-size: 18px; font-weight: 700;"
+            "background: transparent; min-width: 64px;"
+        )
+
+        self._btn_inc = QPushButton("+")
+        self._btn_inc.setFixedSize(36, 36)
+        self._btn_inc.setStyleSheet(btn_style)
+        self._btn_inc.clicked.connect(self._increase)
+
+        ctrl = QHBoxLayout()
+        ctrl.setSpacing(8)
+        ctrl.addWidget(self._btn_dec)
+        ctrl.addStretch()
+        ctrl.addWidget(self._px_lbl)
+        ctrl.addStretch()
+        ctrl.addWidget(self._btn_inc)
+        outer.addLayout(ctrl)
+
+        # ── Progress bar (min → max) ──
+        bar_bg = QFrame()
+        bar_bg.setFixedHeight(4)
+        bar_bg.setStyleSheet(
+            "background: rgba(255,255,255,0.15); border-radius: 2px;"
+        )
+        bar_layout = QHBoxLayout(bar_bg)
+        bar_layout.setContentsMargins(0, 0, 0, 0)
+        bar_layout.setSpacing(0)
+
+        self._bar_fill = QFrame()
+        self._bar_fill.setFixedHeight(4)
+        self._bar_fill.setStyleSheet(
+            "background: white; border-radius: 2px;"
+        )
+        bar_layout.addWidget(self._bar_fill)
+        bar_layout.addStretch()
+        outer.addWidget(bar_bg)
+        self._bar_bg = bar_bg
+
+        # ── Range hint ──
+        hint_row = QHBoxLayout()
+        hint_row.setContentsMargins(0, 0, 0, 0)
+        lbl_min = QLabel(f"{FONT_MIN_PX}px")
+        lbl_max = QLabel(f"{FONT_MAX_PX}px")
+        for l in (lbl_min, lbl_max):
+            l.setStyleSheet(
+                "color: rgba(255,255,255,0.35); font-size: 10px; background: transparent;"
+            )
+        hint_row.addWidget(lbl_min)
+        hint_row.addStretch()
+        hint_row.addWidget(lbl_max)
+        outer.addLayout(hint_row)
+
+        # ── Reset link ──
+        reset_btn = QPushButton("Reset to default")
+        reset_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent; border: none;
+                color: rgba(255,255,255,0.45); font-size: 11px;
+                text-decoration: underline;
+            }
+            QPushButton:hover { color: white; }
+        """)
+        reset_btn.clicked.connect(self._reset)
+        outer.addWidget(reset_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        self.adjustSize()
+        self._refresh_ui()
+
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
     def _refresh_ui(self):
         mgr = FontSizeManager.instance()
-        idx = min(range(len(self._LEVELS)),
-                  key=lambda i: abs(self._LEVELS[i] - mgr.scale()))
-        self._level_lbl.setText(self._LEVEL_LABELS[idx])
-        self._btn_dec.setEnabled(idx > 0)
-        self._btn_inc.setEnabled(idx < len(self._LEVELS) - 1)
-        for i, dot in enumerate(self._dots):
-            dot.setStyleSheet(
-                "color: white; background: transparent;"
-                if i == idx else
-                "color: rgba(255,255,255,0.30); background: transparent;"
-            )
- 
+        px  = mgr.px()
+        self._px_lbl.setText(f"{px} px")
+        self._btn_dec.setEnabled(mgr.can_decrease())
+        self._btn_inc.setEnabled(mgr.can_increase())
+
+        # Fill bar proportionally
+        steps = FONT_MAX_PX - FONT_MIN_PX
+        done  = px - FONT_MIN_PX
+        total_w = self._bar_bg.width() or 168   # fallback before first paint
+        fill_w  = max(4, round(total_w * done / steps))
+        self._bar_fill.setFixedWidth(fill_w)
+
     def _decrease(self):
         FontSizeManager.instance().decrease()
         self._refresh_ui()
- 
+
     def _increase(self):
         FontSizeManager.instance().increase()
         self._refresh_ui()
- 
+
+    def _reset(self):
+        FontSizeManager.instance().reset()
+        self._refresh_ui()
+
     def show_near(self, sidebar_widget: QWidget, trigger_btn: QWidget):
-        """Tampilkan popup di kanan sidebar, sejajar dengan tombol pemicu."""
         self._refresh_ui()
         global_pos = trigger_btn.mapToGlobal(QPoint(0, 0))
-        x = global_pos.x() + sidebar_widget.width() + 6
-        y = global_pos.y() + (trigger_btn.height() - self.height()) // 2
+        x = global_pos.x() + sidebar_widget.width() + 8
+        y = global_pos.y() + (trigger_btn.height() - self.sizeHint().height()) // 2
         self.move(x, y)
         self.show()
         self.raise_()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._refresh_ui()
+
+
  
  
  
