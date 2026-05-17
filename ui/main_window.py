@@ -402,13 +402,7 @@ class MainWindow(QMainWindow):
     def go_dashboard(self): self._navigate(5)
  
     def go_profile(self):
-        try:
-            from services.user_service import UserService
-            data = UserService().get_profile(self.current_user["id"])
-            if data:
-                self.profile_page.load_profile(name=data.name or "", email=data.email or "", bio=data.bio or "", avatar_path=data.avatar_path)
-        except Exception as e: print(f"[go_profile] error: {e}")
-        self.stack.setCurrentWidget(self.profile_page)
+        self._navigate(6)
  
     def go_search(self, query=""): self.search_page.set_query(query); self._navigate(2)
  
