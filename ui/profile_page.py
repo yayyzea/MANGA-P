@@ -87,7 +87,6 @@ class ProfileTopBar(QWidget):
 
 
 class SwitchAccountDialog(QDialog):
-    """Dialog switch account bergaya Instagram."""
 
     def __init__(self, main_window, parent=None):
         super().__init__(parent)

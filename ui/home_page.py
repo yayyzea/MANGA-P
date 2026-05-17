@@ -422,7 +422,7 @@ class HomePage(QWidget):
         self.grid_container.setStyleSheet("background: transparent;")
 
         self.manga_grid = QGridLayout(self.grid_container)
-        self.manga_grid.setSpacing(16)
+        self.manga_grid.setSpacing(6)
         self.manga_grid.setContentsMargins(0, 0, 0, 0)
 
         left.addWidget(self.grid_container)
@@ -564,12 +564,12 @@ class HomePage(QWidget):
 
         # Default 5 kolom, turun kalau window dikecilkan
         spacing = self.manga_grid.spacing()
-        for cols in [5, 4, 3, 2, 1]:
-            if container_width >= cols * 130 + spacing * (cols - 1):
+        for cols in [6, 5, 4, 3, 2, 1]:
+            if container_width >= cols * 110 + spacing * (cols - 1):
                 break
 
         # Card mengisi rata lebar container, tapi dibatasi max 160px
-        card_w = min(160, (container_width - spacing * (cols - 1)) // cols)
+        card_w = min(130, (container_width - spacing * (cols - 1)) // cols)
         card_h = int(card_w * 1.5)
 
         cover_w = max(80, card_w - 16)
