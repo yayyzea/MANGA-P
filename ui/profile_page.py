@@ -108,27 +108,6 @@ class SwitchAccountDialog(QDialog):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # ── Header ──
-        header = QWidget()
-        header.setStyleSheet(f"background: {BLUE_PRIMARY}; border-radius: 0px;")
-        header.setFixedHeight(56)
-        h_layout = QHBoxLayout(header)
-        h_layout.setContentsMargins(20, 0, 20, 0)
-        title_lbl = QLabel("Switch Account")
-        title_lbl.setStyleSheet(f"color: {WHITE}; font-size: 16px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
-        h_layout.addWidget(title_lbl)
-        h_layout.addStretch()
-        close_btn = QPushButton("✕")
-        close_btn.setFixedSize(32, 32)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(255,255,255,0.15); color: {WHITE};
-                border: none; border-radius: 16px; font-size: 14px; }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.30); }}
-        """)
-        close_btn.clicked.connect(self.reject)
-        h_layout.addWidget(close_btn)
-        layout.addWidget(header)
-
         # ── Account list ──
         body = QWidget()
         body.setStyleSheet(f"background: {BLUE_DARK};")
@@ -428,4 +407,16 @@ class ProfilePage(QWidget):
             pix = QPixmap(avatar_path)
             if not pix.isNull(): self.avatar.set_image(pix); self._avatar_path = avatar_path
 
-    def refresh(self): pass
+    def refresh(self):
+        try:
+            from services.user_service import UserService
+            data = UserService().get_profile(self.main_window.current_user["id"])
+            if data:
+                self.load_profile(
+                    name=data.name or "",
+                    email=data.email or "",
+                    bio=data.bio or "",
+                    avatar_path=data.avatar_path
+                )
+        except Exception as e:
+            print(f"[ProfilePage] refresh error: {e}")
