@@ -320,7 +320,8 @@ class Sidebar(QWidget):
         layout.setContentsMargins(8, 12, 8, 12)
         layout.setSpacing(8)
         layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        logo = QLabel()
+        self._logo_lbl = QLabel()
+        logo = self._logo_lbl
         logo.setFixedSize(48, 48)
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         logo.setStyleSheet("background: transparent; border-radius: 24px;")
@@ -331,7 +332,7 @@ class Sidebar(QWidget):
             logo.setText("🐱"); logo.setFont(QFont("Segoe UI", 22))
         if self.on_logo_click:
             logo.mousePressEvent = lambda e: self.on_logo_click() if e.button() == Qt.MouseButton.LeftButton else None
-        layout.addWidget(logo, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self._logo_lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addSpacing(16)
         self._buttons = []
         nav_items = [("home.png","Home",0),("library.png","Library",1),("dashboard.png","Dashboard",5),("about.png","About",4)]
@@ -386,6 +387,52 @@ class Sidebar(QWidget):
 
         layout.addSpacing(8)
         self._set_active(0)
+
+    def update_logo(self, avatar_path: str):
+
+        from PyQt6.QtGui import (
+            QPixmap,
+            QPainter,
+            QPainterPath
+        )
+
+        px = QPixmap(avatar_path)
+
+        if not px.isNull():
+
+            size = 40
+
+            # SCALE
+            scaled = px.scaled(
+                size,
+                size,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation
+            )
+
+            # CROP CENTER
+            x = (scaled.width() - size) // 2
+            y = (scaled.height() - size) // 2
+
+            cropped = scaled.copy(x, y, size, size)
+
+            # BUAT PIXMAP TRANSPARENT
+            rounded = QPixmap(size, size)
+            rounded.fill(Qt.GlobalColor.transparent)
+
+            # MASK LINGKARAN
+            painter = QPainter(rounded)
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+            path = QPainterPath()
+            path.addEllipse(0, 0, size, size)
+
+            painter.setClipPath(path)
+            painter.drawPixmap(0, 0, cropped)
+
+            painter.end()
+
+            self._logo_lbl.setPixmap(rounded)   
  
     def _nav(self, page_idx): self._set_active(page_idx); self.on_navigate(page_idx)
  
@@ -465,6 +512,20 @@ class MainWindow(QMainWindow):
         mgr.set_base_stylesheet(APP_STYLESHEET)
         mgr.register_window(self)
         self._build()
+
+        # LOAD AVATAR DARI DATABASE
+        try:
+            from services.user_service import UserService
+
+            profile = UserService().get_profile(
+                self.current_user["id"]
+            )
+
+            if profile and profile.avatar_path:
+                self.update_sidebar_avatar(profile.avatar_path)
+
+        except Exception as e:
+            print("Avatar load error:", e)
  
     def _build(self):
         root = QWidget(); self.setCentralWidget(root)
@@ -527,3 +588,6 @@ class MainWindow(QMainWindow):
         self.detail_page.load_manga(manga_id); self._navigate(3)
  
     def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
+
+    def update_sidebar_avatar(self, avatar_path: str):
+        self.sidebar.update_logo(avatar_path)

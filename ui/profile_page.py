@@ -29,12 +29,23 @@ class AvatarLabel(QLabel):
         self._pixmap = None
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setToolTip("Click to change profile photo")
+        self.setStyleSheet("background: transparent;")
 
     def set_image(self, pixmap: QPixmap):
         if pixmap and not pixmap.isNull():
-            self._pixmap = pixmap.scaled(self._size, self._size,
+
+            scaled = pixmap.scaled(
+                self._size,
+                self._size,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation)
+                Qt.TransformationMode.SmoothTransformation
+            )
+
+            x = (scaled.width() - self._size) // 2
+            y = (scaled.height() - self._size) // 2
+
+            self._pixmap = scaled.copy(x, y, self._size, self._size)
+
             self.update()
 
     def mousePressEvent(self, event):
@@ -432,10 +443,22 @@ class ProfilePage(QWidget):
         return outer
 
     def _on_change_avatar(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Select Profile Photo", "", "Image (*.png *.jpg *.jpeg *.bmp *.webp)")
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Profile Photo",
+            "",
+            "Image (*.png *.jpg *.jpeg *.bmp *.webp)"
+        )
+
         if path:
             pix = QPixmap(path)
-            if not pix.isNull(): self.avatar.set_image(pix); self._avatar_path = path
+
+            if not pix.isNull():
+                self.avatar.set_image(pix)
+                self._avatar_path = path
+
+                # UPDATE LOGO SIDEBAR LANGSUNG
+                self.main_window.update_sidebar_avatar(path)
 
     def _on_save(self):
         name = self.name_input.text().strip(); email = self.email_input.text().strip()
@@ -445,6 +468,9 @@ class ProfilePage(QWidget):
         if pwd and len(pwd) < 6: self._toast("Password must be at least 6 characters"); return
         from services.user_service import UserService
         UserService().update_profile(user_id=self.main_window.current_user["id"], name=name, email=email, password=pwd if pwd else None, bio=bio, avatar_path=self._avatar_path)
+        if self._avatar_path:
+            self.main_window.current_user["avatar_path"] = self._avatar_path
+            self.main_window.update_sidebar_avatar(self._avatar_path)
         self._toast("Profile saved successfully ✓")
 
     def _on_switch_account(self):
