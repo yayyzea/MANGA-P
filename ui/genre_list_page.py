@@ -213,7 +213,7 @@ class ScrapedGenreLoader(QThread):
         self.finished.emit(results, genre_display)
 
 
-class MangaCardCompact(QWidget):
+class MangaCardSmall(QWidget):
     clicked = pyqtSignal(int)
 
     def __init__(self, manga_data: dict, parent=None):
@@ -379,7 +379,7 @@ class ScrapedGenrePage(QWidget):
         cols = max(1, (container_width + spacing) // (card_w + spacing))
 
         for i, manga in enumerate(manga_list):
-            card = MangaCardCompact(manga)
+            card = MangaCardSmall(manga)
             card.clicked.connect(self.main_window.go_detail)
             row, col = divmod(i, cols)
             self._grid_layout.addWidget(card, row, col, alignment=Qt.AlignmentFlag.AlignCenter)
