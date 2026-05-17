@@ -1,44 +1,19 @@
 {
   "last": {
-    "username": "a",
-    "email": "a",
-    "password": "a"
+    "username": "b",
+    "email": "b",
+    "password": "Yg=="
   },
   "accounts": [
     {
+      "username": "b",
+      "email": "b",
+      "password": "Yg=="
+    },
+    {
       "username": "a",
       "email": "a",
-      "password": "a"
-    },
-    {
-      "username": "zahra",
-      "email": "zahra@gmail.com",
-      "password": "zahra"
-    },
-    {
-      "username": "zimri",
-      "email": "zahra.azkiya.tif425@polban.ac.id",
-      "password": "zimri11"
-    },
-    {
-      "username": "kyo",
-      "email": "kyo@gmail.com",
-      "password": "kyo"
-    },
-    {
-      "username": "kyo",
-      "email": "kyo",
-      "password": "kyo"
-    },
-    {
-      "username": "zimri",
-      "email": "zahra.azkiya,tif425@polban.ac.id",
-      "password": "zimri11"
-    },
-    {
-      "username": "zimri",
-      "email": "zimri",
-      "password": "zimri11"
+      "password": "YQ=="
     }
   ]
 }

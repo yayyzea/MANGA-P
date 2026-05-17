@@ -6,12 +6,26 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QPixmap, QFont, QPainter, QLinearGradient, QColor, QIcon
 from pathlib import Path
-import json
+import json, base64
 
 from services.auth_service import AuthService
 
 _ASSET_DIR     = Path(__file__).parent.parent / "assets"
 _REMEMBER_FILE = Path(__file__).parent.parent / "remember_me.json"
+
+# ── Simple reversible obfuscation (NOT encryption — just avoids plaintext) ──
+# Password is obfuscated with base64 so it isn't stored as raw plaintext.
+# This is intentional: the combo-account feature requires auto-filling the
+# password field so users can switch accounts in one click.
+
+def _obfuscate(text: str) -> str:
+    return base64.b64encode(text.encode()).decode()
+
+def _deobfuscate(text: str) -> str:
+    try:
+        return base64.b64decode(text.encode()).decode()
+    except Exception:
+        return text   # fallback for entries saved before this change
 
 
 def _load_remember() -> dict:
@@ -24,21 +38,47 @@ def _load_remember() -> dict:
 
 
 def _save_remember(email: str, username: str, password_plain: str):
+    """
+    Save/update a remembered account.
+    - Deduplicates by email (one entry per email).
+    - Marks this account as 'last' (will be pre-filled on next open).
+    - Password stored obfuscated (base64), not plaintext.
+    """
     data  = _load_remember()
-    entry = {"username": username, "email": email, "password": password_plain}
-    data["last"] = entry
-    data["accounts"] = [a for a in data.get("accounts", []) if a["email"] != email]
+    entry = {
+        "username": username,
+        "email":    email,
+        "password": _obfuscate(password_plain),
+    }
+    # Remove any existing entry for this email, then insert at front
+    data["accounts"] = [a for a in data.get("accounts", []) if a.get("email") != email]
     data["accounts"].insert(0, entry)
+    data["last"] = entry
     _REMEMBER_FILE.write_text(
         json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
     )
 
 
 def _remove_remember(email: str):
+    """
+    Remove a specific account from remembered list.
+    Updates 'last' to the next available account, or None.
+    """
     data = _load_remember()
-    data["accounts"] = [a for a in data.get("accounts", []) if a["email"] != email]
-    if data["last"] and data["last"]["email"] == email:
+    data["accounts"] = [a for a in data.get("accounts", []) if a.get("email") != email]
+    # If we removed the 'last' account, fall back to the next one
+    last = data.get("last")
+    if last and last.get("email") == email:
         data["last"] = data["accounts"][0] if data["accounts"] else None
+    _REMEMBER_FILE.write_text(
+        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+
+def _clear_last_remember():
+    """Clear the 'last' pointer without removing the account list."""
+    data = _load_remember()
+    data["last"] = None
     _REMEMBER_FILE.write_text(
         json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
     )
@@ -262,6 +302,13 @@ class LoginPage(QWidget):
         self.pass_input.returnPressed.connect(self._do_login)
 
     def _apply_remember(self):
+        """
+        On startup:
+        - Populate the account combo with all remembered accounts.
+        - If a 'last' account exists (user had Remember Me checked last time),
+          pre-fill the fields and check the checkbox.
+        - If no 'last', leave fields empty — user must type credentials.
+        """
         data     = self._remember_data
         accounts = data.get("accounts", [])
 
@@ -272,19 +319,35 @@ class LoginPage(QWidget):
             self._account_combo.addItem(label, acc)
         self._account_combo.blockSignals(False)
 
-        self._account_combo.setVisible(len(accounts) >= 2)
+        # Show combo only when there are remembered accounts
+        self._account_combo.setVisible(len(accounts) > 0)
 
         last = data.get("last")
         if last:
+            # User had Remember Me on — pre-fill and keep checkbox checked
             self._remember_cb.setChecked(True)
             self.email_input.setText(last.get("email", ""))
-            self.pass_input.setText(last.get("password", ""))
+            self.pass_input.setText(_deobfuscate(last.get("password", "")))
+            # Select matching account in combo
+            for i in range(self._account_combo.count()):
+                acc = self._account_combo.itemData(i)
+                if acc and acc.get("email") == last.get("email"):
+                    self._account_combo.blockSignals(True)
+                    self._account_combo.setCurrentIndex(i)
+                    self._account_combo.blockSignals(False)
+                    break
+        else:
+            # No remembered session — start with empty fields
+            self._remember_cb.setChecked(False)
+            self.email_input.clear()
+            self.pass_input.clear()
 
     def _on_account_selected(self, idx: int):
         acc = self._account_combo.itemData(idx)
         if acc:
             self.email_input.setText(acc.get("email", ""))
-            self.pass_input.setText(acc.get("password", ""))
+            self.pass_input.setText(_deobfuscate(acc.get("password", "")))
+            self._remember_cb.setChecked(True)
 
     def _lbl(self, text):
         l = QLabel(text)
@@ -324,6 +387,12 @@ class LoginPage(QWidget):
         email_or_user = self.email_input.text().strip()
         password      = self.pass_input.text()
 
+        if not email_or_user or not password:
+            self.error_lbl.setText("⚠ Please enter your username/email and password.")
+            self.signin_btn.setEnabled(True)
+            self.signin_btn.setText("Sign In")
+            return
+
         user = self._auth.login(email_or_user, password)
 
         self.signin_btn.setEnabled(True)
@@ -335,13 +404,20 @@ class LoginPage(QWidget):
             return
 
         if self._remember_cb.isChecked():
+            # Save/update this account in remembered list and mark as 'last'
             _save_remember(
                 email          = user["email"],
                 username       = user["username"],
                 password_plain = password,
             )
+            # Refresh combo in case a new account was added
+            self._remember_data = _load_remember()
+            self._apply_remember()
         else:
+            # User does NOT want to be remembered:
+            # Remove from saved list and clear 'last' pointer
             _remove_remember(user["email"])
+            _clear_last_remember()
 
         if self.on_login:
             self.on_login(user)
