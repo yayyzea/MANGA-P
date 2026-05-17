@@ -42,6 +42,229 @@ class Toast(QLabel):
             self.move((pw - self.width()) // 2, ph - self.height() - 50)
 
 
+<<<<<<< HEAD
+class FontSizePopup(QFrame):
+    """
+    Flyout panel muncul di kanan sidebar saat tombol 'Aa' diklik.
+    Menampilkan tombol '-' dan '+' untuk memperkecil/memperbesar font,
+    beserta indikator level font saat ini.
+    """
+
+    # Label level font yang ditampilkan ke user
+    _LEVEL_LABELS = ["Kecil", "Normal", "Besar", "X-Besar"]
+    _LEVELS       = [0.85, 1.0, 1.20, 1.45]
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("FontSizePopup")
+        self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("""
+            #FontSizePopup {
+                background: #1565C0;
+                border-radius: 14px;
+                border: 1.5px solid rgba(255,255,255,0.30);
+            }
+        """)
+
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(14, 12, 14, 12)
+        outer.setSpacing(8)
+
+        # ── Judul popup ────────────────────────────────────────────────
+        title_lbl = QLabel("Ukuran Teks")
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_lbl.setFont(QFont("Segoe UI", 9))
+        title_lbl.setStyleSheet("color: rgba(255,255,255,0.70); background: transparent;")
+        outer.addWidget(title_lbl)
+
+        # ── Baris kontrol: [−] [label level] [+] ──────────────────────
+        ctrl_row = QHBoxLayout()
+        ctrl_row.setSpacing(10)
+        ctrl_row.setContentsMargins(0, 0, 0, 0)
+
+        # Tombol minus
+        self._btn_dec = QPushButton("−")
+        self._btn_dec.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        self._btn_dec.setFixedSize(40, 40)
+        self._btn_dec.setToolTip("Perkecil teks")
+        self._btn_dec.setStyleSheet(self._action_btn_style())
+        self._btn_dec.clicked.connect(self._decrease)
+
+        # Label level saat ini
+        self._level_lbl = QLabel("Normal")
+        self._level_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._level_lbl.setFixedWidth(62)
+        self._level_lbl.setFont(QFont("Segoe UI", 11, QFont.Weight.Bold))
+        self._level_lbl.setStyleSheet("color: white; background: transparent;")
+
+        # Tombol plus
+        self._btn_inc = QPushButton("+")
+        self._btn_inc.setFont(QFont("Segoe UI", 20, QFont.Weight.Bold))
+        self._btn_inc.setFixedSize(40, 40)
+        self._btn_inc.setToolTip("Perbesar teks")
+        self._btn_inc.setStyleSheet(self._action_btn_style())
+        self._btn_inc.clicked.connect(self._increase)
+
+        ctrl_row.addWidget(self._btn_dec)
+        ctrl_row.addWidget(self._level_lbl)
+        ctrl_row.addWidget(self._btn_inc)
+        outer.addLayout(ctrl_row)
+
+        # ── Indikator titik level ──────────────────────────────────────
+        dot_row = QHBoxLayout()
+        dot_row.setSpacing(6)
+        dot_row.setContentsMargins(0, 0, 0, 0)
+        dot_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._dots = []
+        for _ in self._LEVELS:
+            dot = QLabel("●")
+            dot.setFont(QFont("Segoe UI", 8))
+            dot.setStyleSheet("color: rgba(255,255,255,0.35); background: transparent;")
+            self._dots.append(dot)
+            dot_row.addWidget(dot)
+        outer.addLayout(dot_row)
+
+        self.adjustSize()
+        self._refresh_ui()
+
+    # ── Gaya tombol aksi ──────────────────────────────────────────────
+    @staticmethod
+    def _action_btn_style():
+        return """
+            QPushButton {
+                background: rgba(255,255,255,0.18);
+                border: none;
+                border-radius: 10px;
+                color: white;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.35);
+            }
+            QPushButton:pressed {
+                background: rgba(255,255,255,0.55);
+            }
+            QPushButton:disabled {
+                background: rgba(255,255,255,0.07);
+                color: rgba(255,255,255,0.30);
+            }
+        """
+
+    # ── Perbarui label & indikator sesuai skala saat ini ─────────────
+    def _refresh_ui(self):
+        mgr = FontSizeManager.instance()
+        idx = min(range(len(self._LEVELS)),
+                  key=lambda i: abs(self._LEVELS[i] - mgr.scale()))
+        self._level_lbl.setText(self._LEVEL_LABELS[idx])
+        self._btn_dec.setEnabled(idx > 0)
+        self._btn_inc.setEnabled(idx < len(self._LEVELS) - 1)
+        for i, dot in enumerate(self._dots):
+            dot.setStyleSheet(
+                "color: white; background: transparent;"
+                if i == idx else
+                "color: rgba(255,255,255,0.30); background: transparent;"
+            )
+
+    def _decrease(self):
+        FontSizeManager.instance().decrease()
+        self._refresh_ui()
+
+    def _increase(self):
+        FontSizeManager.instance().increase()
+        self._refresh_ui()
+
+    def show_near(self, sidebar_widget: QWidget, trigger_btn: QWidget):
+        """Tampilkan popup di kanan sidebar, sejajar dengan tombol pemicu."""
+        self._refresh_ui()
+        global_pos = trigger_btn.mapToGlobal(QPoint(0, 0))
+        x = global_pos.x() + sidebar_widget.width() + 6
+        y = global_pos.y() + (trigger_btn.height() - self.height()) // 2
+        self.move(x, y)
+        self.show()
+        self.raise_()
+
+
+
+class _AaButton(QWidget):
+    """
+    Tombol sidebar berbentuk 'Aa' — huruf kecil dan besar berdampingan.
+    Memancarkan sinyal clicked() saat diklik / ditekan Enter.
+    Mendukung state aktif (checked) dengan highlight background.
+    """
+
+    from PyQt6.QtCore import pyqtSignal as _sig
+    clicked = _sig()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setObjectName("AaButton")
+        self._checked = False
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def setChecked(self, state: bool):
+        self._checked = state
+        self.update()
+
+    def isChecked(self) -> bool:
+        return self._checked
+
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QBrush, QPen, QColor as QC, QRadialGradient
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+
+        # Background saat hover / checked
+        if self._checked:
+            p.setBrush(QBrush(QC(255, 255, 255, 76)))
+        else:
+            p.setBrush(QBrush(QC(0, 0, 0, 0)))
+        p.setPen(QPen(QC(0, 0, 0, 0)))
+        p.drawRoundedRect(4, 4, w - 8, h - 8, 10, 10)
+
+        # "a" kecil — kiri bawah
+        fa = QFont("Segoe UI", 10, QFont.Weight.Bold)
+        p.setFont(fa)
+        p.setPen(QPen(QC(255, 255, 255, 200)))
+        p.drawText(5, 0, w // 2 + 2, h, Qt.AlignmentFlag.AlignBottom | Qt.AlignmentFlag.AlignRight, "a")
+
+        # "A" besar — kanan tengah
+        fA = QFont("Segoe UI", 17, QFont.Weight.Bold)
+        p.setFont(fA)
+        p.setPen(QPen(QC(255, 255, 255, 255)))
+        p.drawText(w // 2 - 4, 0, w // 2 + 4, h, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "A")
+
+        p.end()
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._checked = not self._checked
+            self.update()
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+    def keyPressEvent(self, event):
+        from PyQt6.QtCore import Qt as Qt_
+        if event.key() in (Qt_.Key.Key_Return, Qt_.Key.Key_Space):
+            self._checked = not self._checked
+            self.update()
+            self.clicked.emit()
+        super().keyPressEvent(event)
+
+
+=======
+>>>>>>> origin/main
 class Sidebar(QWidget):
     def __init__(self, on_navigate, on_logo_click=None, on_logout=None, parent=None):
         super().__init__(parent)
@@ -92,6 +315,16 @@ class Sidebar(QWidget):
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch()
 
+<<<<<<< HEAD
+        # ── Font Size Button ("Aa") ───────────────────────────────────────────
+        self._font_popup = FontSizePopup()
+        self._font_btn = _AaButton()
+        self._font_btn.setToolTip("Ukuran Teks")
+        self._font_btn.setFixedSize(52, 52)
+        self._font_btn.clicked.connect(self._toggle_font_popup)
+        layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addSpacing(8)
+=======
         # ── Exit/Switch Account button (paling bawah) ──
         exit_btn = QPushButton()
         exit_btn.setObjectName("SidebarIcon")
@@ -112,6 +345,7 @@ class Sidebar(QWidget):
         exit_btn.clicked.connect(self._on_logout)
         layout.addWidget(exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
 
+>>>>>>> origin/main
         self._set_active(0)
 
     def _on_logout(self):
@@ -204,6 +438,8 @@ class MainWindow(QMainWindow):
 
     def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
 
+    def go_detail(self, manga_id):
+        self.detail_page.load_manga(manga_id)
     def _show_switch_account(self):
         self._logout()
 
