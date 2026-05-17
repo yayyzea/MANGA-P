@@ -1,10 +1,15 @@
 {
   "last": {
-    "username": "zimri",
-    "email": "zahra.azkiya.tif425@polban.ac.id",
-    "password": "zimri11"
+    "username": "zahra",
+    "email": "zahra@gmail.com",
+    "password": "zahra"
   },
   "accounts": [
+    {
+      "username": "zahra",
+      "email": "zahra@gmail.com",
+      "password": "zahra"
+    },
     {
       "username": "zimri",
       "email": "zahra.azkiya.tif425@polban.ac.id",
