@@ -519,7 +519,8 @@ class HomePage(QWidget):
         self._manga_list = manga_list
         self._display_cards()
 
-        if manga_list:
+        # Only fill history with top manga if it wasn't already restored from a saved session
+        if manga_list and self.history._manga_id is None:
             self.history.load_manga(manga_list[0])
 
     def _set_limit(self, limit: int):
