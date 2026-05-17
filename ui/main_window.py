@@ -274,12 +274,13 @@ class _AaButton(QWidget):
  
  
 class Sidebar(QWidget):
-    def __init__(self, on_navigate, on_logo_click=None, parent=None):
+    def __init__(self, on_navigate, on_logo_click=None, on_logout=None, parent=None):
         super().__init__(parent)
         self.setObjectName("Sidebar")
         self.setFixedWidth(SIDEBAR_WIDTH)
         self.on_navigate = on_navigate
         self.on_logo_click = on_logo_click
+        self.on_logout = on_logout
         self.setAutoFillBackground(True)
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
@@ -324,11 +325,39 @@ class Sidebar(QWidget):
  
         # ── Font Size Button ("Aa") ───────────────────────────────────────────
         self._font_popup = FontSizePopup()
-        self._font_btn = _AaButton()
+        self._font_btn = QPushButton()
+        self._font_btn.setObjectName("SidebarFont")
         self._font_btn.setToolTip("Ukuran Teks")
+        self._font_btn.setCheckable(True)
         self._font_btn.setFixedSize(52, 52)
+        px_font = QPixmap(str(_ICON_DIR / "font.png"))
+        if not px_font.isNull():
+            self._font_btn.setIcon(QIcon(px_font))
+            self._font_btn.setIconSize(QSize(26, 26))
+        else:
+            self._font_btn.setText("Aa")
+            self._font_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: white; } QPushButton:hover { background: rgba(255,255,255,0.20); } QPushButton:checked { background: rgba(255,255,255,0.30); }")
         self._font_btn.clicked.connect(self._toggle_font_popup)
         layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+
+        # ── Exit Button ───────────────────────────────────────────
+        self._exit_btn = QPushButton()
+        self._exit_btn.setObjectName("SidebarExit")
+        self._exit_btn.setToolTip("Logout / Exit")
+        self._exit_btn.setFixedSize(52, 52)
+        px_exit = QPixmap(str(_ICON_DIR / "exit.png"))
+        if not px_exit.isNull():
+            self._exit_btn.setIcon(QIcon(px_exit))
+            self._exit_btn.setIconSize(QSize(26, 26))
+        else:
+            self._exit_btn.setText("E")
+            self._exit_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
+        self._exit_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: white; } QPushButton:hover { background: rgba(255,255,255,0.20); }")
+        if self.on_logout:
+            self._exit_btn.clicked.connect(self.on_logout)
+        layout.addWidget(self._exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+
         layout.addSpacing(8)
         self._set_active(0)
  
@@ -356,9 +385,10 @@ class Sidebar(QWidget):
  
  
 class MainWindow(QMainWindow):
-    def __init__(self, user=None):
+    def __init__(self, user=None, on_logout=None):
         super().__init__()
         self.current_user = user
+        self.on_logout = on_logout
         self.setWindowTitle("MANGA:P")
         self.resize(1140, 680)
         self.setMinimumSize(900, 580)
@@ -372,7 +402,7 @@ class MainWindow(QMainWindow):
     def _build(self):
         root = QWidget(); self.setCentralWidget(root)
         h = QHBoxLayout(root); h.setContentsMargins(0,0,0,0); h.setSpacing(0)
-        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile)
+        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile, on_logout=self.on_logout)
         h.addWidget(self.sidebar)
         self.stack = QStackedWidget(); h.addWidget(self.stack)
         from .home_page import HomePage; from .library_page import LibraryPage
@@ -415,4 +445,3 @@ class MainWindow(QMainWindow):
         self.detail_page.load_manga(manga_id); self._navigate(3)
  
     def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
- 
