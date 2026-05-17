@@ -213,6 +213,11 @@ class SignUpPage(QWidget):
         email = self.email_input.text().strip()
         password = self.pass_input.text()
 
+        # Validasi sisi klien sebelum memanggil service
+        if not username or not email or not password:
+            self.error_lbl.setText("⚠  All fields are required")
+            return
+
         self.signup_btn.setEnabled(False)
         self.signup_btn.setText("Signing up...")
 
@@ -225,5 +230,6 @@ class SignUpPage(QWidget):
             self.error_lbl.setText(f"⚠  {error}")
             return
 
-        if self.on_signup:
+        # Hanya pindah ke login jika registrasi benar-benar berhasil
+        if success and self.on_signup:
             self.on_signup(email)
