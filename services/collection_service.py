@@ -168,7 +168,32 @@ class CollectionService:
                             genre_counter[g] = genre_counter.get(g, 0) + 1
             
             top_genre = max(genre_counter, key=genre_counter.get) if genre_counter else None
-            
-            return {"total": total, "counts": counts, "top_genre": top_genre}
+
+            author_rows = session.query(Manga.authors).join(
+                UserCollection, UserCollection.manga_id == Manga.id
+            ).filter(
+                UserCollection.user_id == user_id,
+                Manga.authors != None,
+                Manga.authors != ""
+            ).all()
+
+            author_counter = {}
+            for row in author_rows:
+                if row[0]:
+                    for a in row[0].split(","):
+                        a = a.strip()
+                        if a:
+                            author_counter[a] = author_counter.get(a, 0) + 1
+
+            top_author = max(author_counter, key=author_counter.get) if author_counter else None
+
+            return {
+                "total": total,
+                "counts": counts,
+                "top_genre": top_genre,
+                "top_author": top_author,
+                "genre_counts": dict(sorted(genre_counter.items(), key=lambda x: x[1], reverse=True)),
+                "author_counts": dict(sorted(author_counter.items(), key=lambda x: x[1], reverse=True))
+            }
         finally:
             session.close()
