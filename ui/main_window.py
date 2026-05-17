@@ -410,6 +410,47 @@ class Sidebar(QWidget):
         return super().eventFilter(obj, event)
  
  
+def _history_path():
+    """Return path to the per-user history JSON file next to the DB."""
+    import os
+    base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "..", "user_history.json")
+
+
+def load_history(user_id: int) -> int | None:
+    """Return the last-visited manga_id for user_id, or None."""
+    import json, os
+    path = _history_path()
+    if not os.path.exists(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data.get(str(user_id))
+    except Exception as e:
+        print(f"[History] load error: {e}")
+        return None
+
+
+def save_history(user_id: int, manga_id: int):
+    """Persist manga_id as the last-visited entry for user_id."""
+    import json, os
+    path = _history_path()
+    data = {}
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = {}
+    data[str(user_id)] = manga_id
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception as e:
+        print(f"[History] save error: {e}")
+
+
 class MainWindow(QMainWindow):
     def __init__(self, user=None, on_logout=None):
         super().__init__()
@@ -444,6 +485,17 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.about_page); self.stack.addWidget(self.dashboard_page)
         self.stack.addWidget(self.profile_page)
         self.stack.setCurrentIndex(0)
+        # Restore last-visited manga from previous session
+        if self.current_user:
+            last_id = load_history(self.current_user["id"])
+            if last_id:
+                try:
+                    from services.manga_service import MangaService
+                    manga = MangaService().get_by_id(last_id)
+                    if manga:
+                        self.home_page.history.load_manga(manga)
+                except Exception as e:
+                    print(f"[MainWindow] Restore history error: {e}")
  
     def _navigate(self, idx):
         if idx == 1: self.library_page.refresh()
@@ -466,7 +518,11 @@ class MainWindow(QMainWindow):
         try:
             from services.manga_service import MangaService
             manga = MangaService().get_by_id(manga_id)
-            if manga: self.home_page.history.load_manga(manga)
+            if manga:
+                self.home_page.history.load_manga(manga)
+                # Persist so it survives logout/login
+                if self.current_user:
+                    save_history(self.current_user["id"], manga_id)
         except Exception as e: print(f"[MainWindow] History update error: {e}")
         self.detail_page.load_manga(manga_id); self._navigate(3)
  
