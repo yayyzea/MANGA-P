@@ -95,13 +95,19 @@ class ReviewService:
                 Review.updated_at.desc()
             ).first()
             if result:
+                import json
                 r, m = result
+                try:
+                    tags = json.loads(r.tags) if r.tags else []
+                except Exception:
+                    tags = []
                 return {
                     "manga_id": r.manga_id,
                     "title": m.title or "—",
                     "cover_url": m.cover_url or "",
                     "rating": r.rating,
                     "review_text": r.review_text or "",
+                    "tags": tags,
                 }
             return None
         finally:
