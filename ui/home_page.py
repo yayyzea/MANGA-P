@@ -563,11 +563,11 @@ class HomePage(QWidget):
             container_width = self.width() - 80 - 220 - 72
 
         spacing = self.manga_grid.spacing()
-        for cols in [6, 5, 4, 3, 2, 1]:
+        for cols in [5, 4, 3, 2, 1]:
             if container_width >= cols * 110 + spacing * (cols - 1):
                 break
 
-        card_w = min(130, (container_width - spacing * (cols - 1)) // cols)
+        card_w = min(180, (container_width - spacing * (cols - 1)) // cols)
         card_h = int(card_w * 1.5)
 
         cover_w = max(80, card_w - 16)
@@ -596,6 +596,14 @@ class HomePage(QWidget):
                 item.widget().deleteLater()
 
     def _on_filter_apply(self, genres, status, year):
+        # Kalau tidak ada filter apapun → langsung balik ke Top Manga
+        if not genres and not status and not year:
+            self._filter_mode = False
+            for btn in self._top_buttons.values():
+                btn.setVisible(True)
+            self._display_cards()
+            return
+
         self._filter_mode   = True
         self._filter_page   = 1
         self._filter_genres = genres
@@ -638,6 +646,11 @@ class HomePage(QWidget):
         self._home_loading_lbl.setVisible(False)
 
         if page == 1 and not manga_list:
+        # Tidak ada hasil — balik ke tampilan Top Manga normal
+            self._filter_mode = False
+            for btn in self._top_buttons.values():
+                btn.setVisible(True)
+            self._display_cards()
             return
 
         container_width = self.content_scroll.viewport().width() - 4
@@ -655,6 +668,8 @@ class HomePage(QWidget):
             card.clicked.connect(self.main_window.go_detail)
             self.manga_grid.addWidget(card, row, col)
             self._card_count += 1
+
+        self._relayout()
 
         if len(manga_list) < SearchLoader.PAGE_SIZE:
             self._no_more = True
