@@ -147,11 +147,11 @@ class TopMangaLoader(QThread):
 
             manga_list = MangaService().get_top_manga(limit=105)
 
-            # Hitung genre_counts dari SEMUA manga di database (bukan hanya top 105)
+            # Hitung genre_counts dari SEMUA manga di database tanpa filter apapun
             genre_counts = {}
             session = get_session()
             try:
-                all_manga = session.query(Manga).filter(Manga.genres != None).all()
+                all_manga = session.query(Manga).all()
                 for manga in all_manga:
                     if manga.genres:
                         for g in manga.genres.split(","):
