@@ -8,17 +8,20 @@ from pathlib import Path
 _ICON_DIR = Path(__file__).parent.parent / "assets"
 
 from .theme import (
-    BLUE_PRIMARY, BLUE_CARD, BLUE_FOOTER, WHITE,
+    BLUE_PRIMARY, BLUE_CARD, BLUE_FOOTER, WHITE, BLUE_LIGHT,
     TEXT_DARK, TOPBAR_HEIGHT, CARD_W, CARD_H, CARD_RADIUS
 )
 from .widgets import MangaCard, ImageLoader
 from .search_page import FilterPanel, SearchLoader
 
 
-# ── Walking Cat Animation ─────────────────────────────────────────────────────
+def _force_bg(widget, hex_color, radius=0):
+    widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+    r = f"border-radius: {radius}px;" if radius else ""
+    widget.setStyleSheet(f"background: {hex_color}; {r}")
+
 
 class WalkingCat(QWidget):
-    """Cat that walks back and forth across the footer. Drawn with QPainter."""
     SIZE  = 36
     SPEED = 2
     FRAMES = [0, 1, 2, 1]
@@ -75,25 +78,21 @@ class WalkingCat(QWidget):
         p.setPen(pen)
         p.setBrush(QBrush(body_col))
 
-        # Body
         body = QPainterPath()
         body.addRoundedRect(4, 12, 22, 14, 6, 6)
         p.drawPath(body)
 
-        # Head
         head = QPainterPath()
         head.addEllipse(QPointF(15, 10), 9, 9)
         p.drawPath(head)
 
-        # Ears
         for ex, ey in [(9, 4), (19, 4)]:
             p.drawLine(ex - 2, ey + 3, ex - 3, ey - 1)
             p.drawLine(ex - 2, ey + 3, ex + 1, ey)
 
-        # Eyes
         p.setBrush(QBrush(line_col))
         p.setPen(Qt.PenStyle.NoPen)
-        if f == 2:  # blink
+        if f == 2:
             p.setPen(QPen(line_col, 1.5))
             p.setBrush(Qt.BrushStyle.NoBrush)
             p.drawLine(11, 10, 13, 10)
@@ -102,7 +101,6 @@ class WalkingCat(QWidget):
             p.drawEllipse(QPointF(12, 10), 1.5, 1.5)
             p.drawEllipse(QPointF(18, 10), 1.5, 1.5)
 
-        # Nose
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(QBrush(nose_col))
         nose = QPainterPath()
@@ -112,14 +110,12 @@ class WalkingCat(QWidget):
         nose.closeSubpath()
         p.drawPath(nose)
 
-        # Whiskers
         p.setPen(QPen(line_col, 1))
         p.drawLine(6, 13, 12, 14)
         p.drawLine(6, 15, 12, 15)
         p.drawLine(18, 14, 24, 13)
         p.drawLine(18, 15, 24, 15)
 
-        # Legs
         p.setPen(QPen(line_col, 2.2))
         p.setBrush(QBrush(body_col))
         leg_x_offsets = [0, 3, 0, -3]
@@ -130,7 +126,6 @@ class WalkingCat(QWidget):
             leg.quadTo(lx, ly + 3, lx + ox, ly + 8)
             p.drawPath(leg)
 
-        # Tail
         wag = [0, 5, 0, -5][self._frame]
         tail = QPainterPath()
         tail.moveTo(5, 18)
@@ -141,24 +136,32 @@ class WalkingCat(QWidget):
         p.end()
 
 
-
 class TopMangaLoader(QThread):
-    finished = pyqtSignal(list)
+    finished = pyqtSignal(list, dict)
 
     def run(self):
         try:
             from services.manga_service import MangaService
-            # Fetch 105 supaya setelah filtering/dedup tetap dapat 100 penuh
-            self.finished.emit(MangaService().get_top_manga(limit=105))
+            manga_list = MangaService().get_top_manga(limit=105)
+            
+            genre_counts = {}
+            for manga in manga_list:
+                if manga.genres:
+                    for g in manga.genres.split(","):
+                        g = g.strip()
+                        if g:
+                            genre_counts[g] = genre_counts.get(g, 0) + 1
+            
+            genre_counts = dict(sorted(genre_counts.items(), key=lambda x: x[1], reverse=True))
+            top_genre = list(genre_counts.keys())[0] if genre_counts else None
+            
+            self.finished.emit(manga_list, {"top_genre": top_genre, "genre_counts": genre_counts})
         except Exception as e:
             print(f"[HomePage] Load error: {e}")
-            self.finished.emit([])
+            self.finished.emit([], {})
 
-
-# ── History panel (clickable) ─────────────────────────────────────────────────
 
 class HistoryPanel(QWidget):
-    # ★ Signal emitted when user clicks the panel
     manga_clicked = pyqtSignal(int)
 
     def __init__(self, parent=None):
@@ -166,7 +169,7 @@ class HistoryPanel(QWidget):
         self.setObjectName("HistoryPanel")
         self.setFixedWidth(220)
         self._loader   = None
-        self._manga_id = None   # stores current manga id for click navigation
+        self._manga_id = None
 
         self.setAutoFillBackground(True)
         pal = self.palette()
@@ -174,10 +177,7 @@ class HistoryPanel(QWidget):
         self.setPalette(pal)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"border-radius: {CARD_RADIUS}px;")
-
-        # ★ Pointer cursor — signals it's clickable
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
         self._build()
 
     def _build(self):
@@ -237,14 +237,11 @@ class HistoryPanel(QWidget):
         )
         self.cover_lbl.setPixmap(scaled)
 
-    # ★ Navigate to detail page on click
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self._manga_id:
             self.manga_clicked.emit(self._manga_id)
         super().mousePressEvent(event)
 
-
-# ── Search bar ────────────────────────────────────────────────────────────────
 
 class SearchBar(QWidget):
     search_triggered = pyqtSignal(str)
@@ -316,15 +313,65 @@ class SearchBar(QWidget):
         self.input.setText(text)
 
 
-# ── Home page ─────────────────────────────────────────────────────────────────
+class MostGenreCard(QWidget):
+    clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        _force_bg(self, BLUE_CARD, radius=CARD_RADIUS)
+        self.setFixedHeight(80)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(20, 14, 20, 14)
+        layout.setSpacing(12)
+        
+        icon_lbl = QLabel("🔥")
+        icon_lbl.setStyleSheet("font-size: 22px; background: transparent;")
+        layout.addWidget(icon_lbl)
+        
+        text_col = QVBoxLayout()
+        text_col.setSpacing(2)
+        
+        self._label = QLabel("MOST GENRE")
+        self._label.setStyleSheet(
+            f"color: rgba(255,255,255,0.80); font-size: 10px; font-weight: 700; letter-spacing: 1px; background: transparent;"
+        )
+        text_col.addWidget(self._label)
+        
+        self._value = QLabel("—")
+        self._value.setStyleSheet(
+            f"color: {WHITE}; font-size: 20px; font-weight: 700; background: transparent;"
+        )
+        text_col.addWidget(self._value)
+        
+        layout.addLayout(text_col)
+        layout.addStretch()
+        
+        arrow = QLabel("→")
+        arrow.setStyleSheet(
+            f"color: rgba(255,255,255,0.60); font-size: 18px; font-weight: 700; background: transparent;"
+        )
+        layout.addWidget(arrow)
+
+    def set_genre(self, genre: str):
+        self._value.setText(genre if genre else "—")
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
 
 class HomePage(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
         self._manga_list = []
-        self._current_limit = 50  # default tampil 50
-        # Infinite scroll state (untuk mode filter)
+        self._genre_counts = {}
+        self._top_genre = None
+        self._current_limit = 50
         self._filter_mode   = False
         self._filter_page   = 1
         self._filter_genres = []
@@ -346,29 +393,29 @@ class HomePage(QWidget):
         self.search_bar.filter_triggered.connect(self._on_filter)
         root.addWidget(self.search_bar)
 
-        # Outer row: left scrollable area + right fixed History panel
         outer_row = QWidget()
         outer_row_layout = QHBoxLayout(outer_row)
-        outer_row_layout.setContentsMargins(24, 20, 24, 20)
+        outer_row_layout.setContentsMargins(24, 16, 24, 20)
         outer_row_layout.setSpacing(24)
         root.addWidget(outer_row, stretch=1)
 
-        # ── Kolom kiri: wrapper vertical (header + tombol fixed + scroll) ──
         left_wrapper = QWidget()
         left_wrapper.setStyleSheet("background: transparent;")
         left_wrapper_layout = QVBoxLayout(left_wrapper)
         left_wrapper_layout.setContentsMargins(0, 0, 0, 0)
-        left_wrapper_layout.setSpacing(8)
+        left_wrapper_layout.setSpacing(12)
         outer_row_layout.addWidget(left_wrapper, stretch=1)
 
-        # "Top Manga" label — di luar scroll, tidak hilang saat scroll
+        self._most_genre_card = MostGenreCard()
+        self._most_genre_card.clicked.connect(self._on_most_genre_clicked)
+        left_wrapper_layout.addWidget(self._most_genre_card)
+
         lbl = QLabel("Top Manga")
         lbl.setStyleSheet(
             f"color: {BLUE_PRIMARY}; font-size: 16px; font-weight: 700; background: transparent;"
         )
         left_wrapper_layout.addWidget(lbl)
 
-        # ── Tombol Top 10 / 20 / 50 / 100 — FIXED, tidak ikut scroll ──────
         btn_container = QWidget()
         btn_container.setStyleSheet("background: transparent;")
         self._top_btn_row = QHBoxLayout(btn_container)
@@ -380,7 +427,7 @@ class HomePage(QWidget):
             btn.setFixedHeight(32)
             btn.setFixedWidth(75)
             btn.setCheckable(True)
-            btn.setChecked(n == 50)  # default Top 50 aktif
+            btn.setChecked(n == 50)
             btn.setStyleSheet(f"""
                 QPushButton {{
                     background: {BLUE_PRIMARY};
@@ -403,7 +450,6 @@ class HomePage(QWidget):
         self._top_btn_row.addStretch()
         left_wrapper_layout.addWidget(btn_container)
 
-        # Left: QScrollArea wraps hanya grid manga
         self.content_scroll = QScrollArea()
         content_scroll = self.content_scroll
         content_scroll.setWidgetResizable(True)
@@ -422,7 +468,7 @@ class HomePage(QWidget):
         self.grid_container.setStyleSheet("background: transparent;")
 
         self.manga_grid = QGridLayout(self.grid_container)
-        self.manga_grid.setSpacing(16)
+        self.manga_grid.setSpacing(6)
         self.manga_grid.setContentsMargins(0, 0, 0, 0)
 
         left.addWidget(self.grid_container)
@@ -437,10 +483,8 @@ class HomePage(QWidget):
 
         left.addStretch()
 
-        # Connect infinite scroll
         self.content_scroll.verticalScrollBar().valueChanged.connect(self._on_home_scroll)
 
-        # ★ Right side: filter panel (hidden by default) + history panel
         self.filter_panel = FilterPanel()
         self.filter_panel.apply_clicked.connect(self._on_filter_apply)
         self.filter_panel.setVisible(False)
@@ -449,54 +493,6 @@ class HomePage(QWidget):
         self.history = HistoryPanel()
         self.history.manga_clicked.connect(self.main_window.go_detail)
         outer_row_layout.addWidget(self.history, alignment=Qt.AlignmentFlag.AlignTop)
-
-        root.addWidget(self._build_footer())
-
-    def _build_footer(self):
-        # Outer container: links row + cat row
-        outer = QWidget()
-        outer.setAutoFillBackground(True)
-        pal = outer.palette()
-        pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_FOOTER))
-        outer.setPalette(pal)
-
-        v = QVBoxLayout(outer)
-        v.setContentsMargins(0, 0, 0, 0)
-        v.setSpacing(0)
-
-        # ── Links row ─────────────────────────────────────────────────────
-        link_bar = QWidget()
-        link_bar.setFixedHeight(30)
-        link_bar.setStyleSheet("background: transparent;")
-        layout = QHBoxLayout(link_bar)
-        layout.setContentsMargins(16, 0, 16, 0)
-        layout.setSpacing(4)
-
-        for label, cb in [("Home", self.main_window.go_home),
-                          ("About", self.main_window.go_about)]:
-            btn = QPushButton(label)
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: transparent; border: none;
-                    color: {BLUE_PRIMARY}; font-size: 12px;
-                    text-decoration: underline;
-                }}
-                QPushButton:hover {{ color: #0D47A1; }}
-            """)
-            btn.clicked.connect(cb)
-            layout.addWidget(btn)
-            sep = QLabel("|")
-            sep.setStyleSheet(f"color: {BLUE_PRIMARY}; background: transparent; font-size: 12px;")
-            layout.addWidget(sep)
-        layout.addStretch()
-        v.addWidget(link_bar)
-
-        # ── Walking cat strip ──────────────────────────────────────────────
-        self.walking_cat = WalkingCat()
-        self.walking_cat.setStyleSheet("background: transparent;")
-        v.addWidget(self.walking_cat)
-
-        return outer
 
     def _start_loading(self):
         self._show_placeholders()
@@ -514,26 +510,31 @@ class HomePage(QWidget):
             self.manga_grid.addWidget(ph, 0, 0)
         self._relayout()
 
-    @pyqtSlot(list)
-    def _on_loaded(self, manga_list):
+    @pyqtSlot(list, dict)
+    def _on_loaded(self, manga_list, stats):
         self._manga_list = manga_list
+        self._genre_counts = stats.get("genre_counts", {})
+        self._top_genre = stats.get("top_genre")
+        
+        if self._top_genre:
+            self._most_genre_card.set_genre(self._top_genre)
+        
         self._display_cards()
 
-        # Only fill history with top manga if it wasn't already restored from a saved session
         if manga_list and self.history._manga_id is None:
             self.history.load_manga(manga_list[0])
 
+    def _on_most_genre_clicked(self):
+        if hasattr(self.main_window, 'go_genre_list'):
+            self.main_window.go_genre_list(self._genre_counts, self._top_genre)
+
     def _set_limit(self, limit: int):
-        """Dipanggil saat user klik tombol Top 10/20/50/100."""
         self._current_limit = limit
         self._filter_mode = False
-        # Tampilkan kembali semua tombol
         for btn in self._top_buttons.values():
             btn.setVisible(True)
-        # Update state tombol
         for n, btn in self._top_buttons.items():
             btn.setChecked(n == limit)
-        # Tampilkan kartu sesuai limit
         self._display_cards()
 
     def _display_cards(self):
@@ -557,20 +558,16 @@ class HomePage(QWidget):
         if not widgets:
             return
 
-        # Ambil lebar dari viewport scroll area (akurat, tidak terpengaruh konten)
         container_width = self.content_scroll.viewport().width() - 4
         if container_width < 50:
-            # Fallback: hitung dari lebar window
             container_width = self.width() - 80 - 220 - 72
 
-        # Default 5 kolom, turun kalau window dikecilkan
         spacing = self.manga_grid.spacing()
-        for cols in [5, 4, 3, 2, 1]:
-            if container_width >= cols * 130 + spacing * (cols - 1):
+        for cols in [6, 5, 4, 3, 2, 1]:
+            if container_width >= cols * 110 + spacing * (cols - 1):
                 break
 
-        # Card mengisi rata lebar container, tapi dibatasi max 160px
-        card_w = min(160, (container_width - spacing * (cols - 1)) // cols)
+        card_w = min(130, (container_width - spacing * (cols - 1)) // cols)
         card_h = int(card_w * 1.5)
 
         cover_w = max(80, card_w - 16)
@@ -607,7 +604,6 @@ class HomePage(QWidget):
         self._no_more       = False
         self._card_count    = 0
         self._clear_grid()
-        # Sembunyikan tombol Top N saat filter aktif
         for btn in self._top_buttons.values():
             btn.setVisible(False)
         self._start_filter_loader(page=1)
