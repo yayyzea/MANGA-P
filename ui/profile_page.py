@@ -264,7 +264,8 @@ class SwitchAccountDialog(QDialog):
     def _on_add_account(self):
         """Buka AuthWindow untuk login akun baru."""
         self.reject()
-        self.main_window._logout()
+        if callable(self.main_window.on_logout):
+            self.main_window.on_logout()
 
 
 class ProfilePage(QWidget):

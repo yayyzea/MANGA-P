@@ -142,19 +142,28 @@ class TopMangaLoader(QThread):
     def run(self):
         try:
             from services.manga_service import MangaService
+            from database import get_session
+            from models.manga import Manga
+
             manga_list = MangaService().get_top_manga(limit=105)
-            
+
+            # Hitung genre_counts dari SEMUA manga di database tanpa filter apapun
             genre_counts = {}
-            for manga in manga_list:
-                if manga.genres:
-                    for g in manga.genres.split(","):
-                        g = g.strip()
-                        if g:
-                            genre_counts[g] = genre_counts.get(g, 0) + 1
-            
+            session = get_session()
+            try:
+                all_manga = session.query(Manga).all()
+                for manga in all_manga:
+                    if manga.genres:
+                        for g in manga.genres.split(","):
+                            g = g.strip()
+                            if g:
+                                genre_counts[g] = genre_counts.get(g, 0) + 1
+            finally:
+                session.close()
+
             genre_counts = dict(sorted(genre_counts.items(), key=lambda x: x[1], reverse=True))
             top_genre = list(genre_counts.keys())[0] if genre_counts else None
-            
+
             self.finished.emit(manga_list, {"top_genre": top_genre, "genre_counts": genre_counts})
         except Exception as e:
             print(f"[HomePage] Load error: {e}")
@@ -362,6 +371,36 @@ class MostGenreCard(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
+
+
+class _GenreOnlyLoader(QThread):
+    """Lightweight loader: hanya hitung genre_counts dari seluruh DB, tanpa fetch top manga."""
+    finished = pyqtSignal(dict)
+
+    def run(self):
+        try:
+            from database import get_session
+            from models.manga import Manga
+
+            genre_counts = {}
+            session = get_session()
+            try:
+                for manga in session.query(Manga).all():
+                    if manga.genres:
+                        for g in manga.genres.split(","):
+                            g = g.strip()
+                            if g:
+                                genre_counts[g] = genre_counts.get(g, 0) + 1
+            finally:
+                session.close()
+
+            genre_counts = dict(
+                sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)
+            )
+            self.finished.emit(genre_counts)
+        except Exception as e:
+            print(f"[_GenreOnlyLoader] Error: {e}")
+            self.finished.emit({})
 
 
 class HomePage(QWidget):
@@ -662,6 +701,9 @@ class HomePage(QWidget):
         if len(manga_list) < SearchLoader.PAGE_SIZE:
             self._no_more = True
 
+        # Scraping mungkin menambah manga baru ke DB → refresh distribusi genre
+        self.refresh_genre_counts()
+
     def _on_search(self, query):
         if query:
             self.main_window.go_search(query)
@@ -673,3 +715,21 @@ class HomePage(QWidget):
 
     def refresh(self):
         self._start_loading()
+
+    def refresh_genre_counts(self):
+        """Refresh genre distribution dari DB tanpa reload seluruh manga list.
+        Dipanggil setelah scraping selesai agar chart distribusi selalu terupdate."""
+        loader = _GenreOnlyLoader()
+        loader.finished.connect(self._on_genre_counts_refreshed)
+        loader.start()
+        self._genre_refresh_loader = loader  # simpan referensi agar tidak di-GC
+
+    @pyqtSlot(dict)
+    def _on_genre_counts_refreshed(self, genre_counts: dict):
+        if not genre_counts:
+            return
+        self._genre_counts = genre_counts
+        top = list(genre_counts.keys())[0] if genre_counts else None
+        if top:
+            self._top_genre = top
+            self._most_genre_card.set_genre(top)
