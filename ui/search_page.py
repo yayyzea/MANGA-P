@@ -337,10 +337,9 @@ class FilterPanel(QWidget):
         """
 
     def _emit_apply(self):
-        genres = [g for g, cb in self._genre_cbs.items() if cb.isChecked()]
-        checked_status = [s for s, cb in self._status_cbs.items() if cb.isChecked()]
-        status = checked_status[0] if checked_status else None
-        year = self.selected_year()
+        genres = self.selected_genres()  # sudah include custom genre dari _custom_genre_input
+        status = self.selected_status()
+        year   = self.selected_year()
         self.apply_clicked.emit(genres, status, year)
 
     # ── Getters ───────────────────────────────────────────────────────────
