@@ -78,6 +78,8 @@ class MangaService:
                 if raw:
                     for key, val in raw.items():
                         if key not in ("id", "created_at") and hasattr(manga, key):
+                            if key == "authors" and val:
+                                val = self._fix_author(val)
                             setattr(manga, key, val)
                     session.commit()
                     session.refresh(manga)
@@ -135,17 +137,14 @@ class MangaService:
         if not manga:
             return []
 
-        # Parse helpers
         try:
             genre_list = manga.genres_list()
         except AttributeError:
             genre_list = [g.strip() for g in (manga.genres or "").split(",") if g.strip()]
 
-        # Extract base title keyword (first meaningful word, min 4 chars)
         title_words = (manga.title or "").split()
         title_kw    = next((w for w in title_words if len(w) >= 4), title_words[0] if title_words else "")
 
-        # Author (first author name)
         author_kw = ""
         if manga.authors:
             parts     = manga.authors.split(",")
@@ -162,7 +161,6 @@ class MangaService:
                         seen_ids.add(m.id)
                         results.append(m)
 
-            # ── Priority 1: same title keyword ────────────────────────────────
             if title_kw:
                 p1 = (
                     session.query(Manga)
@@ -176,7 +174,6 @@ class MangaService:
                 )
                 _add(p1)
 
-            # ── Priority 2: same author + same genre ──────────────────────────
             if len(results) < limit and author_kw and genre_list:
                 genre_filters = [Manga.genres.contains(g) for g in genre_list[:2]]
                 p2 = (
@@ -192,7 +189,6 @@ class MangaService:
                 )
                 _add(p2)
 
-            # ── Priority 3: same genre (DB first, then Jikan fallback) ─────────
             if len(results) < limit and genre_list:
                 genre_filters = [Manga.genres.contains(g) for g in genre_list[:3]]
                 p3 = (
@@ -207,7 +203,6 @@ class MangaService:
                 )
                 _add(p3)
 
-                # Still not enough → fetch from Jikan by genre
                 if len(results) < limit:
                     raw_list = self.jikan.search_by_genres(genre_list[:2], limit=20)
                     self._bulk_upsert(raw_list, session)
@@ -229,6 +224,20 @@ class MangaService:
         finally:
             session.close()
     
+    # ── Helpers ───────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _fix_author(authors_raw: str) -> str:
+        """Convert Jikan format 'Last, First' → 'First Last'"""
+        if not authors_raw:
+            return authors_raw
+        authors = authors_raw.strip()
+        if "," in authors:
+            parts = [p.strip() for p in authors.split(",", 1)]
+            if len(parts) == 2:
+                return f"{parts[1]} {parts[0]}"
+        return authors
+
     # ── Cache helpers ─────────────────────────────────────────────────────────
             
     def _fetch_and_cache_keyword(self, query: str, session: Session):
@@ -261,9 +270,13 @@ class MangaService:
                     if self._is_stale(existing):
                         for key, val in raw.items():
                             if key not in ("id", "created_at") and hasattr(existing, key):
+                                if key == "authors" and val:
+                                    val = self._fix_author(val)
                                 setattr(existing, key, val)
                     continue
             try:
+                if "authors" in raw and raw["authors"]:
+                    raw["authors"] = self._fix_author(raw["authors"])
                 manga = Manga(**{k: v for k, v in raw.items() if k != "id"})
                 session.add(manga)
                 session.flush()

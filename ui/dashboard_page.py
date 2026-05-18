@@ -29,7 +29,15 @@ class DashboardLoader(QThread):
         self.user_id = user_id
 
     def run(self):
-        stats = {"total": 0, "counts": {}, "top_genre": None, "avg_rating": None}
+        stats = {
+            "total": 0,
+            "counts": {},
+            "top_genre": None,
+            "top_author": None,
+            "genre_counts": {},
+            "author_counts": {},
+            "avg_rating": None
+        }
         last_review_data = None
         ratings = []
 
@@ -63,12 +71,15 @@ class DashboardLoader(QThread):
 
 
 class StatCard(QWidget):
+    clicked = pyqtSignal()
+
     def __init__(self, label, value="—", bg=None, parent=None):
         super().__init__(parent)
         _force_bg(self, bg or BLUE_CARD, radius=CARD_RADIUS)
         self.setMinimumWidth(140)
         self.setFixedHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(4)
@@ -82,13 +93,22 @@ class StatCard(QWidget):
     def set_value(self, v):
         self._val.setText(str(v))
 
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
 
 class WideCard(QWidget):
+    clicked = pyqtSignal(str)
+
     def __init__(self, label, value="—", parent=None):
         super().__init__(parent)
         _force_bg(self, BLUE_CARD, radius=CARD_RADIUS)
+        self._card_value = "—"
         self.setFixedHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 14, 18, 14)
         layout.setSpacing(6)
@@ -102,7 +122,13 @@ class WideCard(QWidget):
         layout.addStretch()
 
     def set_value(self, v):
-        self._val.setText(str(v))
+        self._card_value = str(v) if v else "—"
+        self._val.setText(self._card_value)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._card_value != "—":
+            self.clicked.emit(self._card_value)
+        super().mousePressEvent(event)
 
 
 STATUS_COLORS = {
@@ -114,11 +140,16 @@ STATUS_COLORS = {
 
 
 class PieChartWidget(QWidget):
+    clicked_status = pyqtSignal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._data = {}
+        self._slices = []
+        self._hovered_label = None
         self.setMinimumHeight(220)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMouseTracking(True)
 
     def set_data(self, counts: dict):
         self._data = {}
@@ -133,23 +164,37 @@ class PieChartWidget(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         w, h = self.width(), self.height()
         total = sum(self._data.values())
+        self._slices = []
+
         if total == 0:
             painter.setPen(QColor(TEXT_MUTED))
+            font = QFont("Segoe UI", 11)
+            painter.setFont(font)
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No data yet")
             return
+
         pie_size = min(w // 2, h - 40)
         pie_x = (w // 2 - pie_size) // 2
         pie_y = (h - pie_size) // 2
         pie_rect = QRectF(pie_x, pie_y, pie_size, pie_size)
+
         start_angle = 90 * 16
         items = list(self._data.items())
+
         for label, count in items:
             span = int(round(count / total * 360 * 16))
             color = QColor(STATUS_COLORS.get(label, BLUE_CARD))
             painter.setBrush(QBrush(color))
-            painter.setPen(QPen(QColor(WHITE), 2))
+
+            if label == self._hovered_label:
+                painter.setPen(QPen(QColor(WHITE), 3))
+            else:
+                painter.setPen(QPen(QColor(WHITE), 2))
+
             painter.drawPie(pie_rect, start_angle, span)
+            self._slices.append((pie_rect, start_angle, span, label))
             start_angle += span
+
         legend_x = w // 2 + 20
         legend_y = h // 2 - len(items) * 18
         font = QFont("Segoe UI", 10)
@@ -161,17 +206,76 @@ class PieChartWidget(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawRoundedRect(legend_x, y, 14, 14, 3, 3)
             painter.setPen(QColor(TEXT_DARK))
-            painter.drawText(legend_x + 20, y, 200, 14, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, f"{label}")
+            painter.drawText(legend_x + 20, y, 200, 14,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                f"{label}")
             painter.setPen(QColor(TEXT_MUTED))
-            painter.drawText(legend_x + 20, y + 16, 200, 14, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, f"{count} manga  ({pct:.0f}%)")
+            painter.drawText(legend_x + 20, y + 16, 200, 14,
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                f"{count} manga  ({pct:.0f}%)")
+
+    def mouseMoveEvent(self, event):
+        pos = event.position()
+        new_hover = None
+        for pie_rect, start_angle, span, label in self._slices:
+            center = pie_rect.center()
+            dx = pos.x() - center.x()
+            dy = pos.y() - center.y()
+            dist = (dx * dx + dy * dy) ** 0.5
+            radius = pie_rect.width() / 2
+
+            if dist <= radius:
+                import math
+                angle = math.degrees(math.atan2(-dy, dx))
+                if angle < 0:
+                    angle += 360
+                angle_16 = angle * 16
+                sa = start_angle % (360 * 16)
+                ea = sa + span
+
+                if ea <= 360 * 16:
+                    if sa <= angle_16 < ea:
+                        new_hover = label
+                        break
+                else:
+                    if angle_16 >= sa or angle_16 < (ea % (360 * 16)):
+                        new_hover = label
+                        break
+
+        if new_hover != self._hovered_label:
+            self._hovered_label = new_hover
+            self.update()
+
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._hovered_label:
+            self.clicked_status.emit(self._hovered_label)
+        super().mousePressEvent(event)
+
+    def enterEvent(self, event):
+        if self._data:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self._hovered_label = None
+        self.update()
+        super().leaveEvent(event)
 
 
 class RatingBarChart(QWidget):
+    clicked_rating = pyqtSignal(int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._ratings = {}
+        self._bar_rects = []
+        self._hovered_score = None
         self.setMinimumHeight(200)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMouseTracking(True)
 
     def set_data(self, ratings):
         new_ratings = {i: 0 for i in range(1, 11)}
@@ -194,33 +298,92 @@ class RatingBarChart(QWidget):
         max_count = max(self._ratings.values()) if self._ratings else 1
         if max_count == 0:
             max_count = 1
+
         if total == 0:
             painter.setPen(QColor(TEXT_MUTED))
+            font = QFont("Segoe UI", 11)
+            painter.setFont(font)
             painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "No reviews yet")
+            self._bar_rects = []
             return
+
         padding_l, padding_r, padding_v = 40, 60, 10
         bar_area_w = w - padding_l - padding_r
-        n_bars, bar_h = 10, (h - padding_v * 2) / 10 - 4
+        bar_h = (h - padding_v * 2) / 10 - 4
         font = QFont("Segoe UI", 9)
         painter.setFont(font)
+
+        self._bar_rects = []
+
         for i, score in enumerate(range(1, 11)):
             count = self._ratings.get(score, 0)
             bar_w = int(bar_area_w * count / max_count) if count > 0 else 2
             y = padding_v + i * ((h - padding_v * 2) / 10)
+
             painter.setPen(QColor(TEXT_DARK))
-            painter.drawText(0, int(y), padding_l - 6, int(bar_h), Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter, str(score))
+            painter.drawText(
+                0, int(y),
+                padding_l - 6, int(bar_h),
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                str(score)
+            )
+
             bar_rect = QRectF(padding_l, y + 2, max(bar_w, 2), bar_h - 2)
             grad = QLinearGradient(bar_rect.topLeft(), bar_rect.topRight())
             grad.setColorAt(0, QColor(BLUE_PRIMARY))
             grad.setColorAt(1, QColor(BLUE_LIGHT))
             painter.setBrush(QBrush(grad))
-            painter.setPen(Qt.PenStyle.NoPen)
+
+            if score == self._hovered_score:
+                painter.setPen(QPen(QColor(WHITE), 2))
+            else:
+                painter.setPen(Qt.PenStyle.NoPen)
+
             path = QPainterPath()
             path.addRoundedRect(bar_rect, 4, 4)
             painter.drawPath(path)
+
             if count > 0:
                 painter.setPen(QColor(TEXT_MUTED))
-                painter.drawText(int(padding_l + bar_w + 6), int(y), padding_r - 8, int(bar_h), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter, str(count))
+                painter.drawText(
+                    int(padding_l + bar_w + 6), int(y),
+                    padding_r - 8, int(bar_h),
+                    Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                    str(count)
+                )
+
+            full_rect = QRectF(0, y, w, bar_h)
+            self._bar_rects.append((full_rect, score))
+
+    def mouseMoveEvent(self, event):
+        pos = event.position()
+        new_hover = None
+        for rect, score in self._bar_rects:
+            if rect.contains(pos) and self._ratings.get(score, 0) > 0:
+                new_hover = score
+                break
+
+        if new_hover != self._hovered_score:
+            self._hovered_score = new_hover
+            self.update()
+
+        super().mouseMoveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self._hovered_score:
+            self.clicked_rating.emit(self._hovered_score)
+        super().mousePressEvent(event)
+
+    def enterEvent(self, event):
+        if any(v > 0 for v in self._ratings.values()):
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.setCursor(Qt.CursorShape.ArrowCursor)
+        self._hovered_score = None
+        self.update()
+        super().leaveEvent(event)
 
 
 class LastReviewCard(QWidget):
@@ -260,7 +423,6 @@ class LastReviewCard(QWidget):
         self._text.setStyleSheet(f"color:rgba(255,255,255,0.85);font-size:12px;background:transparent;")
         self._text.setWordWrap(True)
         right.addWidget(self._text)
-        # ── Tags row ──
         self._tags_row = QHBoxLayout()
         self._tags_row.setSpacing(5)
         self._tags_row.setContentsMargins(0, 2, 0, 0)
@@ -288,7 +450,6 @@ class LastReviewCard(QWidget):
         self._text.setText(str(review_data.get("review_text", "(no review text)")))
         self._hint.setVisible(True)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        # ── Render tags ──
         self._clear_tags()
         tags = review_data.get("tags", [])
         if isinstance(tags, list):
@@ -351,6 +512,8 @@ class DashboardPage(QWidget):
         super().__init__(parent)
         self.main_window = main_window
         self._loader = None
+        self._genre_counts = {}
+        self._author_counts = {}
         self._build()
         self._start_loading()
 
@@ -358,6 +521,7 @@ class DashboardPage(QWidget):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
+
         topbar = QWidget()
         topbar.setFixedHeight(60)
         _force_bg(topbar, BLUE_PRIMARY)
@@ -368,36 +532,55 @@ class DashboardPage(QWidget):
         tb.addWidget(title)
         tb.addStretch()
         root.addWidget(topbar)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setStyleSheet("background: transparent; border: none;")
+
         body = QWidget()
         bl = QVBoxLayout(body)
         bl.setContentsMargins(24, 24, 24, 24)
         bl.setSpacing(16)
+
         row1 = QHBoxLayout()
         row1.setSpacing(16)
+
         self._total = StatCard("Total Manga", "—", bg=BLUE_CARD)
         self._rating = StatCard("Avg Rating", "—", bg=BLUE_CARD)
         self._genre = WideCard("Top Genre", "—")
+        self._author = WideCard("Top Author", "—")
+
         row1.addWidget(self._total)
         row1.addWidget(self._rating)
         row1.addWidget(self._genre, stretch=2)
+        row1.addWidget(self._author, stretch=2)
         bl.addLayout(row1)
+
         row2 = QHBoxLayout()
         row2.setSpacing(16)
+
         self._pie = PieChartWidget()
         pie_card = _chart_card("Collection Status", self._pie)
         row2.addWidget(pie_card, stretch=1)
+
         self._bar = RatingBarChart()
         bar_card = _chart_card("Rating Distribution (1–10)", self._bar)
         row2.addWidget(bar_card, stretch=1)
+
         bl.addLayout(row2)
+
+        self._total.clicked.connect(self.main_window.go_library)
+        self._pie.clicked_status.connect(self.main_window.go_status)
+        self._bar.clicked_rating.connect(self.main_window.go_rating)
+        self._genre.clicked.connect(self.main_window.go_genre)
+        self._author.clicked.connect(self.main_window.go_author)
+
         bl.addWidget(self._sec("Last Review"))
         self._last_review = LastReviewCard()
         self._last_review.clicked.connect(self.main_window.go_detail)
         bl.addWidget(self._last_review)
+
         bl.addStretch()
         scroll.setWidget(body)
         root.addWidget(scroll, stretch=1)
@@ -421,6 +604,9 @@ class DashboardPage(QWidget):
         total = int(stats.get("total", 0))
         avg = stats.get("avg_rating")
         top_genre = stats.get("top_genre")
+        top_author = stats.get("top_author")
+        self._genre_counts = stats.get("genre_counts", {})
+        self._author_counts = stats.get("author_counts", {})
         counts = {}
         for k, v in stats.get("counts", {}).items():
             counts[str(k)] = int(v)
@@ -444,6 +630,7 @@ class DashboardPage(QWidget):
         self._total.set_value(total)
         self._rating.set_value(f"{avg:.1f}" if avg else "—")
         self._genre.set_value(str(top_genre) if top_genre else "—")
+        self._author.set_value(str(top_author) if top_author else "—")
         self._pie.set_data(counts)
         self._bar.set_data(ratings_copy)
         self._last_review.load(last_review_copy)
