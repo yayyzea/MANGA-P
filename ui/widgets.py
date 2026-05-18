@@ -33,19 +33,40 @@ class ImageLoader(QThread):
             pass
 
 
+_CARD_MIN_W = 100   # lebar minimum card
+_CARD_MAX_W = 220   # lebar maksimum card
+_ASPECT     = CARD_H / CARD_W   # rasio tinggi:lebar cover (200/140 ≈ 1.43)
+
+
 class MangaCoverLabel(QLabel):
-    """Rounded-corner cover image, fills with lighter blue when no image."""
+    """Rounded-corner cover image — lebar mengikuti parent, tinggi proporsional."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(CARD_W, CARD_H)
-        self._raw_pixmap = None  # simpan original pixmap sebelum scaling
+        self._raw_pixmap = None
         self._pixmap = None
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMinimumWidth(_CARD_MIN_W - _PAD * 2)
+        # Tinggi awal — akan di-update ulang di resizeEvent saat lebar sudah diketahui
+        self.setFixedHeight(round(CARD_W * _ASPECT))
+
+    def _sync_height(self):
+        # Pakai lebar aktual cover. Kalau belum ada (saat init), fallback ke CARD_W.
+        # Tinggi = lebar × rasio aspek, minimum 80px
+        w = self.width()
+        if w < 10:  # belum di-layout, skip dulu — resizeEvent akan handle
+            return
+        self.setFixedHeight(max(80, round(w * _ASPECT)))
 
     def set_cover(self, pixmap: QPixmap):
-        self._raw_pixmap = pixmap  # simpan untuk re-scale saat resize
+        self._raw_pixmap = pixmap
+        self._rescale()
+
+    def _rescale(self):
+        if not self._raw_pixmap:
+            return
         w, h = self.width() or CARD_W, self.height() or CARD_H
-        self._pixmap = pixmap.scaled(
+        self._pixmap = self._raw_pixmap.scaled(
             w, h,
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
             Qt.TransformationMode.SmoothTransformation,
@@ -54,14 +75,8 @@ class MangaCoverLabel(QLabel):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        if self._raw_pixmap:
-            w, h = self.width(), self.height()
-            self._pixmap = self._raw_pixmap.scaled(
-                w, h,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            self.update()
+        self._sync_height()
+        self._rescale()
 
     def paintEvent(self, event):
         painter = QPainter(self)
@@ -110,22 +125,23 @@ class MangaCard(QWidget):
         layout.setSpacing(6)
 
         self.cover = MangaCoverLabel()
-        layout.addWidget(self.cover, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addWidget(self.cover)  # tanpa alignment — biar Expanding mengisi penuh lebar card
 
         if self.show_labels:
             self.lbl_title = QLabel(self.manga.title or "")
             self.lbl_title.setWordWrap(True)
-            self.lbl_title.setFixedWidth(CARD_W)
+            self.lbl_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
             self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             self.lbl_title.setStyleSheet(
                 "color: white; font-size: 11px; font-weight: 600; background: transparent;"
             )
 
-            genres    = self.manga.genres or ""
+            genres = self.manga.genres or ""
             all_genres = ", ".join(g.strip() for g in genres.split(",")) if genres else ""
             self.lbl_genre = QLabel(all_genres)
             self.lbl_genre.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             self.lbl_genre.setWordWrap(True)
+            self.lbl_genre.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
             self.lbl_genre.setStyleSheet(
                 "color: rgba(255,255,255,0.80); font-size: 10px; background: transparent;"
             )
@@ -133,9 +149,9 @@ class MangaCard(QWidget):
             layout.addWidget(self.lbl_title)
             layout.addWidget(self.lbl_genre)
 
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Minimum)
-        # Card is wider than cover by 2×_PAD so blue shows on left and right
-        self.setFixedWidth(CARD_W + _PAD * 2)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.setMinimumWidth(_CARD_MIN_W)
+        self.setMaximumWidth(_CARD_MAX_W)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
     def _load_cover(self):
