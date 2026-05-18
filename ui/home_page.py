@@ -567,16 +567,8 @@ class HomePage(QWidget):
             if container_width >= cols * 110 + spacing * (cols - 1):
                 break
 
-<<<<<<< Updated upstream
         card_w = min(_CARD_MAX_W, max(_CARD_MIN_W, (container_width - spacing * (cols - 1)) // cols))
         cover_w = card_w - _PAD * 2
-=======
-        card_w = min(130, (container_width - spacing * (cols - 1)) // cols)
-        card_h = int(card_w * 1.5)
-
-        cover_w = max(80, card_w - 16)
-        cover_h = card_h
->>>>>>> Stashed changes
 
         for i, widget in enumerate(widgets):
             widget.setMinimumWidth(_CARD_MIN_W)
