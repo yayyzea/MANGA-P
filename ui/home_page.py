@@ -142,19 +142,28 @@ class TopMangaLoader(QThread):
     def run(self):
         try:
             from services.manga_service import MangaService
+            from database import get_session
+            from models.manga import Manga
+
             manga_list = MangaService().get_top_manga(limit=105)
-            
+
+            # Hitung genre_counts dari SEMUA manga di database (bukan hanya top 105)
             genre_counts = {}
-            for manga in manga_list:
-                if manga.genres:
-                    for g in manga.genres.split(","):
-                        g = g.strip()
-                        if g:
-                            genre_counts[g] = genre_counts.get(g, 0) + 1
-            
+            session = get_session()
+            try:
+                all_manga = session.query(Manga).filter(Manga.genres != None).all()
+                for manga in all_manga:
+                    if manga.genres:
+                        for g in manga.genres.split(","):
+                            g = g.strip()
+                            if g:
+                                genre_counts[g] = genre_counts.get(g, 0) + 1
+            finally:
+                session.close()
+
             genre_counts = dict(sorted(genre_counts.items(), key=lambda x: x[1], reverse=True))
             top_genre = list(genre_counts.keys())[0] if genre_counts else None
-            
+
             self.finished.emit(manga_list, {"top_genre": top_genre, "genre_counts": genre_counts})
         except Exception as e:
             print(f"[HomePage] Load error: {e}")
