@@ -395,11 +395,43 @@ class ScrapedGenrePage(QWidget):
             self.main_window.go_genre_list(self.main_window.genre_list_page._genre_counts)
 
 
+class GenreCountLoader(QThread):
+    """Query fresh genre counts directly from DB every time the page is opened."""
+    finished = pyqtSignal(dict)
+
+    def run(self):
+        try:
+            from database import get_session
+            from models.manga import Manga
+
+            session = get_session()
+            try:
+                genre_counts = {}
+                all_manga = session.query(Manga).all()
+                for manga in all_manga:
+                    if manga.genres:
+                        for g in manga.genres.split(","):
+                            g = g.strip()
+                            if g:
+                                genre_counts[g] = genre_counts.get(g, 0) + 1
+            finally:
+                session.close()
+
+            genre_counts = dict(
+                sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)
+            )
+            self.finished.emit(genre_counts)
+        except Exception as e:
+            print(f"[GenreCountLoader] Error: {e}")
+            self.finished.emit({})
+
+
 class GenreListPage(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
         self._genre_counts = {}
+        self._loader = None
         self._build()
 
     def _build(self):
@@ -432,6 +464,14 @@ class GenreListPage(QWidget):
             f"color: {WHITE}; font-size: 18px; font-weight: 700; background: transparent;"
         )
         tb.addWidget(title)
+
+        self._loading_lbl = QLabel("  ⏳ Updating…")
+        self._loading_lbl.setStyleSheet(
+            f"color: rgba(255,255,255,0.70); font-size: 11px; background: transparent;"
+        )
+        self._loading_lbl.setVisible(False)
+        tb.addWidget(self._loading_lbl)
+
         tb.addStretch()
         root.addWidget(topbar)
 
@@ -472,8 +512,38 @@ class GenreListPage(QWidget):
         root.addWidget(scroll, stretch=1)
 
     def load_data(self, genre_counts: dict, top_genre: str = None):
-        self._genre_counts = genre_counts
-        self._bar_chart.set_data(genre_counts)
+        """Called from HomePage — show passed data immediately, then refresh from DB."""
+        # Tampilkan data yang ada dulu agar chart langsung muncul
+        if genre_counts:
+            self._genre_counts = genre_counts
+            self._bar_chart.set_data(genre_counts)
+
+        # Selalu refresh dari DB untuk dapat data terbaru (termasuk hasil scraping)
+        self._refresh_from_db()
+
+    def _refresh_from_db(self):
+        """Fetch fresh genre counts from DB in background thread."""
+        if self._loader and self._loader.isRunning():
+            return
+        self._loading_lbl.setVisible(True)
+        self._loader = GenreCountLoader()
+        self._loader.finished.connect(self._on_counts_loaded)
+        self._loader.start()
+
+    @pyqtSlot(dict)
+    def _on_counts_loaded(self, genre_counts: dict):
+        self._loading_lbl.setVisible(False)
+        if genre_counts:
+            self._genre_counts = genre_counts
+            self._bar_chart.set_data(genre_counts)
+            # Sync kembali ke HomePage agar MostGenreCard juga terupdate
+            if hasattr(self.main_window, 'home_page'):
+                hp = self.main_window.home_page
+                hp._genre_counts = genre_counts
+                top = list(genre_counts.keys())[0] if genre_counts else None
+                if top:
+                    hp._top_genre = top
+                    hp._most_genre_card.set_genre(top)
 
     def _on_genre_clicked(self, genre: str):
         if hasattr(self.main_window, 'go_scraped_genre'):
