@@ -142,18 +142,6 @@ class FontSizePopup(QFrame):
         hint_row.addWidget(lbl_max)
         outer.addLayout(hint_row)
 
-        reset_btn = QPushButton("Reset to default")
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent; border: none;
-                color: rgba(255,255,255,0.45); font-size: 11px;
-                text-decoration: underline;
-            }
-            QPushButton:hover { color: white; }
-        """)
-        reset_btn.clicked.connect(self._reset)
-        outer.addWidget(reset_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
         self.adjustSize()
         self._refresh_ui()
 
@@ -175,10 +163,6 @@ class FontSizePopup(QFrame):
 
     def _increase(self):
         FontSizeManager.instance().increase()
-        self._refresh_ui()
-
-    def _reset(self):
-        FontSizeManager.instance().reset()
         self._refresh_ui()
 
     def show_near(self, sidebar_widget: QWidget, trigger_btn: QWidget):
