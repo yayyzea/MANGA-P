@@ -591,6 +591,14 @@ class HomePage(QWidget):
                 item.widget().deleteLater()
 
     def _on_filter_apply(self, genres, status, year):
+        # Kalau tidak ada filter yang dipilih, balik ke tampilan normal
+        if not genres and not status and not year:
+            self._filter_mode = False
+            for btn in self._top_buttons.values():
+                btn.setVisible(True)
+            self._display_cards()
+            return
+
         self._filter_mode   = True
         self._filter_page   = 1
         self._filter_genres = genres
