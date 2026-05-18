@@ -218,6 +218,14 @@ class SignUpPage(QWidget):
             self.error_lbl.setText("⚠  All fields are required")
             return
 
+        if "@" not in email or email.index("@") == 0 or email.index("@") == len(email) - 1:
+            self.error_lbl.setText("⚠  Please enter a valid email address ")
+            return
+
+        if len(password) < 6:
+            self.error_lbl.setText("⚠  Password must be at least 6 characters")
+            return
+
         self.signup_btn.setEnabled(False)
         self.signup_btn.setText("Signing up...")
 
