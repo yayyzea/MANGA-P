@@ -251,7 +251,9 @@ class SwitchAccountDialog(QDialog):
     def _do_switch(self, acc: dict):
         """Login ke akun lain dan reload MainWindow."""
         from services.auth_service import AuthService
-        user = AuthService().login(acc["email"], acc["password"])
+        from .login_page import _deobfuscate
+        password = _deobfuscate(acc["password"])
+        user = AuthService().login(acc["email"], password)
         if not user:
             self.main_window.show_toast("⚠ Failed to switch account, please log in again.")
             self.reject()
