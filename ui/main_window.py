@@ -546,3 +546,37 @@ class MainWindow(QMainWindow):
 
     def update_sidebar_avatar(self, avatar_path: str):
         self.sidebar.update_logo(avatar_path)
+
+    def _switch_to_user(self, user: dict):
+        """Reload seluruh halaman untuk user baru setelah switch account."""
+        self.current_user = user
+
+        if hasattr(self.home_page, 'refresh'):
+            self.home_page.refresh()
+        if hasattr(self.library_page, 'refresh'):
+            self.library_page.refresh()
+        if hasattr(self.dashboard_page, 'refresh'):
+            self.dashboard_page.refresh()
+        if hasattr(self.profile_page, 'refresh'):
+            self.profile_page.refresh()
+
+        # Load avatar sidebar user baru kalau ada
+        try:
+            from services.user_service import UserService
+            profile = UserService().get_profile(user["id"])
+            if profile and profile.avatar_path:
+                self.update_sidebar_avatar(profile.avatar_path)
+            else:
+                # Reset ke logo default
+                from PyQt6.QtGui import QPixmap
+                _logo_px = QPixmap(str(_ICON_DIR / "logo_kucing.png"))
+                if not _logo_px.isNull():
+                    self.sidebar._logo_lbl.setPixmap(
+                        _logo_px.scaled(40, 40, Qt.AspectRatioMode.KeepAspectRatio,
+                                        Qt.TransformationMode.SmoothTransformation)
+                    )
+        except Exception as e:
+            print(f"[Switch] avatar load error: {e}")
+
+        self.go_home()
+        self.show_toast(f"✓ Switched to {user.get('username', 'account')}")
