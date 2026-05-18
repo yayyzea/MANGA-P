@@ -210,7 +210,7 @@ class LibraryFilterPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(300)
+        self.setFixedWidth(340)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"background: {WHITE};")
         self._genre_cbs  = {}
@@ -221,7 +221,20 @@ class LibraryFilterPanel(QWidget):
         self.setVisible(False)
 
     def _build(self):
-        root = QVBoxLayout(self)
+        from PyQt6.QtWidgets import QScrollArea
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+
+        # Scroll area untuk semua konten filter
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        inner_widget = QWidget()
+        inner_widget.setStyleSheet(f"background: {WHITE};")
+        root = QVBoxLayout(inner_widget)
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(14)
 
@@ -281,9 +294,12 @@ class LibraryFilterPanel(QWidget):
             QLineEdit:focus {{ border-color: {BLUE_PRIMARY}; }}
         """)
         root.addWidget(self._year_input)
-
         root.addStretch()
 
+        scroll.setWidget(inner_widget)
+        outer.addWidget(scroll, stretch=1)
+
+        # Apply button di luar scroll, selalu nempel di bawah
         apply_btn = QPushButton("Apply")
         apply_btn.setFixedHeight(46)
         apply_btn.setStyleSheet(f"""
@@ -300,7 +316,7 @@ class LibraryFilterPanel(QWidget):
             }}
         """)
         apply_btn.clicked.connect(self.apply_clicked)
-        root.addWidget(apply_btn)
+        outer.addWidget(apply_btn)
 
     def _heading(self, text):
         lbl = QLabel(text)
