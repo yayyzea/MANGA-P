@@ -327,6 +327,30 @@ class ProfilePage(QWidget):
         card_layout.addSpacing(10)
 
         btn_row = QHBoxLayout(); btn_row.setSpacing(10)
+
+        # Delete account icon button (bottom-left of card)
+        delete_icon_btn = QPushButton()
+        delete_icon_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        delete_icon_btn.setFixedSize(38, 38)
+        delete_icon_btn.setToolTip("Delete Account")
+        delete_user_icon = QPixmap(str(_ICON_DIR / "deleteuser.png"))
+        if not delete_user_icon.isNull():
+            delete_icon_btn.setIcon(QIcon(delete_user_icon))
+            delete_icon_btn.setIconSize(QSize(24, 24))
+        else:
+            delete_icon_btn.setText("🗑")
+        delete_icon_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.15);
+                border-radius: 19px;
+            }
+        """)
+        delete_icon_btn.clicked.connect(self._on_delete_account)
+
         cancel_btn = QPushButton("Back")
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor); cancel_btn.setFixedHeight(38)
         cancel_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {WHITE}; border: 1.5px solid {WHITE}; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(255,255,255,0.15); }}")
@@ -335,7 +359,7 @@ class ProfilePage(QWidget):
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor); save_btn.setFixedHeight(38)
         save_btn.setStyleSheet(f"QPushButton {{ background: {WHITE}; color: {BLUE_DARK}; border: none; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 700; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: {BLUE_FOOTER}; }}")
         save_btn.clicked.connect(self._on_save)
-        btn_row.addStretch(); btn_row.addWidget(cancel_btn); btn_row.addWidget(save_btn)
+        btn_row.addWidget(delete_icon_btn); btn_row.addStretch(); btn_row.addWidget(cancel_btn); btn_row.addWidget(save_btn)
         card_layout.addLayout(btn_row)
 
         # Switch Account button
@@ -475,6 +499,58 @@ class ProfilePage(QWidget):
             self.main_window.current_user["avatar_path"] = self._avatar_path
             self.main_window.update_sidebar_avatar(self._avatar_path)
         self._toast("Profile saved successfully ✓")
+
+    def _on_delete_account(self):
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Delete Account")
+        msg.setText("Are you sure you want to delete your account?")
+        msg.setInformativeText("This action is permanent and cannot be undone. All your data will be lost.")
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        msg.button(QMessageBox.StandardButton.Yes).setText("Yes, Delete")
+        msg.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
+        msg.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {BLUE_DARK};
+                font-family: '{FONT_FAMILY}';
+            }}
+            QMessageBox QLabel {{
+                color: {WHITE};
+                background-color: transparent;
+                font-family: '{FONT_FAMILY}';
+                font-size: 13px;
+            }}
+            QMessageBox QTextEdit {{
+                background-color: transparent;
+                color: {WHITE};
+                border: none;
+            }}
+            QPushButton {{
+                background: rgba(255,255,255,0.15);
+                color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.40);
+                border-radius: 12px;
+                padding: 6px 18px;
+                font-family: '{FONT_FAMILY}';
+                font-size: 12px;
+                font-weight: 600;
+                min-width: 80px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.28);
+            }}
+        """)
+        result = msg.exec()
+        if result == QMessageBox.StandardButton.Yes:
+            from services.user_service import UserService
+            user_id = self.main_window.current_user.get("id")
+            success = UserService().delete_account(user_id)
+            if success:
+                if callable(self.main_window.on_logout):
+                    self.main_window.on_logout()
+            else:
+                self._toast("Failed to delete account. Please try again.")
 
     def _on_switch_account(self):
         dialog = SwitchAccountDialog(self.main_window, parent=self)
