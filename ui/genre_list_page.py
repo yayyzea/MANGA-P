@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QPushButton, QSizePolicy, QGridLayout
 )
-from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread, pyqtSlot, QTimer
+from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread, pyqtSlot
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont,
     QPainterPath, QLinearGradient, QPixmap
@@ -19,6 +19,8 @@ def _force_bg(widget, hex_color, radius=0):
     r = f"border-radius: {radius}px;" if radius else ""
     widget.setStyleSheet(f"background: {hex_color}; {r}")
 
+
+# ── Bar Chart ────────────────────────────────────────────────────────────────
 
 class GenreBarChart(QWidget):
     clicked_genre = pyqtSignal(str)
@@ -54,37 +56,28 @@ class GenreBarChart(QWidget):
         bar_h = 30
         gap = 12
         start_y = padding_t
-        
         label_width = 140
         count_width = 60
         bar_area_x = label_width + 12
         bar_area_w = w - label_width - count_width - 60
-        
         self._bar_rects = []
 
         for i, (genre, count) in enumerate(self._data.items()):
             y = start_y + i * (bar_h + gap)
-
             if y + bar_h < 0 or y > h:
                 continue
-
             bar_w = max(4, int(bar_area_w * count / max_count))
-            
-            # Label genre di kiri (selalu kebaca)
-                        # Label genre di kiri (align left, selalu kebaca)
+
             painter.setPen(QColor(TEXT_DARK))
             font = QFont("Segoe UI", 10, QFont.Weight.Bold)
             painter.setFont(font)
-            display_name = genre
-            if len(display_name) > 16:
-                display_name = display_name[:14] + "…"
+            display_name = genre[:14] + "…" if len(genre) > 16 else genre
             painter.drawText(
                 8, int(y), label_width - 8, bar_h,
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
                 display_name
             )
-            
-            # Bar
+
             bar_rect = QRectF(bar_area_x, y + 2, bar_w, bar_h - 4)
             grad = QLinearGradient(bar_rect.topLeft(), bar_rect.topRight())
             if genre == self._hovered_genre:
@@ -94,17 +87,11 @@ class GenreBarChart(QWidget):
                 grad.setColorAt(0, QColor(BLUE_PRIMARY))
                 grad.setColorAt(1, QColor(BLUE_LIGHT))
             painter.setBrush(QBrush(grad))
-
-            if genre == self._hovered_genre:
-                painter.setPen(QPen(QColor(WHITE), 2))
-            else:
-                painter.setPen(Qt.PenStyle.NoPen)
-
+            painter.setPen(QPen(QColor(WHITE), 2) if genre == self._hovered_genre else Qt.PenStyle.NoPen)
             path = QPainterPath()
             path.addRoundedRect(bar_rect, 6, 6)
             painter.drawPath(path)
 
-            # Count + persentase di kanan bar
             painter.setPen(QColor(TEXT_DARK))
             font = QFont("Segoe UI", 11, QFont.Weight.Bold)
             painter.setFont(font)
@@ -127,9 +114,7 @@ class GenreBarChart(QWidget):
                     f"({pct:.1f}%)"
                 )
 
-            # Simpan full row rect untuk deteksi klik
-            full_rect = QRectF(0, y, w, bar_h)
-            self._bar_rects.append((full_rect, genre))
+            self._bar_rects.append((QRectF(0, y, w, bar_h), genre))
 
         total_height = start_y + len(self._data) * (bar_h + gap) + padding_b
         if total_height != self.minimumHeight():
@@ -142,11 +127,9 @@ class GenreBarChart(QWidget):
             if rect.contains(pos):
                 new_hover = genre
                 break
-
         if new_hover != self._hovered_genre:
             self._hovered_genre = new_hover
             self.update()
-
         super().mouseMoveEvent(event)
 
     def mousePressEvent(self, event):
@@ -165,6 +148,120 @@ class GenreBarChart(QWidget):
         self.update()
         super().leaveEvent(event)
 
+
+# ── Genre count loader (DB only, NO scrape) ──────────────────────────────────
+
+class GenreCountLoader(QThread):
+    """
+    Query genre distribution + total manga count langsung dari DB.
+    Filter hanya manga hasil scrape (is_manual == False).
+    TIDAK melakukan request ke API apapun.
+    """
+    finished = pyqtSignal(dict, int)   # (genre_counts, total_manga)
+
+    def run(self):
+        try:
+            from database import get_session
+            from models.manga import Manga
+
+            session = get_session()
+            try:
+                scraped_manga = (
+                    session.query(Manga)
+                    .filter(Manga.is_manual == False)
+                    .all()
+                )
+                total = len(scraped_manga)
+
+                genre_counts = {}
+                for manga in scraped_manga:
+                    if manga.genres:
+                        for g in manga.genres.split(","):
+                            g = g.strip()
+                            if g:
+                                genre_counts[g] = genre_counts.get(g, 0) + 1
+            finally:
+                session.close()
+
+            genre_counts = dict(
+                sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)
+            )
+            self.finished.emit(genre_counts, total)
+        except Exception as e:
+            print(f"[GenreCountLoader] Error: {e}")
+            self.finished.emit({}, 0)
+
+
+# ── Scrape +100 worker ───────────────────────────────────────────────────────
+
+class AddMangaWorker(QThread):
+    """
+    Scrape 100 manga berikutnya dari Jikan top/manga.
+    Menentukan halaman mulai dari jumlah manga scraped yang sudah ada di DB.
+    """
+    progress = pyqtSignal(int)   # berapa yang sudah diambil di batch ini
+    finished = pyqtSignal(int)   # total yang berhasil ditambahkan
+
+    ADD_COUNT = 100
+    PER_PAGE  = 25
+
+    def run(self):
+        try:
+            from database import get_session
+            from models.manga import Manga
+            from services.jikan_service import JikanService
+            from services.manga_service import MangaService
+            import time
+
+            session = get_session()
+            jikan   = JikanService()
+            svc     = MangaService()
+
+            try:
+                existing = (
+                    session.query(Manga)
+                    .filter(Manga.is_manual == False)
+                    .count()
+                )
+                start_page = (existing // self.PER_PAGE) + 1
+
+                added = 0
+                page  = start_page
+
+                while added < self.ADD_COUNT:
+                    time.sleep(0.7)
+                    resp = jikan._get("top/manga", params={
+                        "limit": self.PER_PAGE,
+                        "type":  "manga",
+                        "page":  page,
+                    })
+                    if not resp or "data" not in resp or not resp["data"]:
+                        break
+
+                    raw_list = [jikan._clean_manga(item) for item in resp["data"]]
+                    svc._bulk_upsert(raw_list, session)
+
+                    added += len(raw_list)
+                    page  += 1
+                    self.progress.emit(min(added, self.ADD_COUNT))
+
+                    if len(resp["data"]) < self.PER_PAGE:
+                        break
+
+            finally:
+                session.close()
+
+            self.finished.emit(min(added, self.ADD_COUNT))
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[AddMangaWorker] Fatal: {e}")
+            self.finished.emit(0)
+
+
+# ── ScrapedGenreLoader ────────────────────────────────────────────────────────
+
 class ScrapedGenreLoader(QThread):
     finished = pyqtSignal(list, str)
 
@@ -174,8 +271,6 @@ class ScrapedGenreLoader(QThread):
 
     def run(self):
         results = []
-        genre_display = self.genre
-
         try:
             from database import get_session
             from models.manga import Manga
@@ -184,34 +279,28 @@ class ScrapedGenreLoader(QThread):
             try:
                 rows = (
                     session.query(Manga)
-                    .filter(
-                        Manga.genres.like(f"%{self.genre}%")
-                    )
+                    .filter(Manga.genres.like(f"%{self.genre}%"))
                     .all()
                 )
-
                 for manga in rows:
                     results.append({
-                        "id": manga.id,
-                        "title": manga.title,
+                        "id":        manga.id,
+                        "title":     manga.title,
                         "cover_url": manga.cover_url or "",
-                        "score": manga.score or 0,
-                        "genres": manga.genres or "",
-                        "status": manga.status or "?",
+                        "score":     manga.score or 0,
+                        "genres":    manga.genres or "",
+                        "status":    manga.status or "?",
                     })
-
                 results.sort(key=lambda x: x["score"], reverse=True)
-
             finally:
                 session.close()
-
         except Exception as e:
-            import traceback
-            traceback.print_exc()
             print(f"[ScrapedGenre] Error loading genre '{self.genre}': {e}")
 
-        self.finished.emit(results, genre_display)
+        self.finished.emit(results, self.genre)
 
+
+# ── MangaCardSmall ────────────────────────────────────────────────────────────
 
 class MangaCardSmall(QWidget):
     clicked = pyqtSignal(int)
@@ -249,7 +338,7 @@ class MangaCardSmall(QWidget):
         if score:
             score_lbl = QLabel(f"★ {score:.1f}")
             score_lbl.setStyleSheet(
-                f"color: rgba(255,255,255,0.85); font-size: 9px; font-weight: 600; background: transparent;"
+                "color: rgba(255,255,255,0.85); font-size: 9px; font-weight: 600; background: transparent;"
             )
             score_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(score_lbl)
@@ -275,6 +364,8 @@ class MangaCardSmall(QWidget):
             self.clicked.emit(self.manga_id)
         super().mousePressEvent(event)
 
+
+# ── ScrapedGenrePage ──────────────────────────────────────────────────────────
 
 class ScrapedGenrePage(QWidget):
     def __init__(self, main_window, parent=None):
@@ -374,16 +465,14 @@ class ScrapedGenrePage(QWidget):
             return
 
         container_width = self.width() - 48
-        card_w = 130
-        spacing = 14
-        cols = max(1, (container_width + spacing) // (card_w + spacing))
+        cols = max(1, (container_width + 14) // (130 + 14))
 
         for i, manga in enumerate(manga_list):
             card = MangaCardSmall(manga)
             card.clicked.connect(self.main_window.go_detail)
             row, col = divmod(i, cols)
             self._grid_layout.addWidget(card, row, col, alignment=Qt.AlignmentFlag.AlignCenter)
-            
+
     def _clear_grid(self):
         while self._grid_layout.count():
             item = self._grid_layout.takeAt(0)
@@ -395,61 +484,24 @@ class ScrapedGenrePage(QWidget):
             self.main_window.go_genre_list(self.main_window.genre_list_page._genre_counts)
 
 
-class GenreCountLoader(QThread):
-    """Query fresh genre counts directly from DB every time the page is opened."""
-    finished = pyqtSignal(dict)
-
-    def run(self):
-        try:
-            from database import get_session
-            from models.manga import Manga
-
-            session = get_session()
-            try:
-                genre_counts = {}
-                all_manga = session.query(Manga).all()
-                for manga in all_manga:
-                    if manga.genres:
-                        for g in manga.genres.split(","):
-                            g = g.strip()
-                            if g:
-                                genre_counts[g] = genre_counts.get(g, 0) + 1
-            finally:
-                session.close()
-
-            genre_counts = dict(
-                sorted(genre_counts.items(), key=lambda x: x[1], reverse=True)
-            )
-            self.finished.emit(genre_counts)
-        except Exception as e:
-            print(f"[GenreCountLoader] Error: {e}")
-            self.finished.emit({})
-
+# ── GenreListPage ─────────────────────────────────────────────────────────────
 
 class GenreListPage(QWidget):
-    POLL_MS = 15_000  # refresh chart tiap 15 detik selama page terbuka
-
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
-        self.main_window = main_window
+        self.main_window   = main_window
         self._genre_counts = {}
-        self._loader = None
+        self._total_manga  = 0
+        self._loader       = None
+        self._add_worker   = None
         self._build()
-
-        # Timer polling — hanya aktif saat page ini sedang ditampilkan
-        self._poll_timer = QTimer(self)
-        self._poll_timer.timeout.connect(self._refresh_from_db)
-        # Timer tidak distart di sini; distart saat load_data dipanggil
-
-        # Update instan setiap kali MangaService commit data baru ke DB
-        from signals import app_signals
-        app_signals.db_updated.connect(self._refresh_from_db)
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        # ── Topbar ────────────────────────────────────────────────────────
         topbar = QWidget()
         topbar.setFixedHeight(60)
         _force_bg(topbar, BLUE_PRIMARY)
@@ -457,9 +509,9 @@ class GenreListPage(QWidget):
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)
 
-        self._back_btn = QPushButton("←")
-        self._back_btn.setFixedSize(36, 36)
-        self._back_btn.setStyleSheet(f"""
+        back_btn = QPushButton("←")
+        back_btn.setFixedSize(36, 36)
+        back_btn.setStyleSheet(f"""
             QPushButton {{
                 background: rgba(255,255,255,0.20);
                 color: {WHITE}; border: none; border-radius: 18px;
@@ -467,53 +519,82 @@ class GenreListPage(QWidget):
             }}
             QPushButton:hover {{ background: rgba(255,255,255,0.35); }}
         """)
-        self._back_btn.clicked.connect(self._go_back)
-        tb.addWidget(self._back_btn)
+        back_btn.clicked.connect(self._go_back)
+        tb.addWidget(back_btn)
 
-        title = QLabel("Most Genre")
-        title.setStyleSheet(
+        title_lbl = QLabel("Most Genre")
+        title_lbl.setStyleSheet(
             f"color: {WHITE}; font-size: 18px; font-weight: 700; background: transparent;"
         )
-        tb.addWidget(title)
-
-        self._loading_lbl = QLabel("  ⏳ Updating…")
-        self._loading_lbl.setStyleSheet(
-            f"color: rgba(255,255,255,0.70); font-size: 11px; background: transparent;"
-        )
-        self._loading_lbl.setVisible(False)
-        tb.addWidget(self._loading_lbl)
-
+        tb.addWidget(title_lbl)
         tb.addStretch()
 
-        self._refresh_btn = QPushButton("🔄 Refresh")
-        self._refresh_btn.setFixedHeight(32)
-        self._refresh_btn.setStyleSheet(f"""
+        self._add_btn = QPushButton("＋ 100 Manga")
+        self._add_btn.setFixedHeight(34)
+        self._add_btn.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(255,255,255,0.20);
-                color: {WHITE}; border: none; border-radius: 16px;
-                font-size: 12px; font-weight: 600;
-                padding: 0 16px;
+                background: rgba(255,255,255,0.22);
+                color: {WHITE}; border: none; border-radius: 17px;
+                font-size: 12px; font-weight: 700;
+                padding: 0 18px;
             }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.35); }}
-            QPushButton:disabled {{ background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.35); }}
+            QPushButton:hover {{ background: rgba(255,255,255,0.38); }}
+            QPushButton:disabled {{
+                background: rgba(255,255,255,0.08);
+                color: rgba(255,255,255,0.35);
+            }}
         """)
-        self._refresh_btn.clicked.connect(self._on_refresh_clicked)
-        tb.addWidget(self._refresh_btn)
+        self._add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._add_btn.clicked.connect(self._on_add_clicked)
+        tb.addWidget(self._add_btn)
 
         root.addWidget(topbar)
 
-        info_banner = QLabel("🔥  Distribution of genres across all scraped manga")
-        info_banner.setStyleSheet(f"""
-            QLabel {{
-                background: {BLUE_LIGHT};
-                color: {TEXT_DARK};
-                font-size: 11px;
-                padding: 8px 16px;
-                border: none;
-            }}
-        """)
-        root.addWidget(info_banner)
+        # ── Info banner + total counter ───────────────────────────────────
+        banner_wrap = QWidget()
+        banner_wrap.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        banner_wrap.setStyleSheet(f"background: {BLUE_LIGHT};")
+        brow = QHBoxLayout(banner_wrap)
+        brow.setContentsMargins(16, 8, 16, 8)
+        brow.setSpacing(0)
 
+        self._banner_lbl = QLabel("🔥  Distribusi genre dari seluruh manga yang di-scrape")
+        self._banner_lbl.setStyleSheet(
+            f"color: {TEXT_DARK}; font-size: 11px; background: transparent;"
+        )
+        brow.addWidget(self._banner_lbl)
+        brow.addStretch()
+
+        self._total_lbl = QLabel("— manga")
+        self._total_lbl.setStyleSheet(f"""
+            color: {BLUE_PRIMARY};
+            font-size: 11px;
+            font-weight: 700;
+            background: white;
+            border-radius: 10px;
+            padding: 2px 12px;
+        """)
+        self._total_lbl.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._total_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        brow.addWidget(self._total_lbl)
+
+        root.addWidget(banner_wrap)
+
+        # ── Status bar scrape (tersembunyi saat idle) ─────────────────────
+        self._scrape_status = QLabel("")
+        self._scrape_status.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._scrape_status.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._scrape_status.setStyleSheet(f"""
+            background: #E3F2FD;
+            color: {BLUE_PRIMARY};
+            font-size: 11px;
+            font-weight: 600;
+            padding: 5px 16px;
+        """)
+        self._scrape_status.setVisible(False)
+        root.addWidget(self._scrape_status)
+
+        # ── Chart ─────────────────────────────────────────────────────────
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -521,71 +602,108 @@ class GenreListPage(QWidget):
 
         container = QWidget()
         container.setStyleSheet("background: transparent;")
-        layout = QVBoxLayout(container)
-        layout.setContentsMargins(32, 24, 32, 24)
-        layout.setSpacing(8)
+        clayout = QVBoxLayout(container)
+        clayout.setContentsMargins(32, 24, 32, 24)
+        clayout.setSpacing(8)
 
         chart_title = QLabel("Genre Distribution")
         chart_title.setStyleSheet(
             f"color: {BLUE_PRIMARY}; font-size: 16px; font-weight: 700; background: transparent;"
         )
-        layout.addWidget(chart_title)
+        clayout.addWidget(chart_title)
 
         self._bar_chart = GenreBarChart()
         self._bar_chart.clicked_genre.connect(self._on_genre_clicked)
-        layout.addWidget(self._bar_chart, stretch=1)
+        clayout.addWidget(self._bar_chart, stretch=1)
 
         scroll.setWidget(container)
         root.addWidget(scroll, stretch=1)
 
-    def load_data(self, genre_counts: dict, top_genre: str = None):
-        """Called from HomePage — show passed data immediately, then refresh from DB."""
-        # Tampilkan data yang ada dulu agar chart langsung muncul
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def load_data(self, genre_counts: dict = None, top_genre: str = None):
+        """
+        Dipanggil saat halaman dibuka (dari go_genre_list di main_window).
+        Tampilkan data cache dulu jika ada, lalu query DB segar.
+        Tidak ada scraping di sini.
+        """
         if genre_counts:
             self._genre_counts = genre_counts
             self._bar_chart.set_data(genre_counts)
 
-        # Refresh sekali langsung, lalu polling tiap POLL_MS
-        self._refresh_from_db()
-        if not self._poll_timer.isActive():
-            self._poll_timer.start(self.POLL_MS)
+        self._load_from_db()
 
-    def _on_refresh_clicked(self):
-        self._refresh_from_db()
+    # ── Internal ─────────────────────────────────────────────────────────────
 
-    def _refresh_from_db(self):
-        """Fetch fresh genre counts from DB in background thread."""
+    def _load_from_db(self):
+        """Query genre distribution + total dari DB (background thread, tanpa scrape)."""
         if self._loader and self._loader.isRunning():
             return
-        self._loading_lbl.setVisible(True)
-        self._refresh_btn.setEnabled(False)
-        self._refresh_btn.setText("⏳ Loading…")
         self._loader = GenreCountLoader()
         self._loader.finished.connect(self._on_counts_loaded)
         self._loader.start()
 
-    @pyqtSlot(dict)
-    def _on_counts_loaded(self, genre_counts: dict):
-        self._loading_lbl.setVisible(False)
-        self._refresh_btn.setEnabled(True)
-        self._refresh_btn.setText("🔄 Refresh")
+    @pyqtSlot(dict, int)
+    def _on_counts_loaded(self, genre_counts: dict, total: int):
+        self._total_manga = total
+        self._total_lbl.setText(f"Total: {total:,} manga")
+
         if genre_counts:
             self._genre_counts = genre_counts
             self._bar_chart.set_data(genre_counts)
-            # Sync kembali ke HomePage agar MostGenreCard juga terupdate
+
+            # Sync ke HomePage agar MostGenreCard ikut terupdate
             if hasattr(self.main_window, 'home_page'):
-                hp = self.main_window.home_page
+                hp  = self.main_window.home_page
                 hp._genre_counts = genre_counts
                 top = list(genre_counts.keys())[0] if genre_counts else None
                 if top:
                     hp._top_genre = top
                     hp._most_genre_card.set_genre(top)
 
+    # ── Tombol + 100 Manga ────────────────────────────────────────────────────
+
+    def _on_add_clicked(self):
+        if self._add_worker and self._add_worker.isRunning():
+            return
+
+        self._add_btn.setEnabled(False)
+        self._add_btn.setText("⏳ Mengambil…")
+        self._scrape_status.setText("⏳  Mengambil 100 manga baru dari Jikan API…")
+        self._scrape_status.setVisible(True)
+
+        self._add_worker = AddMangaWorker()
+        self._add_worker.progress.connect(self._on_add_progress)
+        self._add_worker.finished.connect(self._on_add_finished)
+        self._add_worker.start()
+
+    @pyqtSlot(int)
+    def _on_add_progress(self, count: int):
+        self._scrape_status.setText(f"⏳  Mengambil manga baru… {count} / 100")
+
+    @pyqtSlot(int)
+    def _on_add_finished(self, count: int):
+        self._add_btn.setEnabled(True)
+        self._add_btn.setText("＋ 100 Manga")
+
+        if count > 0:
+            self._scrape_status.setText(
+                f"✅  {count} manga berhasil ditambahkan! Memperbarui distribusi…"
+            )
+            # Reload DB → update total counter + chart sekaligus
+            self._load_from_db()
+        else:
+            self._scrape_status.setText("⚠  Tidak ada manga baru yang berhasil ditambahkan.")
+
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(3000, lambda: self._scrape_status.setVisible(False))
+
+    # ── Navigasi ──────────────────────────────────────────────────────────────
+
     def _on_genre_clicked(self, genre: str):
         if hasattr(self.main_window, 'go_scraped_genre'):
             self.main_window.go_scraped_genre(genre)
 
     def _go_back(self):
-        self._poll_timer.stop()  # berhenti polling saat tidak di halaman ini
         if hasattr(self.main_window, 'go_home'):
             self.main_window.go_home()

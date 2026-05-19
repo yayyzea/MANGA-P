@@ -4,6 +4,20 @@ from database import init_db
 from ui.auth_window import AuthWindow
 
 
+def _is_db_empty() -> bool:
+    """Kembalikan True jika belum ada manga sama sekali di DB."""
+    try:
+        from database import get_session
+        from models.manga import Manga
+        session = get_session()
+        try:
+            return session.query(Manga).count() == 0
+        finally:
+            session.close()
+    except Exception:
+        return False
+
+
 def main():
     init_db()
     app = QApplication(sys.argv)
@@ -30,6 +44,15 @@ def main():
         if "auth" in main_win_ref:
             main_win_ref["auth"].close()
             del main_win_ref["auth"]
+
+        # ── First-time setup: scrape 500 manga jika DB masih kosong ──────────
+        if _is_db_empty():
+            from ui.initial_scrape_dialog import InitialScrapeDialog
+            dlg = InitialScrapeDialog()
+            dlg.show()
+            dlg.start_scrape()
+            dlg.exec()   # modal — blokir sampai scrape selesai
+        # ─────────────────────────────────────────────────────────────────────
 
         from ui.main_window import MainWindow
         main_win = MainWindow(user=user, on_logout=on_logout)
