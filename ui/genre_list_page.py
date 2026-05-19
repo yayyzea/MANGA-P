@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QPushButton, QSizePolicy, QGridLayout
 )
-from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread, pyqtSlot
+from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread, pyqtSlot, QTimer
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont,
     QPainterPath, QLinearGradient, QPixmap
@@ -427,12 +427,23 @@ class GenreCountLoader(QThread):
 
 
 class GenreListPage(QWidget):
+    POLL_MS = 15_000  # refresh chart tiap 15 detik selama page terbuka
+
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
         self._genre_counts = {}
         self._loader = None
         self._build()
+
+        # Timer polling — hanya aktif saat page ini sedang ditampilkan
+        self._poll_timer = QTimer(self)
+        self._poll_timer.timeout.connect(self._refresh_from_db)
+        # Timer tidak distart di sini; distart saat load_data dipanggil
+
+        # Update instan setiap kali MangaService commit data baru ke DB
+        from signals import app_signals
+        app_signals.db_updated.connect(self._refresh_from_db)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -473,6 +484,22 @@ class GenreListPage(QWidget):
         tb.addWidget(self._loading_lbl)
 
         tb.addStretch()
+
+        self._refresh_btn = QPushButton("🔄 Refresh")
+        self._refresh_btn.setFixedHeight(32)
+        self._refresh_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.20);
+                color: {WHITE}; border: none; border-radius: 16px;
+                font-size: 12px; font-weight: 600;
+                padding: 0 16px;
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,0.35); }}
+            QPushButton:disabled {{ background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.35); }}
+        """)
+        self._refresh_btn.clicked.connect(self._on_refresh_clicked)
+        tb.addWidget(self._refresh_btn)
+
         root.addWidget(topbar)
 
         info_banner = QLabel("🔥  Distribution of genres across all scraped manga")
@@ -518,7 +545,12 @@ class GenreListPage(QWidget):
             self._genre_counts = genre_counts
             self._bar_chart.set_data(genre_counts)
 
-        # Selalu refresh dari DB untuk dapat data terbaru (termasuk hasil scraping)
+        # Refresh sekali langsung, lalu polling tiap POLL_MS
+        self._refresh_from_db()
+        if not self._poll_timer.isActive():
+            self._poll_timer.start(self.POLL_MS)
+
+    def _on_refresh_clicked(self):
         self._refresh_from_db()
 
     def _refresh_from_db(self):
@@ -526,6 +558,8 @@ class GenreListPage(QWidget):
         if self._loader and self._loader.isRunning():
             return
         self._loading_lbl.setVisible(True)
+        self._refresh_btn.setEnabled(False)
+        self._refresh_btn.setText("⏳ Loading…")
         self._loader = GenreCountLoader()
         self._loader.finished.connect(self._on_counts_loaded)
         self._loader.start()
@@ -533,6 +567,8 @@ class GenreListPage(QWidget):
     @pyqtSlot(dict)
     def _on_counts_loaded(self, genre_counts: dict):
         self._loading_lbl.setVisible(False)
+        self._refresh_btn.setEnabled(True)
+        self._refresh_btn.setText("🔄 Refresh")
         if genre_counts:
             self._genre_counts = genre_counts
             self._bar_chart.set_data(genre_counts)
@@ -550,5 +586,6 @@ class GenreListPage(QWidget):
             self.main_window.go_scraped_genre(genre)
 
     def _go_back(self):
+        self._poll_timer.stop()  # berhenti polling saat tidak di halaman ini
         if hasattr(self.main_window, 'go_home'):
             self.main_window.go_home()

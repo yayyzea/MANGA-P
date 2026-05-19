@@ -285,6 +285,9 @@ class MangaService:
                 session.rollback()
         try:
             session.commit()
+            # Broadcast ke UI bahwa ada data baru di DB
+            from signals import app_signals
+            app_signals.db_updated.emit()
         except Exception as e:
             print(f"[MangaService] Commit failed: {e}")
             session.rollback()

@@ -404,6 +404,8 @@ class _GenreOnlyLoader(QThread):
 
 
 class HomePage(QWidget):
+    GENRE_POLL_MS = 30_000  # refresh genre counts tiap 30 detik
+
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
@@ -419,8 +421,18 @@ class HomePage(QWidget):
         self._is_loading    = False
         self._no_more       = False
         self._card_count    = 0
+        self._genre_refresh_loader = None
         self._build()
         self._start_loading()
+
+        # Polling otomatis: refresh distribusi genre dari DB setiap 30 detik
+        self._genre_poll_timer = QTimer(self)
+        self._genre_poll_timer.timeout.connect(self.refresh_genre_counts)
+        self._genre_poll_timer.start(self.GENRE_POLL_MS)
+
+        # Update instan setiap kali MangaService commit data baru ke DB
+        from signals import app_signals
+        app_signals.db_updated.connect(self.refresh_genre_counts)
 
     def _build(self):
         root = QVBoxLayout(self)
