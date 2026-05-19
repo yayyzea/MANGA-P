@@ -10,6 +10,21 @@ class UserService:
         finally:
             session.close()
 
+    def delete_account(self, user_id: int) -> bool:
+        session = get_session()
+        try:
+            user = session.query(User).filter(User.id == user_id).first()
+            if not user:
+                return False
+            session.delete(user)
+            session.commit()
+            return True
+        except Exception as e:
+            session.rollback()
+            return False
+        finally:
+            session.close()
+
     def update_profile(self, user_id: int, name=None, email=None,
                        password=None, bio=None, avatar_path=None):
         session = get_session()
