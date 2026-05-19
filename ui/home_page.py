@@ -208,6 +208,16 @@ class HistoryPanel(QWidget):
         self.cover_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.cover_lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
 
+        # Placeholder kosong — tampil kalau user belum pernah klik manga
+        self.empty_lbl = QLabel("Click a manga\nto see its\ndetails here")
+        self.empty_lbl.setFixedSize(190, 260)
+        self.empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_lbl.setWordWrap(True)
+        self.empty_lbl.setStyleSheet(
+            "color: rgba(255,255,255,0.50); font-size: 12px; background: transparent;"
+        )
+        layout.addWidget(self.empty_lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
+
         self.title_lbl = QLabel("")
         self.title_lbl.setStyleSheet(
             f"color: {WHITE}; font-size: 14px; font-weight: 700; background: transparent;"
@@ -225,10 +235,17 @@ class HistoryPanel(QWidget):
 
         layout.addStretch()
 
+        # Awal: tampilkan state kosong
+        self.cover_lbl.setVisible(False)
+        self.empty_lbl.setVisible(True)
+
     def load_manga(self, manga):
+        """Update panel saat user klik kartu manga (in-memory, tidak simpan ke DB)."""
         if not manga:
             return
         self._manga_id = manga.id
+        self.empty_lbl.setVisible(False)
+        self.cover_lbl.setVisible(True)
         self.title_lbl.setText(manga.title or "")
         synopsis = manga.synopsis or ""
         self.desc_lbl.setText(synopsis[:280] + ("…" if len(synopsis) > 280 else ""))
@@ -572,9 +589,6 @@ class HomePage(QWidget):
         
         self._display_cards()
 
-        if manga_list and self.history._manga_id is None:
-            self.history.load_manga(manga_list[0])
-
     def _on_most_genre_clicked(self):
         if hasattr(self.main_window, 'go_genre_list'):
             self.main_window.go_genre_list(self._genre_counts, self._top_genre)
@@ -596,6 +610,8 @@ class HomePage(QWidget):
         for manga in to_show:
             card = MangaCard(manga, show_labels=True)
             card.clicked.connect(self.main_window.go_detail)
+            # Update history panel saat kartu diklik
+            card.clicked.connect(lambda mid, m=manga: self.history.load_manga(m))
             self._cards.append(card)
             self.manga_grid.addWidget(card, 0, 0)
         self._relayout()
@@ -707,6 +723,7 @@ class HomePage(QWidget):
             col = self._card_count % cols
             card = MangaCard(manga, show_labels=True)
             card.clicked.connect(self.main_window.go_detail)
+            card.clicked.connect(lambda mid, m=manga: self.history.load_manga(m))
             self.manga_grid.addWidget(card, row, col)
             self._card_count += 1
 

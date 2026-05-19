@@ -414,9 +414,13 @@ class SelectableMangaCard(QWidget):
 
 class CardRow(QWidget):
     """Menampilkan kartu manga dalam grid yang wrap otomatis — tidak ada scroll horizontal sendiri."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._selectable_cards: list[SelectableMangaCard] = []
+        self._scroll_area = None  # referensi ke QScrollArea induk
+        from PyQt6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._build()
 
     def _build(self):
@@ -425,11 +429,24 @@ class CardRow(QWidget):
         self._grid.setSpacing(16)
         self._grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
+    def set_scroll_area(self, scroll_area):
+        """Simpan referensi scroll area agar bisa ambil lebar viewport yang akurat."""
+        self._scroll_area = scroll_area
+
+    def _available_width(self):
+        """Ambil lebar yang tersedia — dari viewport scroll area jika ada, fallback ke self.width()."""
+        if self._scroll_area is not None:
+            vp_w = self._scroll_area.viewport().width()
+            if vp_w > 10:
+                # kurangi margin konten (24 kiri + 24 kanan)
+                return vp_w - 48
+        w = self.width()
+        return w if w > 10 else 800
+
     def _cols(self):
-        """Hitung jumlah kolom berdasarkan lebar widget."""
-        w = self.width() if self.width() > 10 else 900
-        col_w = CARD_W + 16 + 16
-        return max(1, w // col_w)
+        """Hitung jumlah kolom berdasarkan lebar yang tersedia."""
+        col_w = CARD_W + 16  # lebar kartu + spacing
+        return max(1, self._available_width() // col_w)
 
     def _relayout(self):
         """Susun ulang semua widget ke grid sesuai lebar saat ini."""
@@ -448,7 +465,7 @@ class CardRow(QWidget):
 
     def show_placeholders(self, count=6):
         self._clear()
-        cols = self._cols()
+        cols = self._cols()   # sudah dibatasi MAX_COLS
         for i in range(count):
             ph = QWidget()
             ph.setFixedSize(CARD_W + 16, CARD_H)
@@ -465,14 +482,16 @@ class CardRow(QWidget):
             self._grid.addWidget(lbl, 0, 0)
             return
         cols = self._cols()
-        for i, entry in enumerate(entries):
+        idx = 0
+        for entry in entries:
             manga = entry.manga
             if not manga:
                 continue
             card = SelectableMangaCard(manga, entry_id=entry.id, show_labels=True)
             card.clicked.connect(on_click)
             self._selectable_cards.append(card)
-            self._grid.addWidget(card, i // cols, i % cols)
+            self._grid.addWidget(card, idx // cols, idx % cols)
+            idx += 1
 
     def set_select_mode(self, active: bool):
         for card in self._selectable_cards:
@@ -626,11 +645,13 @@ class LibraryPage(QWidget):
         cl.addLayout(lr_header)
 
         self.last_read_row = CardRow()
+        self.last_read_row.set_scroll_area(scroll)
         self.last_read_row.show_placeholders(6)
         cl.addWidget(self.last_read_row)
 
         cl.addWidget(self._sec("My Books"))
         self.my_books_row = CardRow()
+        self.my_books_row.set_scroll_area(scroll)
         self.my_books_row.show_placeholders(6)
         cl.addWidget(self.my_books_row)
 
