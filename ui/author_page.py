@@ -299,7 +299,8 @@ class AuthorPage(QWidget):
 
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        _force_bg(topbar, BLUE_PRIMARY)
+        topbar.setAttribute(__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)
@@ -334,7 +335,7 @@ class AuthorPage(QWidget):
         info_banner = QLabel("One manga may have multiple authors.")
         info_banner.setStyleSheet(f"""
             QLabel {{
-                background: {BLUE_LIGHT};
+                background: rgba(196,181,222,0.22);
                 color: {TEXT_DARK};
                 font-size: 11px;
                 padding: 6px 16px;

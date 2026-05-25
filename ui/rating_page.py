@@ -173,7 +173,7 @@ class RatingPage(QWidget):
         topbar = QWidget()
         topbar.setFixedHeight(60)
         topbar.setAttribute(__import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.WidgetAttribute.WA_StyledBackground, True)
-        topbar.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #006ec4, stop:0.55 #2cb5d3, stop:1 #f96a67);")
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)
