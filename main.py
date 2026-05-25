@@ -61,13 +61,13 @@ def main():
 
         from ui.main_window import MainWindow
         main_win = MainWindow(user=user, on_logout=on_logout)
-        main_win.show()
+        main_win.showMaximized()
         # Keep reference alive so it doesn't get garbage-collected
         main_win_ref["win"] = main_win
 
     def show_auth():
         auth_win = AuthWindow(on_auth_success=on_auth_success)
-        auth_win.show()
+        auth_win.showMaximized()
         main_win_ref["auth"] = auth_win
 
     show_auth()
