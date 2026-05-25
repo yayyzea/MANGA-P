@@ -86,10 +86,8 @@ class ProfileTopBar(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedHeight(TOPBAR_HEIGHT)
-        self.setAutoFillBackground(True)
-        pal = self.palette()
-        pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
-        self.setPalette(pal)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 8, 20, 8)
         title = QLabel("My Profile")
@@ -393,7 +391,6 @@ class ProfilePage(QWidget):
         card_layout.addLayout(switch_row)
 
         outer.addWidget(card); outer.addStretch()
-        root.addWidget(self._build_footer())
 
     def _make_field(self, parent_layout, label_text, placeholder, is_password=False):
         label = QLabel(label_text)
@@ -493,19 +490,6 @@ class ProfilePage(QWidget):
                     self.pass_input.setFocus()
                 else:
                     self._toast("Incorrect old password!")
-
-    def _build_footer(self):
-        outer = QWidget()
-        outer.setAutoFillBackground(True)
-        pal = outer.palette(); pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_FOOTER)); outer.setPalette(pal)
-        v = QHBoxLayout(outer); v.setContentsMargins(16, 6, 16, 6); v.setSpacing(4)
-        for label, cb in [("Home", self.main_window.go_home), ("About", self.main_window.go_about)]:
-            btn = QPushButton(label)
-            btn.setStyleSheet(f"QPushButton {{ background: transparent; border: none; color: {BLUE_PRIMARY}; font-size: 12px; text-decoration: underline; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ color: #0D47A1; }}")
-            btn.clicked.connect(cb); v.addWidget(btn)
-            sep = QLabel("|"); sep.setStyleSheet(f"color: {BLUE_PRIMARY}; background: transparent; font-size: 12px;"); v.addWidget(sep)
-        v.addStretch()
-        return outer
 
     def _on_change_avatar(self):
         path, _ = QFileDialog.getOpenFileName(
