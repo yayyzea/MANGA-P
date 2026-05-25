@@ -1,8 +1,9 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
     QPushButton, QLineEdit, QCheckBox, QGridLayout, QMessageBox,
+    QGraphicsDropShadowEffect,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QSize, QTimer
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QSize, QTimer, QPropertyAnimation, QEasingCurve, QEvent, QPoint
 from PyQt6.QtGui import QColor, QPalette, QPixmap, QIcon
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from .theme import (
     TEXT_DARK, TEXT_MUTED,
     TOPBAR_HEIGHT, CARD_W, CARD_H, CARD_RADIUS
 )
-from .widgets import MangaCard
+from .widgets import MangaCard, _CARD_MIN_W, _CARD_MAX_W, _ASPECT, _PAD
 from .add_manga_form import AddMangaForm
 
 
@@ -124,8 +125,22 @@ class LibrarySearchBar(QWidget):
         layout.setContentsMargins(16, 8, 16, 8)
         layout.setSpacing(10)
 
+        # ── Search input wrapper (icon inside pill) ──
+        input_wrapper = QWidget()
+        input_wrapper.setStyleSheet(f"""
+            QWidget {{
+                background: {WHITE};
+                border-radius: 22px;
+            }}
+        """)
+        input_wrapper.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        input_wrapper.setFixedHeight(44)
+        wrapper_layout = QHBoxLayout(input_wrapper)
+        wrapper_layout.setContentsMargins(14, 0, 14, 0)
+        wrapper_layout.setSpacing(8)
+
         icon = QLabel()
-        icon.setFixedSize(20, 20)
+        icon.setFixedSize(18, 18)
         _sx = QPixmap(str(_ICON_DIR / "search.png"))
         if not _sx.isNull():
             icon.setPixmap(_sx.scaled(18, 18,
@@ -134,23 +149,36 @@ class LibrarySearchBar(QWidget):
         else:
             icon.setText("🔍")
         icon.setStyleSheet("background: transparent;")
-        layout.addWidget(icon)
+        wrapper_layout.addWidget(icon)
 
         self.input = QLineEdit()
         self.input.setObjectName("SearchInput")
         self.input.setPlaceholderText("Search Mangas...")
         self.input.setStyleSheet(f"""
             QLineEdit {{
-                background: {WHITE}; border: none;
-                border-radius: 20px; padding: 8px 16px;
-                font-size: 14px; color: {TEXT_DARK};
+                background: transparent; border: none;
+                padding: 0; font-size: 14px; color: {TEXT_DARK};
             }}
         """)
         self.input.textChanged.connect(lambda t: self.search_triggered.emit(t.strip()))
         self.input.returnPressed.connect(
             lambda: self.search_triggered.emit(self.input.text().strip())
         )
-        layout.addWidget(self.input)
+        wrapper_layout.addWidget(self.input)
+
+        self._input_shadow = QGraphicsDropShadowEffect(input_wrapper)
+        self._input_shadow.setBlurRadius(12)
+        self._input_shadow.setOffset(0, 4)
+        self._input_shadow.setColor(QColor(0, 0, 0, 60))
+        input_wrapper.setGraphicsEffect(self._input_shadow)
+
+        self._input_anim = QPropertyAnimation(input_wrapper, b"pos")
+        self._input_anim.setDuration(150)
+        self._input_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._input_wrapper = input_wrapper
+        input_wrapper.installEventFilter(self)
+
+        layout.addWidget(input_wrapper)
 
         self.filter_btn = QPushButton()
         self.filter_btn.setObjectName("FilterBtn")
@@ -167,9 +195,20 @@ class LibrarySearchBar(QWidget):
                 background: {WHITE}; border: none;
                 border-radius: 18px; font-size: 16px; color: {BLUE_PRIMARY};
             }}
-            QPushButton:hover   {{ background: #E3F2FD; }}
             QPushButton:checked {{ background: #BBDEFB; }}
         """)
+
+        self._filter_shadow = QGraphicsDropShadowEffect(self.filter_btn)
+        self._filter_shadow.setBlurRadius(12)
+        self._filter_shadow.setOffset(0, 4)
+        self._filter_shadow.setColor(QColor(0, 0, 0, 60))
+        self.filter_btn.setGraphicsEffect(self._filter_shadow)
+
+        self._filter_anim = QPropertyAnimation(self.filter_btn, b"pos")
+        self._filter_anim.setDuration(150)
+        self._filter_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.filter_btn.installEventFilter(self)
+
         self.filter_btn.clicked.connect(self.filter_toggled)
         layout.addWidget(self.filter_btn)
 
@@ -188,11 +227,22 @@ class LibrarySearchBar(QWidget):
                 background: {WHITE}; border: none;
                 border-radius: 18px; font-size: 16px; color: #E53935;
             }}
-            QPushButton:hover   {{ background: #FFEBEE; }}
             QPushButton:checked {{
                 background: #E53935; color: {WHITE};
             }}
         """)
+
+        self._trash_shadow = QGraphicsDropShadowEffect(self.trash_btn)
+        self._trash_shadow.setBlurRadius(12)
+        self._trash_shadow.setOffset(0, 4)
+        self._trash_shadow.setColor(QColor(0, 0, 0, 60))
+        self.trash_btn.setGraphicsEffect(self._trash_shadow)
+
+        self._trash_anim = QPropertyAnimation(self.trash_btn, b"pos")
+        self._trash_anim.setDuration(150)
+        self._trash_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self.trash_btn.installEventFilter(self)
+
         self.trash_btn.toggled.connect(self.delete_toggled)
         layout.addWidget(self.trash_btn)
 
@@ -204,15 +254,50 @@ class LibrarySearchBar(QWidget):
     def get_text(self) -> str:
         return self.input.text().strip()
 
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Enter:
+            if obj == self._input_wrapper:
+                self._hover_in(self._input_shadow, self._input_anim, self._input_wrapper)
+            elif obj == self.filter_btn:
+                self._hover_in(self._filter_shadow, self._filter_anim, self.filter_btn)
+            elif obj == self.trash_btn:
+                self._hover_in(self._trash_shadow, self._trash_anim, self.trash_btn)
+        elif event.type() == QEvent.Type.Leave:
+            if obj == self._input_wrapper:
+                self._hover_out(self._input_shadow, self._input_anim, self._input_wrapper)
+            elif obj == self.filter_btn:
+                self._hover_out(self._filter_shadow, self._filter_anim, self.filter_btn)
+            elif obj == self.trash_btn:
+                self._hover_out(self._trash_shadow, self._trash_anim, self.trash_btn)
+        return super().eventFilter(obj, event)
+
+    def _hover_in(self, shadow, anim, widget):
+        shadow.setBlurRadius(28)
+        shadow.setOffset(0, 8)
+        shadow.setColor(QColor(0, 0, 0, 100))
+        anim.stop()
+        anim.setStartValue(widget.pos())
+        anim.setEndValue(widget.pos() + QPoint(0, -4))
+        anim.start()
+
+    def _hover_out(self, shadow, anim, widget):
+        shadow.setBlurRadius(12)
+        shadow.setOffset(0, 4)
+        shadow.setColor(QColor(0, 0, 0, 60))
+        anim.stop()
+        anim.setStartValue(widget.pos())
+        anim.setEndValue(widget.pos() + QPoint(0, 4))
+        anim.start()
+
 
 class LibraryFilterPanel(QWidget):
     apply_clicked = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(340)
+        self.setFixedWidth(320)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"background: {WHITE};")
+        self.setStyleSheet("background: transparent;")
         self._genre_cbs  = {}
         self._status_cbs = {}
         self._year_input = None
@@ -223,7 +308,7 @@ class LibraryFilterPanel(QWidget):
     def _build(self):
         from PyQt6.QtWidgets import QScrollArea
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setContentsMargins(12, 0, 12, 12)
         outer.setSpacing(0)
 
         # Scroll area untuk semua konten filter
@@ -233,7 +318,7 @@ class LibraryFilterPanel(QWidget):
         scroll.setStyleSheet("background: transparent; border: none;")
 
         inner_widget = QWidget()
-        inner_widget.setStyleSheet(f"background: {WHITE};")
+        inner_widget.setStyleSheet("background: transparent;")
         root = QVBoxLayout(inner_widget)
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(14)
@@ -304,7 +389,7 @@ class LibraryFilterPanel(QWidget):
         apply_btn.setFixedHeight(46)
         apply_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {WHITE};
+                background: transparent;
                 border: 2.5px solid {BLUE_PRIMARY};
                 border-radius: 23px;
                 color: {BLUE_PRIMARY};
@@ -338,7 +423,7 @@ class LibraryFilterPanel(QWidget):
             QCheckBox::indicator {{
                 width: 14px; height: 14px;
                 border: 2px solid {TEXT_MUTED}; border-radius: 3px;
-                background: {WHITE};
+                background: transparent;
             }}
             QCheckBox::indicator:checked {{
                 background: {BLUE_PRIMARY}; border-color: {BLUE_PRIMARY};
@@ -360,8 +445,61 @@ class LibraryFilterPanel(QWidget):
         self.setVisible(not self.isVisible())
 
 
+class _CircleCheck(QWidget):
+    """Tombol centang bulat custom — transparan saat unchecked, hijau + ceklis saat checked."""
+
+    SIZE = 26
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._checked = False
+        self.setFixedSize(self.SIZE, self.SIZE)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+
+    def set_checked(self, val: bool):
+        self._checked = val
+        self.update()
+
+    def is_checked(self) -> bool:
+        return self._checked
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._checked = not self._checked
+            self.update()
+        event.accept()  # jangan propagasi ke MangaCard parent
+
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPen, QBrush, QPainterPath, QColor as _QC
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        s = self.SIZE
+        r = s / 2
+
+        if self._checked:
+            # Lingkaran hijau solid
+            p.setBrush(QBrush(_QC("#43A047")))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawEllipse(0, 0, s, s)
+            # Ceklis putih
+            pen = QPen(_QC(WHITE), 2.5, Qt.PenStyle.SolidLine, Qt.PenCapStyle.RoundCap, Qt.PenJoinStyle.RoundJoin)
+            p.setPen(pen)
+            p.drawLine(int(s*0.22), int(s*0.50), int(s*0.44), int(s*0.72))
+            p.drawLine(int(s*0.44), int(s*0.72), int(s*0.78), int(s*0.30))
+        else:
+            # Lingkaran transparan dengan border putih
+            p.setBrush(QBrush(_QC(255, 255, 255, 180)))
+            p.setPen(QPen(_QC(WHITE), 2.2))
+            p.drawEllipse(1, 1, s-2, s-2)
+
+
 class SelectableMangaCard(QWidget):
     clicked = pyqtSignal(int)
+
+    # Margin ekstra di sekeliling card agar QGraphicsDropShadowEffect
+    # punya ruang render dan tidak terpotong oleh batas widget.
+    _SHADOW_MARGIN = 10
 
     def __init__(self, manga, entry_id: int, show_labels: bool = True, parent=None):
         super().__init__(parent)
@@ -369,11 +507,14 @@ class SelectableMangaCard(QWidget):
         self.entry_id = entry_id
         self._checkbox = None
 
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        # Jangan pakai WA_StyledBackground — biarkan transparan secara default
+        # agar shadow dari MangaCard child tidak ter-clip.
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setStyleSheet("background: transparent;")
 
+        m = self._SHADOW_MARGIN
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setContentsMargins(m, m, m, m)
         layout.setSpacing(0)
 
         self._card = MangaCard(manga, show_labels=show_labels)
@@ -381,42 +522,32 @@ class SelectableMangaCard(QWidget):
         layout.addWidget(self._card)
 
         self.setSizePolicy(self._card.sizePolicy())
-        self.setFixedWidth(self._card.width())
 
     def set_select_mode(self, active: bool):
         if active:
             if self._checkbox is None:
-                self._checkbox = QCheckBox(self)
-                self._checkbox.setStyleSheet(f"""
-                    QCheckBox {{ background: transparent; spacing: 0px; }}
-                    QCheckBox::indicator {{
-                        width: 22px; height: 22px;
-                        border: 2.5px solid {WHITE};
-                        border-radius: 5px;
-                        background: rgba(255,255,255,0.85);
-                    }}
-                    QCheckBox::indicator:checked {{
-                        background: #E53935;
-                        border-color: #E53935;
-                    }}
-                """)
-                self._checkbox.move(8, 8)
+                self._checkbox = _CircleCheck(self._card)  # parent = _card
+                self._checkbox.move(10, 10)
                 self._checkbox.raise_()
-            self._checkbox.setChecked(False)
+            self._checkbox.set_checked(False)
             self._checkbox.setVisible(True)
         else:
             if self._checkbox:
                 self._checkbox.setVisible(False)
 
     def is_selected(self) -> bool:
-        return self._checkbox is not None and self._checkbox.isChecked()
+        return self._checkbox is not None and self._checkbox.is_checked()
 
 
 class CardRow(QWidget):
     """Menampilkan kartu manga dalam grid yang wrap otomatis — tidak ada scroll horizontal sendiri."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self._selectable_cards: list[SelectableMangaCard] = []
+        self._scroll_area = None  # referensi ke QScrollArea induk
+        from PyQt6.QtWidgets import QSizePolicy
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         self._build()
 
     def _build(self):
@@ -425,33 +556,64 @@ class CardRow(QWidget):
         self._grid.setSpacing(16)
         self._grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
-    def _cols(self):
-        """Hitung jumlah kolom berdasarkan lebar widget."""
-        w = self.width() if self.width() > 10 else 900
-        col_w = CARD_W + 16 + 16
-        return max(1, w // col_w)
+    def set_scroll_area(self, scroll_area):
+        """Simpan referensi scroll area agar bisa ambil lebar viewport yang akurat."""
+        self._scroll_area = scroll_area
+
+    def _available_width(self):
+        """Ambil lebar yang tersedia — dari viewport scroll area jika ada, fallback ke self.width()."""
+        if self._scroll_area is not None:
+            vp_w = self._scroll_area.viewport().width()
+            if vp_w > 10:
+                # kurangi margin konten (24 kiri + 24 kanan)
+                return vp_w - 48
+        w = self.width()
+        return w if w > 10 else 800
+
+    def _get_cols_and_card_w(self):
+        """Hitung jumlah kolom dan lebar kartu secara dinamis — sama persis dengan homepage."""
+        avail = self._available_width()
+        spacing = self._grid.spacing()
+        for cols in [6, 5, 4, 3, 2, 1]:
+            if avail >= cols * 110 + spacing * (cols - 1):
+                break
+        card_w = min(_CARD_MAX_W, max(_CARD_MIN_W, (avail - spacing * (cols - 1)) // cols))
+        return cols, card_w
 
     def _relayout(self):
-        """Susun ulang semua widget ke grid sesuai lebar saat ini."""
+        """Susun ulang semua widget ke grid sesuai lebar saat ini, termasuk resize kartu."""
         widgets = []
         while self._grid.count():
             item = self._grid.takeAt(0)
             if item.widget():
                 widgets.append(item.widget())
-        cols = self._cols()
+        if not widgets:
+            return
+        cols, card_w = self._get_cols_and_card_w()
+        cover_w = card_w - _PAD * 2
         for i, w in enumerate(widgets):
+            # SelectableMangaCard punya shadow margin di setiap sisi
+            sm = getattr(w, '_SHADOW_MARGIN', 0)
+            w.setFixedWidth(card_w + sm * 2)
+            # update lebar label jika ada (SelectableMangaCard wraps MangaCard)
+            inner = getattr(w, '_card', w)
+            if hasattr(inner, 'lbl_title'):
+                inner.lbl_title.setMaximumWidth(cover_w)
+            if hasattr(inner, 'lbl_genre'):
+                inner.lbl_genre.setMaximumWidth(cover_w)
             self._grid.addWidget(w, i // cols, i % cols)
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
-        self._relayout()
+        QTimer.singleShot(50, self._relayout)
 
     def show_placeholders(self, count=6):
         self._clear()
-        cols = self._cols()
+        cols, card_w = self._get_cols_and_card_w()
+        card_h = int(card_w * _ASPECT) + 48  # cover + label area
         for i in range(count):
             ph = QWidget()
-            ph.setFixedSize(CARD_W + 16, CARD_H)
+            ph.setFixedSize(card_w, card_h)
             ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
             self._grid.addWidget(ph, i // cols, i % cols)
@@ -464,15 +626,28 @@ class CardRow(QWidget):
             lbl.setStyleSheet(f"color: {TEXT_MUTED}; font-size: 13px; background: transparent;")
             self._grid.addWidget(lbl, 0, 0)
             return
-        cols = self._cols()
-        for i, entry in enumerate(entries):
+        cols, card_w = self._get_cols_and_card_w()
+        cover_w = card_w - _PAD * 2
+        idx = 0
+        for entry in entries:
             manga = entry.manga
             if not manga:
                 continue
             card = SelectableMangaCard(manga, entry_id=entry.id, show_labels=True)
             card.clicked.connect(on_click)
+            sm = card._SHADOW_MARGIN
+            card.setFixedWidth(card_w + sm * 2)
+            inner = card._card
+            if hasattr(inner, 'lbl_title'):
+                inner.lbl_title.setMaximumWidth(cover_w)
+            if hasattr(inner, 'lbl_genre'):
+                inner.lbl_genre.setMaximumWidth(cover_w)
             self._selectable_cards.append(card)
-            self._grid.addWidget(card, i // cols, i % cols)
+            self._grid.addWidget(card, idx // cols, idx % cols)
+            idx += 1
+
+        # Relayout ulang setelah render untuk koreksi ukuran (sama seperti homepage)
+        QTimer.singleShot(150, self._relayout)
 
     def set_select_mode(self, active: bool):
         for card in self._selectable_cards:
@@ -512,7 +687,7 @@ class DeleteConfirmBar(QWidget):
         )
         layout.addWidget(self.info_lbl, stretch=1)
 
-        cancel_btn = QPushButton("Batal")
+        cancel_btn = QPushButton("Cancel")
         cancel_btn.setFixedHeight(38)
         cancel_btn.setMinimumWidth(90)
         cancel_btn.setStyleSheet(f"""
@@ -561,10 +736,10 @@ class DeleteConfirmBar(QWidget):
 
     def update_count(self, count: int):
         if count == 0:
-            self.info_lbl.setText("Pilih manga yang ingin dihapus")
+            self.info_lbl.setText("Select the manga you want to delete")
             self.delete_btn.setEnabled(False)
         else:
-            self.info_lbl.setText(f"{count} manga dipilih")
+            self.info_lbl.setText(f"{count} manga selected")
             self.delete_btn.setEnabled(True)
 
 
@@ -626,11 +801,13 @@ class LibraryPage(QWidget):
         cl.addLayout(lr_header)
 
         self.last_read_row = CardRow()
+        self.last_read_row.set_scroll_area(scroll)
         self.last_read_row.show_placeholders(6)
         cl.addWidget(self.last_read_row)
 
         cl.addWidget(self._sec("My Books"))
         self.my_books_row = CardRow()
+        self.my_books_row.set_scroll_area(scroll)
         self.my_books_row.show_placeholders(6)
         cl.addWidget(self.my_books_row)
 
@@ -677,7 +854,7 @@ class LibraryPage(QWidget):
     def _on_manga_added(self, manga_id: int):
         self._start_loading()
         if hasattr(self.main_window, 'show_toast'):
-            self.main_window.show_toast("Manga berhasil ditambahkan!")
+            self.main_window.show_toast("Manga successfully added!")
 
     def _set_delete_mode(self, active: bool):
         self.last_read_row.set_select_mode(active)
@@ -700,6 +877,26 @@ class LibraryPage(QWidget):
         ))
         self.confirm_bar.update_count(len(ids))
 
+    def _style_msgbox(self, msg):
+        """Force QMessageBox pakai warna terang agar tidak kena dark theme sistem."""
+        from PyQt6.QtGui import QPalette, QColor as _QC
+        pal = msg.palette()
+        pal.setColor(QPalette.ColorRole.Window,     _QC(BLUE_DARK))
+        pal.setColor(QPalette.ColorRole.WindowText, _QC(WHITE))
+        pal.setColor(QPalette.ColorRole.ButtonText, _QC(WHITE))
+        pal.setColor(QPalette.ColorRole.Text,       _QC(WHITE))
+        msg.setPalette(pal)
+        msg.setStyleSheet(f"""
+            QMessageBox {{ background: {BLUE_DARK}; font-family: Arial; }}
+            QLabel {{ color: {WHITE}; background: transparent; font-size: 13px; }}
+            QPushButton {{
+                background: rgba(255,255,255,0.15); color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.40); border-radius: 12px;
+                padding: 6px 18px; font-size: 12px; font-weight: 600; min-width: 80px;
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,0.28); }}
+        """)
+
     def _confirm_delete(self):
         ids = list(dict.fromkeys(
             self.last_read_row.get_selected_entry_ids()
@@ -710,17 +907,18 @@ class LibraryPage(QWidget):
 
         count = len(ids)
         msg = QMessageBox(self)
-        msg.setWindowTitle("Konfirmasi Hapus")
+        msg.setWindowTitle("Delete Confirmation")
         msg.setText(
-            f"Hapus {count} manga dari My Library?\n\n"
-            "Tindakan ini tidak dapat dibatalkan."
+            f"Delete {count} manga from My Library?\n\n"
+            "This action cannot be undone."
         )
         msg.setStandardButtons(
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
         )
         msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
-        msg.button(QMessageBox.StandardButton.Yes).setText("Ya, Hapus")
-        msg.button(QMessageBox.StandardButton.Cancel).setText("Batal")
+        msg.button(QMessageBox.StandardButton.Yes).setText("Yes, Delete")
+        msg.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
+        self._style_msgbox(msg)
 
         if msg.exec() == QMessageBox.StandardButton.Yes:
             self._do_delete(ids)
@@ -736,9 +934,10 @@ class LibraryPage(QWidget):
             self._start_loading()
             if deleted:
                 ok = QMessageBox(self)
-                ok.setWindowTitle("Berhasil")
-                ok.setText(f"{deleted} manga berhasil dihapus dari My Library.")
+                ok.setWindowTitle("Success")
+                ok.setText(f"{deleted} manga successfully deleted from My Library.")
                 ok.setStandardButtons(QMessageBox.StandardButton.Ok)
+                self._style_msgbox(ok)
                 ok.exec()
         except Exception as e:
             print(f"[LibraryPage] Delete error: {e}")

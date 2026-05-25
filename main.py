@@ -31,6 +31,11 @@ def main():
     fsm.set_base_stylesheet(APP_STYLESHEET)
     fsm.apply_px(FONT_BASE_PX)   # apply default px sekaligus set stylesheet ke QApplication
 
+    from PyQt6.QtGui import QFont
+    font = QFont()
+    font.setFamilies(["Helvetica", "Arial", "sans-serif"])
+    app.setFont(font)
+
     main_win_ref = {}   # mutable container to hold reference
 
     def on_logout():
