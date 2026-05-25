@@ -699,9 +699,14 @@ class HomePage(QWidget):
         left_wrapper_layout = QVBoxLayout(left_wrapper)
         left_wrapper_layout.setContentsMargins(0, 0, 0, 0)
         left_wrapper_layout.setSpacing(12)
+        left_wrapper_layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
         outer_row_layout.addWidget(left_wrapper, stretch=1)
 
         self._most_genre_card = MostGenreCard()
+        self._most_genre_card.setSizePolicy(
+            QSizePolicy.Policy.Expanding, 
+            QSizePolicy.Policy.Fixed
+        )
         self._most_genre_card.clicked.connect(self._on_most_genre_clicked)
         left_wrapper_layout.addWidget(self._most_genre_card)
 
