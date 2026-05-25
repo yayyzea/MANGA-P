@@ -467,7 +467,8 @@ class ScrapedGenrePage(QWidget):
 
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        _force_bg(topbar, BLUE_PRIMARY)
+        topbar.setAttribute(__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)
@@ -499,10 +500,10 @@ class ScrapedGenrePage(QWidget):
         tb.addStretch()
         root.addWidget(topbar)
 
-        info_banner = QLabel("📊  Showing all scraped manga with this genre")
+        info_banner = QLabel("Showing all scraped manga with this genre")
         info_banner.setStyleSheet(f"""
             QLabel {{
-                background: {BLUE_LIGHT};
+                background: rgba(196,181,222,0.22);
                 color: {TEXT_DARK};
                 font-size: 11px;
                 padding: 6px 16px;
@@ -641,7 +642,8 @@ class GenreListPage(QWidget):
         # ── Topbar ────────────────────────────────────────────────────────
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        _force_bg(topbar, BLUE_PRIMARY)
+        topbar.setAttribute(__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)
@@ -690,7 +692,7 @@ class GenreListPage(QWidget):
         # ── Info banner + total counter ───────────────────────────────────
         banner_wrap = QWidget()
         banner_wrap.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        banner_wrap.setStyleSheet(f"background: {BLUE_LIGHT};")
+        banner_wrap.setStyleSheet(f"background: rgba(196,181,222,0.22);")
         brow = QHBoxLayout(banner_wrap)
         brow.setContentsMargins(16, 8, 16, 8)
         brow.setSpacing(0)

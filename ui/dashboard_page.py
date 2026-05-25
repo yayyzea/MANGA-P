@@ -10,7 +10,7 @@ from PyQt6.QtGui import (
 )
 
 from .theme import (
-    BLUE_PRIMARY, BLUE_CARD, BLUE_DARK, BLUE_LIGHT,
+    BLUE_PRIMARY, BLUE_CARD, BLUE_DARK, BLUE_LIGHT, LILAC_MIST,
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
 
@@ -192,10 +192,10 @@ class WideCard(QWidget):
 
 
 STATUS_COLORS = {
-    "Plan to Read": "#2cb5d3",
-    "Reading":      "#2cb5d3",
-    "Completed":    "#9abe7c",
-    "Dropped":      "#f96a67",
+    "Plan to Read": "#a78fd4",
+    "Reading":      "#f5c46a",
+    "Completed":    "#7ec8a0",
+    "Dropped":      "#f4918e",
 }
 
 
@@ -390,8 +390,8 @@ class RatingBarChart(QWidget):
 
             bar_rect = QRectF(padding_l, y + 2, max(bar_w, 2), bar_h - 2)
             grad = QLinearGradient(bar_rect.topLeft(), bar_rect.topRight())
-            grad.setColorAt(0, QColor(BLUE_PRIMARY))
-            grad.setColorAt(1, QColor(BLUE_LIGHT))
+            grad.setColorAt(0, QColor("#7aaee0"))
+            grad.setColorAt(1, QColor("#a78fd4"))
             painter.setBrush(QBrush(grad))
 
             if score == self._hovered_score:
@@ -455,9 +455,9 @@ class LastReviewCard(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             QWidget#lastReviewCard {{
-                background: #F8FBFF;
+                background: #EBF7FF;
                 border-radius: {CARD_RADIUS}px;
-                border: 1.5px solid {BLUE_LIGHT};
+                border: 1.5px solid {LILAC_MIST};
             }}
         """)
         self._manga_id = None
@@ -485,7 +485,7 @@ class LastReviewCard(QWidget):
         right.setSpacing(5)
         top_row = QHBoxLayout()
         self._title_lbl = QLabel("No reviews yet.")
-        self._title_lbl.setStyleSheet(f"color:{BLUE_PRIMARY};font-size:14px;font-weight:700;background:transparent;")
+        self._title_lbl.setStyleSheet(f"color:#4a72b8;font-size:14px;font-weight:700;background:transparent;")
         self._title_lbl.setWordWrap(True)
         self._hint = QLabel("→ Lihat detail")
         self._hint.setStyleSheet("color:rgba(0,0,0,0.45);font-size:11px;background:transparent;")
@@ -538,8 +538,8 @@ class LastReviewCard(QWidget):
                 chip = QLabel(tag)
                 chip.setStyleSheet("""
                     QLabel {
-                        background: rgba(0,0,0,0.08);
-                        color: #333333;
+                        background: rgba(100,80,160,0.12);
+                        color: #3d2a8a;
                         border-radius: 8px;
                         padding: 1px 8px;
                         font-size: 11px;
@@ -597,9 +597,9 @@ def _chart_card(title: str, chart_widget: QWidget) -> QWidget:
     card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     card.setStyleSheet(f"""
         QWidget#chartCard {{
-            background: #F8FBFF;
+            background: #EBF7FF;
             border-radius: {CARD_RADIUS}px;
-            border: 1.5px solid {BLUE_LIGHT};
+            border: 1.5px solid {LILAC_MIST};
         }}
     """)
 
@@ -642,7 +642,7 @@ def _chart_card(title: str, chart_widget: QWidget) -> QWidget:
     hdr = QLabel(title)
     hdr.setFixedHeight(22)
     hdr.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-    hdr.setStyleSheet(f"color: {BLUE_PRIMARY}; font-size: 13px; font-weight: 700; background: transparent; border: none; padding: 0; margin: 0;")
+    hdr.setStyleSheet(f"color: #4a72b8; font-size: 13px; font-weight: 700; background: transparent; border: none; padding: 0; margin: 0;")
     layout.addWidget(hdr)
     layout.addWidget(chart_widget)
     return card
@@ -665,11 +665,12 @@ class DashboardPage(QWidget):
 
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        _force_bg(topbar, BLUE_DARK)
+        topbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(24, 0, 24, 0)
         title = QLabel("Dashboard")
-        title.setStyleSheet(f"color:{WHITE};font-size:18px;font-weight:700;background:transparent;")
+        title.setStyleSheet("color:#003c78;font-size:18px;font-weight:700;background:transparent;")
         tb.addWidget(title)
         tb.addStretch()
         root.addWidget(topbar)

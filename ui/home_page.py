@@ -70,7 +70,7 @@ class WalkingCat(QWidget):
 
         body_col = QColor("#FFFFFF")
         line_col = QColor("#006ec4")
-        nose_col = QColor("#FF8A65")
+        nose_col = QColor("#f5b8a0")
 
         pen = QPen(line_col, 2.2)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -228,7 +228,7 @@ class HistoryPanel(QWidget):
 
         hdr = QLabel("History")
         hdr.setStyleSheet(
-            f"color: #000000; font-size: 16px; font-weight: 700; background: transparent;"
+            f"color: #003c78; font-size: 16px; font-weight: 700; background: transparent;"
         )
         layout.addWidget(hdr)
 
@@ -278,7 +278,7 @@ class HistoryPanel(QWidget):
 
         self.title_lbl = QLabel("")
         self.title_lbl.setStyleSheet(
-            f"color: #000000; font-size: 14px; font-weight: 700; background: transparent;"
+            f"color: #003c78; font-size: 14px; font-weight: 700; background: transparent;"
         )
         self.title_lbl.setWordWrap(True)
         layout.addWidget(self.title_lbl)
@@ -732,7 +732,7 @@ class HomePage(QWidget):
                     font-size: 13px;
                     font-weight: 600;
                 }}
-                QPushButton:hover {{ background: #1565C0; }}
+                QPushButton:hover {{ background: #7aaee0; }}
                 QPushButton:checked {{
                     background: white;
                     color: {BLUE_PRIMARY};
@@ -827,8 +827,13 @@ class HomePage(QWidget):
 
         self._display_cards()
 
+        # Dismiss splash hanya saat load pertama kali
+        if not getattr(self, '_splash_dismissed', False):
+            self._splash_dismissed = True
+            if hasattr(self.main_window, 'dismiss_splash'):
+                self.main_window.dismiss_splash()
+
         # Kalau DB kosong / sedikit, kick off API refresh di background
-        # setelah UI sudah tampil — tidak memblokir apapun
         if len(manga_list) < 10 and not getattr(self, '_api_refreshed', False):
             self._api_refreshed = True
             from PyQt6.QtCore import QTimer

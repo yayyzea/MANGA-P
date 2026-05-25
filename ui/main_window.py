@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QFrame
 )
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QPoint
-from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon
+from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon, QPainter
 from pathlib import Path
  
 _ICON_DIR = Path(__file__).parent.parent / "assets"
@@ -53,9 +53,9 @@ class FontSizePopup(QFrame):
         self.setFixedWidth(200)
         self.setStyleSheet("""
             #FontSizePopup {
-                background: #8b3a6e;
+                background: #ede8f8;
                 border-radius: 16px;
-                border: 1.5px solid rgba(255,255,255,0.22);
+                border: 1.5px solid rgba(100,80,160,0.30);
             }
         """)
 
@@ -66,22 +66,22 @@ class FontSizePopup(QFrame):
         title = QLabel("Text Size")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(
-            "color: rgba(255,255,255,0.55); font-size: 11px;"
+            "color: rgba(60,40,130,0.75); font-size: 11px;"
             "font-weight: 600; letter-spacing: 1px; background: transparent;"
         )
         outer.addWidget(title)
 
         btn_style = """
             QPushButton {
-                background: rgba(255,255,255,0.12);
+                background: rgba(100,80,160,0.10);
                 border: none; border-radius: 14px;
-                color: white; font-size: 20px; font-weight: 700;
+                color: #3d2a8a; font-size: 20px; font-weight: 700;
             }
-            QPushButton:hover   { background: rgba(255,255,255,0.25); }
-            QPushButton:pressed { background: rgba(255,255,255,0.40); }
+            QPushButton:hover   { background: rgba(100,80,160,0.20); }
+            QPushButton:pressed { background: rgba(100,80,160,0.35); }
             QPushButton:disabled{
-                background: rgba(255,255,255,0.05);
-                color: rgba(255,255,255,0.20);
+                background: rgba(100,80,160,0.05);
+                color: rgba(100,80,160,0.25);
             }
         """
         self._btn_dec = QPushButton("−")
@@ -92,7 +92,7 @@ class FontSizePopup(QFrame):
         self._px_lbl = QLabel("13 px")
         self._px_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._px_lbl.setStyleSheet(
-            "color: white; font-size: 18px; font-weight: 700;"
+            "color: rgba(60,40,130,0.75); font-size: 18px; font-weight: 700;"
             "background: transparent; min-width: 64px;"
         )
 
@@ -113,7 +113,7 @@ class FontSizePopup(QFrame):
         bar_bg = QFrame()
         bar_bg.setFixedHeight(4)
         bar_bg.setStyleSheet(
-            "background: rgba(255,255,255,0.15); border-radius: 2px;"
+            "background: rgba(100,80,160,0.20); border-radius: 2px;"
         )
         bar_layout = QHBoxLayout(bar_bg)
         bar_layout.setContentsMargins(0, 0, 0, 0)
@@ -122,7 +122,7 @@ class FontSizePopup(QFrame):
         self._bar_fill = QFrame()
         self._bar_fill.setFixedHeight(4)
         self._bar_fill.setStyleSheet(
-            "background: white; border-radius: 2px;"
+            "background: rgba(60,40,130,0.75); border-radius: 2px;"
         )
         bar_layout.addWidget(self._bar_fill)
         bar_layout.addStretch()
@@ -135,7 +135,7 @@ class FontSizePopup(QFrame):
         lbl_max = QLabel(f"{FONT_MAX_PX}px")
         for l in (lbl_min, lbl_max):
             l.setStyleSheet(
-                "color: rgba(255,255,255,0.35); font-size: 10px; background: transparent;"
+                "color: rgba(60,40,130,0.40); font-size: 10px; background: transparent;"
             )
         hint_row.addWidget(lbl_min)
         hint_row.addStretch()
@@ -263,7 +263,7 @@ class Sidebar(QWidget):
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
         self.setPalette(pal)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet("border-right: 2px solid rgba(255,255,255,0.18);")
+        self.setStyleSheet("border-right: 2px solid rgba(0,60,120,0.20);")
         self._build()
  
     def _build(self):
@@ -295,7 +295,7 @@ class Sidebar(QWidget):
             else: btn.setText(tip[:1])
             btn.setStyleSheet("""QPushButton { background: transparent; border: none; border-radius: 10px; } QPushButton:hover { background: rgba(255,255,255,0.20); } QPushButton:checked { background: rgba(255,255,255,0.30); }""")
             from PyQt6.QtWidgets import QGraphicsColorizeEffect
-            effect = QGraphicsColorizeEffect(); effect.setColor(QColor(255, 255, 255)); btn.setGraphicsEffect(effect)
+            effect = QGraphicsColorizeEffect(); effect.setColor(QColor(0, 60, 120)); btn.setGraphicsEffect(effect)
             btn.clicked.connect(lambda _, idx=page_idx: self._nav(idx))
             self._buttons.append((page_idx, btn))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -309,12 +309,14 @@ class Sidebar(QWidget):
         self._font_btn.setFixedSize(52, 52)
         px_font = QPixmap(str(_ICON_DIR / "font.png"))
         if not px_font.isNull():
-            self._font_btn.setIcon(QIcon(px_font))
+            _px_font_b = QPixmap(px_font.size()); _px_font_b.fill(Qt.GlobalColor.transparent)
+            _pp = QPainter(_px_font_b); _pp.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source); _pp.drawPixmap(0,0,px_font); _pp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn); _pp.fillRect(_px_font_b.rect(), QColor(0,60,120)); _pp.end()
+            self._font_btn.setIcon(QIcon(_px_font_b))
             self._font_btn.setIconSize(QSize(26, 26))
         else:
             self._font_btn.setText("Aa")
             self._font_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: white; } QPushButton:hover { background: rgba(255,255,255,0.20); } QPushButton:checked { background: rgba(255,255,255,0.30); }")
+        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: #003c78; } QPushButton:hover { background: rgba(255,255,255,0.45); } QPushButton:checked { background: rgba(255,255,255,0.60); }")
         self._font_btn.clicked.connect(self._toggle_font_popup)
         layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
 
@@ -324,12 +326,14 @@ class Sidebar(QWidget):
         self._exit_btn.setFixedSize(52, 52)
         px_exit = QPixmap(str(_ICON_DIR / "exit.png"))
         if not px_exit.isNull():
-            self._exit_btn.setIcon(QIcon(px_exit))
+            _px_exit_b = QPixmap(px_exit.size()); _px_exit_b.fill(Qt.GlobalColor.transparent)
+            _pp2 = QPainter(_px_exit_b); _pp2.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source); _pp2.drawPixmap(0,0,px_exit); _pp2.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn); _pp2.fillRect(_px_exit_b.rect(), QColor(0,60,120)); _pp2.end()
+            self._exit_btn.setIcon(QIcon(_px_exit_b))
             self._exit_btn.setIconSize(QSize(26, 26))
         else:
             self._exit_btn.setText("E")
             self._exit_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self._exit_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: white; } QPushButton:hover { background: rgba(255,255,255,0.20); }")
+        self._exit_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: #003c78; } QPushButton:hover { background: rgba(255,255,255,0.45); }")
         if self.on_logout:
             self._exit_btn.clicked.connect(self.on_logout)
         layout.addWidget(self._exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -478,6 +482,13 @@ class MainWindow(QMainWindow):
 
         self.stack.setCurrentIndex(0)
 
+        # ── Splash screen overlay ──
+        from .splash_screen import SplashScreen
+        self._splash = SplashScreen(root)
+        self._splash.resize(root.size())
+        self._splash.show()
+        self._splash.raise_()
+
         # Restore history di background setelah UI tampil
         if self.current_user:
             last_id = load_history(self.current_user["id"])
@@ -567,6 +578,18 @@ class MainWindow(QMainWindow):
         if idx == 6 and page and hasattr(page, 'refresh'): page.refresh()
         self.stack.setCurrentIndex(idx)
         if idx in (0, 1, 5): self.sidebar.set_active(idx)
+
+    def dismiss_splash(self):
+        """Dipanggil oleh HomePage setelah data pertama kali selesai dimuat."""
+        if hasattr(self, '_splash') and self._splash:
+            self._splash.dismiss()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_splash') and self._splash and self._splash.isVisible():
+            cw = self.centralWidget()
+            if cw:
+                self._splash.resize(cw.size())
 
     def go_home(self): self._navigate(0)
     def go_library(self): self._navigate(1)

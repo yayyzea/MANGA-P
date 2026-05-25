@@ -52,7 +52,7 @@ class CoverLabel(QLabel):
         super().__init__(parent)
         self.setFixedSize(w, h)
         self._w, self._h = w, h
-        self.setStyleSheet("background: rgba(255,255,255,0.18); border-radius: 10px;")
+        self.setStyleSheet("background: rgba(255,255,255,1.0); border-radius: 10px;")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def set_cover(self, pixmap: QPixmap):
@@ -123,7 +123,7 @@ class CollectionPanel(QWidget):
         self._ch_spin.setRange(0, 9999)
         self._ch_spin.setFixedWidth(80)
         self._ch_spin.setStyleSheet(f"""
-            QSpinBox {{ background: rgba(255,255,255,0.25); color: {BLACK};
+            QSpinBox {{ background: rgba(255,255,255,1.0); color: {BLACK};
                 border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 6px; font-size: 11px; }}
             QSpinBox::up-button, QSpinBox::down-button {{ background: rgba(255,255,255,0.15); border: none; width: 16px; }} """)
         r2.addWidget(lbl2); r2.addWidget(self._ch_spin); r2.addStretch()
@@ -142,7 +142,7 @@ class CollectionPanel(QWidget):
         self._remove_btn = QPushButton("Remove")
         self._remove_btn.setFixedHeight(30)
         self._remove_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(220,50,50,0.80); color: {BLACK};
+            QPushButton {{ background: rgba(180,50,50,0.75); color: #fff5f5;
                 border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 0 12px; }} """)
         self._remove_btn.clicked.connect(self._on_remove)
 
@@ -258,7 +258,7 @@ class CollectionPanel(QWidget):
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         msg_box.setStyleSheet(f"""
             QMessageBox {{
-                background: {BLUE_DARK};
+                background: #1e1a3a;
                 font-family: Arial;
             }}
             QLabel {{
@@ -295,9 +295,9 @@ class CollectionPanel(QWidget):
 
 
 _TAG_COLORS = {
-    "still reading": ("#1565C0", "#E3F2FD"),
-    "completed":     ("#1B5E20", "#E8F5E9"),
-    "dropped":       ("#B71C1C", "#FFEBEE"),
+    "still reading": ("#4a90d9", "#ddeeff"),
+    "completed":     ("#2d7a50", "#d6f5e8"),
+    "dropped":       ("#b03a38", "#ffe8e8"),
 }
 
 
@@ -335,10 +335,10 @@ class TagBar(QWidget):
         self._add_btn.setFixedSize(26, 26)
         self._add_btn.setToolTip("Add tag")
         self._add_btn.setStyleSheet(
-            "QPushButton{background:rgba(255,255,255,0.20);color:white;"
-            "border:1px solid rgba(255,255,255,0.40);border-radius:13px;"
+            f"QPushButton{{background:{BLUE_PRIMARY};color:white;"
+            "border:none;border-radius:13px;"
             "font-size:13px;font-weight:700;}"
-            "QPushButton:hover{background:rgba(255,255,255,0.35);}"
+            f"QPushButton:hover{{background:{BLUE_DARK};}}"
             "QPushButton:disabled{opacity:0.35;}"
         )
         self._add_btn.clicked.connect(self._on_add)
@@ -382,7 +382,7 @@ class TagBar(QWidget):
         if colors:
             bg, fg = colors
         else:
-            bg, fg = "#E0E0E0", "#1A1A2E"
+            bg, fg = "#e8e4f5", "#3d2a8a"
 
         pill = QWidget()
         pill.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -432,13 +432,13 @@ class TagBar(QWidget):
         dialog.setWindowTitle("New Tag")
         dialog.setLabelText("Tag name:")
         dialog.setStyleSheet("""
-            QInputDialog { background-color: #FFFFFF; }
+            QInputDialog { background-color: #f8f6ff; }
             QLabel { color: #1A1A2E; font-size: 12px; }
-            QLineEdit { background-color: #F5F5F5; color: #1A1A2E; border: 1px solid #CCCCCC;
+            QLineEdit { background-color: #eee9ff; color: #1e1a3a; border: 1px solid #c0b0e8;
                         border-radius: 6px; padding: 4px 8px; font-size: 12px; }
-            QPushButton { background-color: #1565C0; color: white; border: none;
+            QPushButton { background-color: #6a5acd; color: white; border: none;
                           border-radius: 6px; padding: 4px 14px; font-size: 11px; font-weight: 700; }
-            QPushButton:hover { background-color: #1976D2; }
+            QPushButton:hover { background-color: #7b6ade; }
         """)
         ok = dialog.exec()
         text = dialog.textValue()
@@ -471,7 +471,7 @@ class ReviewPanel(QWidget):
         self._rating = QSpinBox()
         self._rating.setRange(1, 10); self._rating.setValue(7); self._rating.setFixedWidth(60)
         self._rating.setStyleSheet(f"""
-            QSpinBox {{ background: rgba(255,255,255,0.25); color: {BLACK};
+            QSpinBox {{ background: rgba(255,255,255,1.0); color: {BLACK};
                 border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 6px; font-size: 12px; }}
             QSpinBox::up-button, QSpinBox::down-button {{ background: rgba(255,255,255,0.15); border: none; width: 16px; }} """)
         r1.addWidget(lbl); r1.addWidget(self._rating); r1.addStretch()
@@ -480,7 +480,7 @@ class ReviewPanel(QWidget):
         self._text.setPlaceholderText("Write your review here…")
         self._text.setFixedHeight(70)
         self._text.setStyleSheet(f"""
-            QTextEdit {{ background: rgba(255,255,255,0.18); color: {BLACK};
+            QTextEdit {{ background: rgba(255,255,255,1.0); color: {BLACK};
                 border: 1px solid rgba(255,255,255,0.35); border-radius: 8px; padding: 6px; font-size: 11px; }} """)
         layout.addWidget(self._text)
         r2 = QHBoxLayout(); r2.setSpacing(8)
@@ -494,7 +494,7 @@ class ReviewPanel(QWidget):
         self._del_btn = QPushButton("Delete")
         self._del_btn.setFixedHeight(30)
         self._del_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(220,50,50,0.80); color: {BLACK};
+            QPushButton {{ background: rgba(180,50,50,0.75); color: #fff5f5;
                 border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 0 12px; }} """)
         self._del_btn.clicked.connect(self._on_delete)
         self._del_btn.hide()
@@ -537,7 +537,7 @@ class ReviewPanel(QWidget):
             self.setGraphicsEffect(effect)
         effect.setOpacity(0.35 if locked else 1.0)
         self._text.setPlaceholderText(
-            'Set status selain "Plan to Read" untuk menulis review…'
+            'Set a status other than "Plan to Read" to write a review…'
             if locked else "Write your review here…"
         )
 
@@ -569,7 +569,7 @@ class ReviewPanel(QWidget):
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         msg_box.setStyleSheet(f"""
             QMessageBox {{
-                background: {BLUE_DARK};
+                background: #1e1a3a;
                 font-family: Arial;
             }}
             QLabel {{
@@ -660,15 +660,15 @@ class DetailPage(QWidget):
         topbar = QWidget()
         topbar.setFixedHeight(TOPBAR_HEIGHT)
         topbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        topbar.setStyleSheet(f"background: {BLUE_DARK};")
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 16, 0)
         back_btn = QPushButton("  Back")
         back_btn.setFixedSize(80, 34)
         back_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(255,255,255,0.20); color: {WHITE};
-                border: none; border-radius: 8px; font-size: 13px; font-weight: 600; }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.35); }} """)
+            QPushButton {{ background: rgba(0,60,120,0.12); color: #003c78;
+                border: 1px solid rgba(0,60,120,0.25); border-radius: 8px; font-size: 13px; font-weight: 600; }}
+            QPushButton:hover {{ background: rgba(0,60,120,0.22); }} """)
         back_btn.clicked.connect(self.main_window.go_home)
         tb.addWidget(back_btn); tb.addStretch()
         root.addWidget(topbar)
@@ -722,7 +722,7 @@ class DetailPage(QWidget):
         mc.addLayout(top_row)
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("background: rgba(255,255,255,0.25); border: none; max-height: 1px;")
+        sep.setStyleSheet("background: rgba(255,255,255,1.0); border: none; max-height: 1px;")
         mc.addWidget(sep)
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(32)
