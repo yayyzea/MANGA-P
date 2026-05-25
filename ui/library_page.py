@@ -195,7 +195,7 @@ class LibrarySearchBar(QWidget):
                 background: {WHITE}; border: none;
                 border-radius: 18px; font-size: 16px; color: {BLUE_PRIMARY};
             }}
-            QPushButton:checked {{ background: #BBDEFB; }}
+            QPushButton:checked {{ background: #ddd5f5; }}
         """)
 
         self._filter_shadow = QGraphicsDropShadowEffect(self.filter_btn)
@@ -225,10 +225,10 @@ class LibrarySearchBar(QWidget):
         self.trash_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {WHITE}; border: none;
-                border-radius: 18px; font-size: 16px; color: #E53935;
+                border-radius: 18px; font-size: 16px; color: #c85a58;
             }}
             QPushButton:checked {{
-                background: #E53935; color: {WHITE};
+                background: #e87e7c; color: #fff5f5;
             }}
         """)
 
@@ -479,7 +479,7 @@ class _CircleCheck(QWidget):
 
         if self._checked:
             # Lingkaran hijau solid
-            p.setBrush(QBrush(_QC("#43A047")))
+            p.setBrush(QBrush(_QC("#7ec8a0")))
             p.setPen(Qt.PenStyle.NoPen)
             p.drawEllipse(0, 0, s, s)
             # Ceklis putih
@@ -699,7 +699,7 @@ class DeleteConfirmBar(QWidget):
                 font-size: 14px; font-weight: 600;
                 padding: 0 16px;
             }}
-            QPushButton:hover {{ background: #E3F2FD; }}
+            QPushButton:hover {{ background: #ede8f8; }}
         """)
         cancel_btn.clicked.connect(self.cancelled)
         layout.addWidget(cancel_btn)
@@ -718,14 +718,14 @@ class DeleteConfirmBar(QWidget):
         self.delete_btn.setEnabled(False)
         self.delete_btn.setStyleSheet(f"""
             QPushButton {{
-                background: #E53935; border: none;
+                background: #e87e7c; border: none;
                 border-radius: 19px;
                 color: {WHITE};
                 font-size: 14px; font-weight: 700;
                 padding: 0 16px;
             }}
-            QPushButton:hover   {{ background: #B71C1C; }}
-            QPushButton:disabled {{ background: #FFCDD2; color: #EF9A9A; }}
+            QPushButton:hover   {{ background: #c85a58; }}
+            QPushButton:disabled {{ background: #ffd6d6; color: #e8a8a8; }}
         """)
         self.delete_btn.clicked.connect(self.confirmed)
         layout.addWidget(self.delete_btn)

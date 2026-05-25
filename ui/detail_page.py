@@ -142,7 +142,7 @@ class CollectionPanel(QWidget):
         self._remove_btn = QPushButton("Remove")
         self._remove_btn.setFixedHeight(30)
         self._remove_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(220,50,50,0.80); color: {BLACK};
+            QPushButton {{ background: rgba(180,50,50,0.75); color: #fff5f5;
                 border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 0 12px; }} """)
         self._remove_btn.clicked.connect(self._on_remove)
 
@@ -258,7 +258,7 @@ class CollectionPanel(QWidget):
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         msg_box.setStyleSheet(f"""
             QMessageBox {{
-                background: {BLUE_DARK};
+                background: #1e1a3a;
                 font-family: Arial;
             }}
             QLabel {{
@@ -295,9 +295,9 @@ class CollectionPanel(QWidget):
 
 
 _TAG_COLORS = {
-    "still reading": ("#1565C0", "#E3F2FD"),
-    "completed":     ("#1B5E20", "#E8F5E9"),
-    "dropped":       ("#B71C1C", "#FFEBEE"),
+    "still reading": ("#4a90d9", "#ddeeff"),
+    "completed":     ("#2d7a50", "#d6f5e8"),
+    "dropped":       ("#b03a38", "#ffe8e8"),
 }
 
 
@@ -382,7 +382,7 @@ class TagBar(QWidget):
         if colors:
             bg, fg = colors
         else:
-            bg, fg = "#E0E0E0", "#1A1A2E"
+            bg, fg = "#e8e4f5", "#3d2a8a"
 
         pill = QWidget()
         pill.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -432,13 +432,13 @@ class TagBar(QWidget):
         dialog.setWindowTitle("New Tag")
         dialog.setLabelText("Tag name:")
         dialog.setStyleSheet("""
-            QInputDialog { background-color: #FFFFFF; }
+            QInputDialog { background-color: #f8f6ff; }
             QLabel { color: #1A1A2E; font-size: 12px; }
-            QLineEdit { background-color: #F5F5F5; color: #1A1A2E; border: 1px solid #CCCCCC;
+            QLineEdit { background-color: #eee9ff; color: #1e1a3a; border: 1px solid #c0b0e8;
                         border-radius: 6px; padding: 4px 8px; font-size: 12px; }
-            QPushButton { background-color: #1565C0; color: white; border: none;
+            QPushButton { background-color: #6a5acd; color: white; border: none;
                           border-radius: 6px; padding: 4px 14px; font-size: 11px; font-weight: 700; }
-            QPushButton:hover { background-color: #1976D2; }
+            QPushButton:hover { background-color: #7b6ade; }
         """)
         ok = dialog.exec()
         text = dialog.textValue()
@@ -494,7 +494,7 @@ class ReviewPanel(QWidget):
         self._del_btn = QPushButton("Delete")
         self._del_btn.setFixedHeight(30)
         self._del_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(220,50,50,0.80); color: {BLACK};
+            QPushButton {{ background: rgba(180,50,50,0.75); color: #fff5f5;
                 border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 0 12px; }} """)
         self._del_btn.clicked.connect(self._on_delete)
         self._del_btn.hide()
@@ -569,7 +569,7 @@ class ReviewPanel(QWidget):
         msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         msg_box.setStyleSheet(f"""
             QMessageBox {{
-                background: {BLUE_DARK};
+                background: #1e1a3a;
                 font-family: Arial;
             }}
             QLabel {{
@@ -660,15 +660,15 @@ class DetailPage(QWidget):
         topbar = QWidget()
         topbar.setFixedHeight(TOPBAR_HEIGHT)
         topbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #82c8ef,stop:1 #80d9e8);")
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 16, 0)
         back_btn = QPushButton("  Back")
         back_btn.setFixedSize(80, 34)
         back_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(0,60,120,0.15); color: #003c78;
-                border: none; border-radius: 8px; font-size: 13px; font-weight: 600; }}
-            QPushButton:hover {{ background: rgba(0,60,120,0.25); }} """)
+            QPushButton {{ background: rgba(0,60,120,0.12); color: #003c78;
+                border: 1px solid rgba(0,60,120,0.25); border-radius: 8px; font-size: 13px; font-weight: 600; }}
+            QPushButton:hover {{ background: rgba(0,60,120,0.22); }} """)
         back_btn.clicked.connect(self.main_window.go_home)
         tb.addWidget(back_btn); tb.addStretch()
         root.addWidget(topbar)

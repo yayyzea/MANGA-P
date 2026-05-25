@@ -70,7 +70,7 @@ class WalkingCat(QWidget):
 
         body_col = QColor("#FFFFFF")
         line_col = QColor("#006ec4")
-        nose_col = QColor("#FF8A65")
+        nose_col = QColor("#f5b8a0")
 
         pen = QPen(line_col, 2.2)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -228,7 +228,7 @@ class HistoryPanel(QWidget):
 
         hdr = QLabel("History")
         hdr.setStyleSheet(
-            f"color: #000000; font-size: 16px; font-weight: 700; background: transparent;"
+            f"color: #003c78; font-size: 16px; font-weight: 700; background: transparent;"
         )
         layout.addWidget(hdr)
 
@@ -274,13 +274,11 @@ class HistoryPanel(QWidget):
         self.empty_lbl.setStyleSheet(
             "color: rgba(0,0,0,0.40); font-size: 12px; background: transparent;"
         )
-        layout.addStretch()
         layout.addWidget(self.empty_lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
-        layout.addStretch()
 
         self.title_lbl = QLabel("")
         self.title_lbl.setStyleSheet(
-            f"color: #000000; font-size: 14px; font-weight: 700; background: transparent;"
+            f"color: #003c78; font-size: 14px; font-weight: 700; background: transparent;"
         )
         self.title_lbl.setWordWrap(True)
         layout.addWidget(self.title_lbl)
@@ -734,7 +732,7 @@ class HomePage(QWidget):
                     font-size: 13px;
                     font-weight: 600;
                 }}
-                QPushButton:hover {{ background: #1565C0; }}
+                QPushButton:hover {{ background: #7aaee0; }}
                 QPushButton:checked {{
                     background: white;
                     color: {BLUE_PRIMARY};

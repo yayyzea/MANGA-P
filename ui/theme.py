@@ -55,7 +55,6 @@ QWidget {{
     background: {_SIDEBAR_GRAD};
     min-width: {SIDEBAR_WIDTH}px;
     max-width: {SIDEBAR_WIDTH}px;
-    border-right: 2px solid rgba(0,80,160,0.18);
 }}
 
 #SidebarIcon {{
@@ -68,14 +67,14 @@ QWidget {{
     background: rgba(255,255,255,0.45);
 }}
 #SidebarIcon:checked {{
-    background: rgba(255,255,255,0.55);
-    border-left: 3px solid #004f9a;
+    background: rgba(255,255,255,0.60);
+    border-left: 3px solid #003c78;
 }}
 
 /* ── Top search bar ── */
 #SearchBar {{
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-        stop:0 {SKY_BLUE}, stop:0.55 {TEAL}, stop:1 {PETAL_PINK});
+        stop:0 #7aaee0, stop:0.55 #80d9e8, stop:1 #f0a8c8);
     min-height: {TOPBAR_HEIGHT}px;
     max-height: {TOPBAR_HEIGHT}px;
     padding: 0 20px;
@@ -97,7 +96,7 @@ QWidget {{
     border: 1px solid rgba(255,255,255,0.35);
     border-radius: 20px;
     padding: 6px 10px;
-    color: {WHITE};
+    color: #003c78;
     font-size: 18px;
 }}
 #FilterBtn:hover {{
@@ -108,7 +107,7 @@ QWidget {{
 #SectionLabel {{
     font-size: 16px;
     font-weight: 700;
-    color: {PETAL_PINK};
+    color: #a78fd4;
     padding: 0;
     margin: 0;
     background: transparent;
@@ -121,7 +120,7 @@ QWidget {{
     border: none;
 }}
 #MangaCard:hover {{
-    background: #FAD6E0;
+    background: #fce4f0;
 }}
 
 #MangaCard QLabel {{
@@ -169,13 +168,13 @@ QWidget {{
 #FooterLink {{
     background: transparent;
     border: none;
-    color: {BLUE_DARK};
+    color: #4a90d9;
     font-size: 12px;
     padding: 0 4px;
     text-decoration: underline;
 }}
 #FooterLink:hover {{
-    color: {SKY_BLUE};
+    color: #003c78;
 }}
 
 /* ── Scroll areas ── */
@@ -213,8 +212,8 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
 
 /* ── Tooltips ── */
 QToolTip {{
-    background: {BLUE_DARK};
-    color: {WHITE};
+    background: #003c78;
+    color: #f0f8ff;
     border: none;
     border-radius: 6px;
     padding: 4px 8px;
