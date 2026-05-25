@@ -63,6 +63,7 @@ def _input_style() -> str:
             border: 1px solid {BLUE_LIGHT};
             border-radius: 6px;
             selection-background-color: {BLUE_LIGHT};
+            background-color: {WHITE};
         }}
         QSpinBox::up-button, QSpinBox::down-button,
         QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
