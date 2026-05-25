@@ -304,6 +304,13 @@ class HistoryPanel(QWidget):
     def load_manga(self, manga):
         """Update panel saat user klik kartu manga (in-memory, tidak simpan ke DB)."""
         if not manga:
+            self._manga_id = None
+            self.empty_lbl.setVisible(True)
+            self.cover_lbl.setVisible(False)
+            self.title_lbl.setText("")
+            self.desc_lbl.setText("")
+            self._synopsis_text = ""
+            self._synopsis_overlay.setText("")
             return
         self._manga_id = manga.id
         self.empty_lbl.setVisible(False)
