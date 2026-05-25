@@ -1,8 +1,9 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QPushButton, QSizePolicy, QGridLayout
+    QScrollArea, QPushButton, QSizePolicy, QGridLayout,
+    QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread, pyqtSlot
+from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread, pyqtSlot, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont,
     QPainterPath, QLinearGradient, QPixmap
@@ -89,7 +90,7 @@ class GenreBarChart(QWidget):
             painter.setBrush(QBrush(grad))
             painter.setPen(QPen(QColor(WHITE), 2) if genre == self._hovered_genre else Qt.PenStyle.NoPen)
             path = QPainterPath()
-            path.addRoundedRect(bar_rect, 6, 6)
+            path.addRoundedRect(bar_rect, 14, 14)
             painter.drawPath(path)
 
             painter.setPen(QColor(TEXT_DARK))
@@ -305,59 +306,143 @@ class ScrapedGenreLoader(QThread):
 class MangaCardSmall(QWidget):
     clicked = pyqtSignal(int)
 
-    def __init__(self, manga_data: dict, parent=None):
+    def __init__(self, manga_data: dict, card_w: int = 140, parent=None):
         super().__init__(parent)
         self.manga_id = manga_data.get("id", 0)
-        self.setFixedSize(130, 210)
+        self._card_w   = card_w
+        self._cover_h  = int(card_w * 1.4)
+        self._total_h  = self._cover_h + 52
+        self._inner_w  = card_w - 16
+        self._hovered  = False
+
+        self.setFixedSize(self._card_w, self._total_h)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        _force_bg(self, BLUE_CARD, radius=10)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setMouseTracking(True)
+
+        # ── Drop shadow (sama seperti homepage MangaCard) ──
+        self._shadow = QGraphicsDropShadowEffect(self)
+        self._shadow.setBlurRadius(8)
+        self._shadow.setOffset(0, 3)
+        self._shadow.setColor(QColor(0, 0, 0, 50))
+        self.setGraphicsEffect(self._shadow)
+
+        # ── Animasi lift (naik saat hover) ──
+        self._anim = QPropertyAnimation(self, b"pos")
+        self._anim.setDuration(120)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        self._set_style(hovered=False)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
+        layout.setContentsMargins(8, 8, 8, 6)
+        layout.setSpacing(4)
 
+        # Cover
         self.cover = QLabel()
-        self.cover.setFixedSize(114, 150)
+        self.cover.setFixedSize(self._inner_w, self._cover_h)
         self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cover.setScaledContents(True)
-        self.cover.setStyleSheet("background: rgba(255,255,255,0.15); border-radius: 6px;")
-        layout.addWidget(self.cover, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.cover.setScaledContents(False)
+        self.cover.setStyleSheet("background: rgba(0,0,0,0.08); border-radius: 6px;")
+        layout.addWidget(self.cover)
 
+        # Title
         title = manga_data.get("title", "—")
-        if len(title) > 18:
-            title = title[:16] + "…"
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(
-            f"color: {WHITE}; font-size: 10px; font-weight: 700; background: transparent;"
+        self.lbl_title = QLabel(title)
+        self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.lbl_title.setMaximumWidth(self._inner_w)
+        self.lbl_title.setStyleSheet(
+            "font-size: 10px; font-weight: 700; color: #111111; background: transparent;"
         )
-        title_lbl.setWordWrap(True)
-        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(title_lbl)
+        self.lbl_title.setTextFormat(Qt.TextFormat.PlainText)
+        metrics = self.lbl_title.fontMetrics()
+        self.lbl_title.setText(
+            metrics.elidedText(title, Qt.TextElideMode.ElideRight, self._inner_w)
+        )
+        layout.addWidget(self.lbl_title)
 
+        # Score
         score = manga_data.get("score", 0)
-        if score:
-            score_lbl = QLabel(f"★ {score:.1f}")
-            score_lbl.setStyleSheet(
-                "color: rgba(255,255,255,0.85); font-size: 9px; font-weight: 600; background: transparent;"
-            )
-            score_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(score_lbl)
+        score_num = f"{float(score):.1f}" if score else "—"
+        score_row = QWidget()
+        score_row.setStyleSheet("background: transparent;")
+        score_layout = QHBoxLayout(score_row)
+        score_layout.setContentsMargins(0, 0, 0, 0)
+        score_layout.setSpacing(2)
+        score_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        lbl_star = QLabel("★")
+        lbl_star.setStyleSheet("font-size: 10px; font-weight: 700; color: #F5C518; background: transparent;")
+        self.lbl_score = QLabel(score_num)
+        self.lbl_score.setStyleSheet("font-size: 10px; font-weight: 600; color: #111111; background: transparent;")
+        score_layout.addWidget(lbl_star)
+        score_layout.addWidget(self.lbl_score)
+        layout.addWidget(score_row)
 
-        layout.addStretch()
-
+        # Load cover async
         cover_url = manga_data.get("cover_url", "")
         if cover_url:
             from .widgets import ImageLoader
             self._img_loader = ImageLoader(str(cover_url))
-            self._img_loader.loaded.connect(self._on_cover)
+            self._img_loader.loaded.connect(
+                lambda px: self._on_cover(px, self._inner_w, self._cover_h)
+            )
             self._img_loader.start()
 
-    def _on_cover(self, pixmap):
-        self.cover.setPixmap(
-            pixmap.scaled(114, 150,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation)
-        )
+    def _set_style(self, hovered: bool):
+        bg = "#dceeff" if hovered else BLUE_CARD
+        self.setStyleSheet(f"""
+            MangaCardSmall {{
+                background: {bg};
+                border-radius: 10px;
+            }}
+            MangaCardSmall QLabel {{
+                color: #111111;
+                background: transparent;
+            }}
+        """)
+        if hasattr(self, "_shadow"):
+            if hovered:
+                self._shadow.setBlurRadius(20)
+                self._shadow.setOffset(0, 8)
+                self._shadow.setColor(QColor(0, 0, 0, 80))
+            else:
+                self._shadow.setBlurRadius(8)
+                self._shadow.setOffset(0, 3)
+                self._shadow.setColor(QColor(0, 0, 0, 50))
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self._set_style(hovered=True)
+        # Animasi naik 4px
+        cur = self.pos()
+        self._anim.stop()
+        self._anim.setStartValue(cur)
+        self._anim.setEndValue(QPoint(cur.x(), cur.y() - 4))
+        self._anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._set_style(hovered=False)
+        # Animasi balik ke posisi semula
+        cur = self.pos()
+        self._anim.stop()
+        self._anim.setStartValue(cur)
+        self._anim.setEndValue(QPoint(cur.x(), cur.y() + 4))
+        self._anim.start()
+        super().leaveEvent(event)
+
+    def _on_cover(self, pixmap, w, h):
+        try:
+            if not self.cover or not self.isVisible():
+                return
+            self.cover.setPixmap(
+                pixmap.scaled(w, h,
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation)
+            )
+        except RuntimeError:
+            pass
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
@@ -372,6 +457,7 @@ class ScrapedGenrePage(QWidget):
         super().__init__(parent)
         self.main_window = main_window
         self._loader = None
+        self._manga_list = []
         self._build()
 
     def _build(self):
@@ -425,23 +511,24 @@ class ScrapedGenrePage(QWidget):
         """)
         root.addWidget(info_banner)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("background: transparent; border: none;")
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setStyleSheet("background: transparent; border: none;")
 
         self._grid_container = QWidget()
         self._grid_layout = QGridLayout(self._grid_container)
-        self._grid_layout.setContentsMargins(24, 24, 24, 24)
-        self._grid_layout.setSpacing(14)
+        self._grid_layout.setContentsMargins(16, 16, 16, 16)
+        self._grid_layout.setSpacing(12)
         self._grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
 
-        scroll.setWidget(self._grid_container)
-        root.addWidget(scroll, stretch=1)
+        self._scroll.setWidget(self._grid_container)
+        root.addWidget(self._scroll, stretch=1)
 
     def load_genre(self, genre: str):
         self._title_lbl.setText(genre)
         self._count_lbl.setText("Loading...")
+        self._manga_list = []
         self._clear_grid()
 
         if self._loader and self._loader.isRunning():
@@ -452,8 +539,62 @@ class ScrapedGenrePage(QWidget):
         self._loader.finished.connect(self._on_loaded)
         self._loader.start()
 
+    def _get_cols_and_card_w(self):
+        vw = self._scroll.viewport().width()
+        if vw < 80:
+            vw = self.width()
+        if vw < 80:
+            vw = 800
+        spacing = self._grid_layout.spacing()
+        margins = 32
+        avail = vw - margins
+        for cols in [8, 7, 6, 5, 4, 3, 2, 1]:
+            card_w = (avail - spacing * (cols - 1)) // cols
+            if card_w >= 110:
+                return cols, int(card_w)
+        return 1, int(avail)
+
+    def _display_cards(self):
+        self._clear_grid()
+        if not self._manga_list:
+            return
+
+        cols, card_w = self._get_cols_and_card_w()
+        for i, manga in enumerate(self._manga_list):
+            card = MangaCardSmall(manga, card_w=card_w)
+            card.clicked.connect(self.main_window.go_detail)
+            self._grid_layout.addWidget(card, i // cols, i % cols)
+
+    def _relayout(self):
+        widgets = []
+        while self._grid_layout.count():
+            item = self._grid_layout.takeAt(0)
+            if item.widget():
+                widgets.append(item.widget())
+        if not widgets:
+            return
+
+        cols, card_w = self._get_cols_and_card_w()
+        cover_h = int(card_w * 1.4)
+        total_h = cover_h + 52
+        inner_w = card_w - 16
+
+        for i, widget in enumerate(widgets):
+            widget.setFixedSize(card_w, total_h)
+            if hasattr(widget, "cover"):
+                widget.cover.setFixedSize(inner_w, cover_h)
+            if hasattr(widget, "lbl_title"):
+                widget.lbl_title.setMaximumWidth(inner_w)
+            self._grid_layout.addWidget(widget, i // cols, i % cols)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(50, self._relayout)
+
     @pyqtSlot(list, str)
     def _on_loaded(self, manga_list, genre_name):
+        self._manga_list = manga_list
         self._count_lbl.setText(f"• {len(manga_list)} manga")
         self._clear_grid()
 
@@ -464,14 +605,10 @@ class ScrapedGenrePage(QWidget):
             self._grid_layout.addWidget(empty, 0, 0, 1, 4)
             return
 
-        container_width = self.width() - 48
-        cols = max(1, (container_width + 14) // (130 + 14))
+        self._display_cards()
 
-        for i, manga in enumerate(manga_list):
-            card = MangaCardSmall(manga)
-            card.clicked.connect(self.main_window.go_detail)
-            row, col = divmod(i, cols)
-            self._grid_layout.addWidget(card, row, col, alignment=Qt.AlignmentFlag.AlignCenter)
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(150, self._relayout)
 
     def _clear_grid(self):
         while self._grid_layout.count():
@@ -558,7 +695,7 @@ class GenreListPage(QWidget):
         brow.setContentsMargins(16, 8, 16, 8)
         brow.setSpacing(0)
 
-        self._banner_lbl = QLabel("🔥  Distribusi genre dari seluruh manga yang di-scrape")
+        self._banner_lbl = QLabel("Genre distribution from all scraped manga")
         self._banner_lbl.setStyleSheet(
             f"color: {TEXT_DARK}; font-size: 11px; background: transparent;"
         )
@@ -566,13 +703,14 @@ class GenreListPage(QWidget):
         brow.addStretch()
 
         self._total_lbl = QLabel("— manga")
+        self._total_lbl.setFixedHeight(26)
         self._total_lbl.setStyleSheet(f"""
             color: {BLUE_PRIMARY};
             font-size: 11px;
             font-weight: 700;
             background: white;
-            border-radius: 10px;
-            padding: 2px 12px;
+            border-radius: 13px;
+            padding: 0px 14px;
         """)
         self._total_lbl.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self._total_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)

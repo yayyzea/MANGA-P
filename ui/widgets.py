@@ -1,14 +1,36 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel,
-    QSizePolicy, QHBoxLayout
+    QSizePolicy, QHBoxLayout, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot, QPropertyAnimation, QEasingCurve, QPoint, QMutex, QMutexLocker
 from PyQt6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 import urllib.request
+from collections import deque
 
 from .theme import CARD_W, CARD_H, CARD_RADIUS, BLUE_CARD
 
 _PAD = 8   # blue padding around the cover image (left/right/top/bottom)
+
+# ── Image loader thread pool ──────────────────────────────────────────────────
+# Batasi maksimal thread image loader yang berjalan bersamaan.
+# Selebihnya masuk antrian dan dieksekusi saat slot kosong.
+_MAX_IMAGE_THREADS = 6
+_active_loaders: list = []
+_pending_loaders: deque = deque()
+_pool_mutex = QMutex()
+
+
+def _try_start_next():
+    """Jalankan loader berikutnya dari antrian jika ada slot kosong."""
+    with QMutexLocker(_pool_mutex):
+        # Bersihkan loader yang sudah selesai
+        global _active_loaders
+        _active_loaders = [l for l in _active_loaders if l.isRunning()]
+        while _pending_loaders and len(_active_loaders) < _MAX_IMAGE_THREADS:
+            loader = _pending_loaders.popleft()
+            if not loader._cancelled:
+                _active_loaders.append(loader)
+                loader.start()
 
 
 class ImageLoader(QThread):
@@ -17,20 +39,39 @@ class ImageLoader(QThread):
     def __init__(self, url: str):
         super().__init__()
         self.url = url
+        self._cancelled = False
+
+    def enqueue(self):
+        """Masukkan ke antrian pool, jangan langsung .start()."""
+        with QMutexLocker(_pool_mutex):
+            if len(_active_loaders) < _MAX_IMAGE_THREADS:
+                _active_loaders.append(self)
+                self.start()
+            else:
+                _pending_loaders.append(self)
+
+    def cancel(self):
+        self._cancelled = True
 
     def run(self):
+        if self._cancelled:
+            _try_start_next()
+            return
         try:
             req = urllib.request.Request(
                 self.url, headers={"User-Agent": "MANGA:P/1.0"}
             )
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = resp.read()
-            pixmap = QPixmap()
-            pixmap.loadFromData(data)
-            if not pixmap.isNull():
-                self.loaded.emit(pixmap)
+            if not self._cancelled:
+                pixmap = QPixmap()
+                pixmap.loadFromData(data)
+                if not pixmap.isNull():
+                    self.loaded.emit(pixmap)
         except Exception:
             pass
+        finally:
+            _try_start_next()
 
 
 _CARD_MIN_W = 100   # lebar minimum card
@@ -94,13 +135,14 @@ class MangaCoverLabel(QLabel):
             y = (ph - h) // 2
             painter.drawPixmap(0, 0, self._pixmap, x, y, w, h)
         else:
-            painter.fillPath(path, QColor("#64B5F6"))  # lighter blue placeholder
+            painter.fillPath(path, QColor("#90d5e4"))  # 水のドレス teal placeholder
 
 
 class MangaCard(QWidget):
     """
     Blue rounded card: _PAD px padding → cover image → title + genre text.
     The _PAD creates visible blue edges around the cover on all sides.
+    Hover: card pops forward with shadow + slight scale via margin trick.
     """
     clicked = pyqtSignal(int)
 
@@ -109,23 +151,36 @@ class MangaCard(QWidget):
         self.manga       = manga
         self.show_labels = show_labels
         self._loader     = None
+        self._hovered    = False
 
         self.setObjectName("MangaCard")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setStyleSheet(
-            f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;"
+            f"border-radius: {CARD_RADIUS}px;"
         )
+
+        # Drop shadow — tipis saat normal, lebih besar saat hover
+        self._shadow = QGraphicsDropShadowEffect(self)
+        self._shadow.setBlurRadius(12)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(0, 0, 0, 60))
+        self.setGraphicsEffect(self._shadow)
+
+        # Animasi posisi (pop-out ke atas)
+        self._anim = QPropertyAnimation(self, b"pos")
+        self._anim.setDuration(150)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
         self._build()
         self._load_cover()
 
     def _build(self):
         layout = QVBoxLayout(self)
-        # _PAD on all sides → blue visible around cover image
         layout.setContentsMargins(_PAD, _PAD, _PAD, _PAD)
         layout.setSpacing(6)
 
         self.cover = MangaCoverLabel()
-        layout.addWidget(self.cover)  # tanpa alignment — biar Expanding mengisi penuh lebar card
+        layout.addWidget(self.cover)
 
         if self.show_labels:
             self.lbl_title = QLabel(self.manga.title or "")
@@ -133,8 +188,12 @@ class MangaCard(QWidget):
             self.lbl_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
             self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             self.lbl_title.setStyleSheet(
-                "color: white; font-size: 11px; font-weight: 600; background: transparent;"
+                "color: #111111; font-size: 13px; font-weight: 600; background: transparent;"
             )
+            from PyQt6.QtGui import QPalette, QColor as _QColor
+            _pal = self.lbl_title.palette()
+            _pal.setColor(QPalette.ColorRole.WindowText, _QColor("#111111"))
+            self.lbl_title.setPalette(_pal)
 
             genres = self.manga.genres or ""
             all_genres = ", ".join(g.strip() for g in genres.split(",")) if genres else ""
@@ -143,8 +202,11 @@ class MangaCard(QWidget):
             self.lbl_genre.setWordWrap(True)
             self.lbl_genre.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
             self.lbl_genre.setStyleSheet(
-                "color: rgba(255,255,255,0.80); font-size: 10px; background: transparent;"
+                "color: rgba(0,0,0,0.60); font-size: 10px; background: transparent;"
             )
+            _pal2 = self.lbl_genre.palette()
+            _pal2.setColor(QPalette.ColorRole.WindowText, _QColor("#555555"))
+            self.lbl_genre.setPalette(_pal2)
 
             layout.addWidget(self.lbl_title)
             layout.addWidget(self.lbl_genre)
@@ -159,33 +221,70 @@ class MangaCard(QWidget):
         if not url:
             return
 
-        # Cek apakah ini path file lokal (bukan http/https)
         import os
         is_local = not url.startswith("http://") and not url.startswith("https://")
         if is_local:
-            # Load langsung dari disk — tidak perlu thread network
             if os.path.isfile(url):
                 px = QPixmap(url)
                 if not px.isNull():
                     self.cover.set_cover(px)
             return
 
-        # URL remote → pakai thread seperti biasa
         self._loader = ImageLoader(url)
         self._loader.loaded.connect(self._on_image_loaded)
-        self._loader.start()
+        self._loader.enqueue()
 
     @pyqtSlot(QPixmap)
     def _on_image_loaded(self, pixmap: QPixmap):
         self.cover.set_cover(pixmap)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), CARD_RADIUS, CARD_RADIUS)
+        painter.fillPath(path, QColor("#DCF0F7"))
+        super().paintEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.manga.id)
 
     def enterEvent(self, event):
-        self.cover.update()
+        self._hovered = True
+        # Shadow lebih besar & gelap
+        self._shadow.setBlurRadius(28)
+        self._shadow.setOffset(0, 8)
+        self._shadow.setColor(QColor(0, 0, 0, 100))
+        # Pop ke atas 6px
+        self._anim.stop()
+        self._anim.setStartValue(self.pos())
+        self._anim.setEndValue(self.pos() + QPoint(0, -6))
+        self._anim.start()
         super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        # Kembalikan shadow normal
+        self._shadow.setBlurRadius(12)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(0, 0, 0, 60))
+        # Kembali ke posisi asal
+        self._anim.stop()
+        self._anim.setStartValue(self.pos())
+        self._anim.setEndValue(self.pos() + QPoint(0, 6))
+        self._anim.start()
+        super().leaveEvent(event)
+
+    def stop_loader(self):
+        """Batalkan ImageLoader agar tidak membuang bandwidth jika card sudah dihapus."""
+        if self._loader:
+            self._loader.cancel()
+        self._loader = None
+
+    def closeEvent(self, event):
+        self.stop_loader()
+        super().closeEvent(event)
 
 
 class MangaCardGrid(QWidget):

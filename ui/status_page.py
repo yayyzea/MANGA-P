@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QPixmap
 
 from .theme import (
+    SKY_BLUE, TEAL, DEWY_GREEN, PETAL_PINK, LILAC_MIST,
     BLUE_PRIMARY, BLUE_CARD, BLUE_LIGHT,
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
@@ -19,10 +20,10 @@ def _force_bg(widget, hex_color, radius=0):
 
 
 STATUS_COLORS = {
-    "Plan to Read": "#29B6F6",
-    "Reading":      "#1E90FF",
-    "Completed":    "#43A047",
-    "Dropped":      "#E53935",
+    "Plan to Read": "#2cb5d3",   # Teal
+    "Reading":      "#006ec4",   # Sky Blue
+    "Completed":    "#9abe7c",   # Dewy Green
+    "Dropped":      "#f96a67",   # Petal Pink
 }
 
 
@@ -87,7 +88,7 @@ class MangaCardCompact(QWidget):
         self.manga_id = manga_data.get("id", 0)
         self.setFixedSize(130, 210)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        _force_bg(self, BLUE_CARD, radius=10)
+        _force_bg(self, '#DCF0F7', radius=10)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -109,7 +110,7 @@ class MangaCardCompact(QWidget):
             title = title[:16] + "…"
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet(
-            f"color: {WHITE}; font-size: 10px; font-weight: 700; background: transparent;"
+            "color: #111111; font-size: 10px; font-weight: 700; background: transparent;"
         )
         title_lbl.setWordWrap(True)
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -120,7 +121,7 @@ class MangaCardCompact(QWidget):
         if score:
             score_lbl = QLabel(f"★ {score:.1f}")
             score_lbl.setStyleSheet(
-                f"color: rgba(255,255,255,0.85); font-size: 9px; font-weight: 600; background: transparent;"
+                "color: rgba(0,0,0,0.60); font-size: 9px; font-weight: 600; background: transparent;"
             )
             score_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(score_lbl)
@@ -166,7 +167,8 @@ class StatusPage(QWidget):
         # ── Top bar ──
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        _force_bg(topbar, BLUE_PRIMARY)
+        topbar.setAttribute(__import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #006ec4, stop:0.55 #2cb5d3, stop:1 #f96a67);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)
