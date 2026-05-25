@@ -482,6 +482,13 @@ class MainWindow(QMainWindow):
 
         self.stack.setCurrentIndex(0)
 
+        # ── Splash screen overlay ──
+        from .splash_screen import SplashScreen
+        self._splash = SplashScreen(root)
+        self._splash.resize(root.size())
+        self._splash.show()
+        self._splash.raise_()
+
         # Restore history di background setelah UI tampil
         if self.current_user:
             last_id = load_history(self.current_user["id"])
@@ -571,6 +578,18 @@ class MainWindow(QMainWindow):
         if idx == 6 and page and hasattr(page, 'refresh'): page.refresh()
         self.stack.setCurrentIndex(idx)
         if idx in (0, 1, 5): self.sidebar.set_active(idx)
+
+    def dismiss_splash(self):
+        """Dipanggil oleh HomePage setelah data pertama kali selesai dimuat."""
+        if hasattr(self, '_splash') and self._splash:
+            self._splash.dismiss()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, '_splash') and self._splash and self._splash.isVisible():
+            cw = self.centralWidget()
+            if cw:
+                self._splash.resize(cw.size())
 
     def go_home(self): self._navigate(0)
     def go_library(self): self._navigate(1)

@@ -500,7 +500,7 @@ class ScrapedGenrePage(QWidget):
         tb.addStretch()
         root.addWidget(topbar)
 
-        info_banner = QLabel("📊  Showing all scraped manga with this genre")
+        info_banner = QLabel("Showing all scraped manga with this genre")
         info_banner.setStyleSheet(f"""
             QLabel {{
                 background: rgba(196,181,222,0.22);
