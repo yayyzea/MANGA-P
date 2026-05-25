@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QFrame
 )
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QPoint
-from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon
+from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon, QPainter
 from pathlib import Path
  
 _ICON_DIR = Path(__file__).parent.parent / "assets"
@@ -295,7 +295,7 @@ class Sidebar(QWidget):
             else: btn.setText(tip[:1])
             btn.setStyleSheet("""QPushButton { background: transparent; border: none; border-radius: 10px; } QPushButton:hover { background: rgba(255,255,255,0.20); } QPushButton:checked { background: rgba(255,255,255,0.30); }""")
             from PyQt6.QtWidgets import QGraphicsColorizeEffect
-            effect = QGraphicsColorizeEffect(); effect.setColor(QColor(255, 255, 255)); btn.setGraphicsEffect(effect)
+            effect = QGraphicsColorizeEffect(); effect.setColor(QColor(0, 60, 120)); btn.setGraphicsEffect(effect)
             btn.clicked.connect(lambda _, idx=page_idx: self._nav(idx))
             self._buttons.append((page_idx, btn))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -309,12 +309,20 @@ class Sidebar(QWidget):
         self._font_btn.setFixedSize(52, 52)
         px_font = QPixmap(str(_ICON_DIR / "font.png"))
         if not px_font.isNull():
-            self._font_btn.setIcon(QIcon(px_font))
+            px_font_blue = QPixmap(px_font.size())
+            px_font_blue.fill(Qt.GlobalColor.transparent)
+            _p = QPainter(px_font_blue)
+            _p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            _p.drawPixmap(0, 0, px_font)
+            _p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            _p.fillRect(px_font_blue.rect(), QColor(0, 60, 120))
+            _p.end()
+            self._font_btn.setIcon(QIcon(px_font_blue))
             self._font_btn.setIconSize(QSize(26, 26))
         else:
             self._font_btn.setText("Aa")
             self._font_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: white; } QPushButton:hover { background: rgba(255,255,255,0.20); } QPushButton:checked { background: rgba(255,255,255,0.30); }")
+        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: #003c78; } QPushButton:hover { background: rgba(255,255,255,0.45); } QPushButton:checked { background: rgba(255,255,255,0.55); }")
         self._font_btn.clicked.connect(self._toggle_font_popup)
         layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
 
@@ -324,12 +332,20 @@ class Sidebar(QWidget):
         self._exit_btn.setFixedSize(52, 52)
         px_exit = QPixmap(str(_ICON_DIR / "exit.png"))
         if not px_exit.isNull():
-            self._exit_btn.setIcon(QIcon(px_exit))
+            px_exit_blue = QPixmap(px_exit.size())
+            px_exit_blue.fill(Qt.GlobalColor.transparent)
+            _p2 = QPainter(px_exit_blue)
+            _p2.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
+            _p2.drawPixmap(0, 0, px_exit)
+            _p2.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+            _p2.fillRect(px_exit_blue.rect(), QColor(0, 60, 120))
+            _p2.end()
+            self._exit_btn.setIcon(QIcon(px_exit_blue))
             self._exit_btn.setIconSize(QSize(26, 26))
         else:
             self._exit_btn.setText("E")
             self._exit_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self._exit_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: white; } QPushButton:hover { background: rgba(255,255,255,0.20); }")
+        self._exit_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: #003c78; } QPushButton:hover { background: rgba(255,255,255,0.45); }")
         if self.on_logout:
             self._exit_btn.clicked.connect(self.on_logout)
         layout.addWidget(self._exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)

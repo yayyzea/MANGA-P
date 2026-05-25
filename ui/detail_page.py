@@ -660,15 +660,15 @@ class DetailPage(QWidget):
         topbar = QWidget()
         topbar.setFixedHeight(TOPBAR_HEIGHT)
         topbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        topbar.setStyleSheet(f"background: {BLUE_DARK};")
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #82c8ef,stop:1 #80d9e8);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 16, 0)
         back_btn = QPushButton("  Back")
         back_btn.setFixedSize(80, 34)
         back_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(255,255,255,0.20); color: {WHITE};
+            QPushButton {{ background: rgba(0,60,120,0.15); color: #003c78;
                 border: none; border-radius: 8px; font-size: 13px; font-weight: 600; }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.35); }} """)
+            QPushButton:hover {{ background: rgba(0,60,120,0.25); }} """)
         back_btn.clicked.connect(self.main_window.go_home)
         tb.addWidget(back_btn); tb.addStretch()
         root.addWidget(topbar)
