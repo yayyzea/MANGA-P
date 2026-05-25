@@ -252,4 +252,4 @@ class SignUpPage(QWidget):
             return
 
         if success and self.on_signup:
-            self.on_signup(email)
+            self.on_signup(email, password)

@@ -41,8 +41,10 @@ class AuthWindow(QMainWindow):
         if self.on_auth_success:
             self.on_auth_success(user)
 
-    def _handle_signup(self, registered_email):
+    def _handle_signup(self, registered_email, registered_password=None):
         # Setelah signup berhasil, balik ke login dan isi email
         self._show_login()
         self.login_page.email_input.setText(registered_email)
+        if registered_password:
+            self.login_page.pass_input.setText(registered_password)
         self.login_page.show_success("✓ Account created successfully! Please log in.")

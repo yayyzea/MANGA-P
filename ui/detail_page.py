@@ -108,10 +108,10 @@ class CollectionPanel(QWidget):
         self._status_cb.addItems(self.STATUS_OPTIONS)
         self._status_cb.setFixedWidth(140)
         self._status_cb.setStyleSheet(f"""
-            QComboBox {{ background: rgba(255,255,255,0.25); color: {BLACK};
+            QComboBox {{ background: {WHITE}; color: {BLACK};
                 border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 8px; font-size: 11px; }}
             QComboBox::drop-down {{ border: none; }}
-            QComboBox QAbstractItemView {{ background: {BLUE_DARK}; color: {BLACK}; selection-background-color: {BLUE_PRIMARY}; }} """)
+            QComboBox QAbstractItemView {{ background: {WHITE}; color: {BLACK}; selection-background-color: {BLUE_LIGHT}; }} """)
         r1.addWidget(lbl1); r1.addWidget(self._status_cb); r1.addStretch()
         self._status_cb.currentIndexChanged.connect(self._on_status_changed)
         ic.addLayout(r1)
@@ -234,7 +234,7 @@ class CollectionPanel(QWidget):
                 self._apply_chapter_rules(entry.current_chapter or 0)
                 self._add_btn.hide(); self._in_col.show()
                 self.changed.emit()
-                self._toast("Berhasil ditambahkan ke koleksi")
+                self._toast("Successfully added to collection")
         except Exception as e:
             print(f"[CollectionPanel] Add error: {e}")
 
@@ -246,7 +246,7 @@ class CollectionPanel(QWidget):
                 status=self._status_cb.currentText(),
                 current_chapter=self._ch_spin.value())
             self.changed.emit()
-            self._toast("Koleksi berhasil disimpan")
+            self._toast("Collection successfully saved")
         except Exception as e:
             print(f"[CollectionPanel] Save error: {e}")
 
@@ -289,7 +289,7 @@ class CollectionPanel(QWidget):
                 self._col_id = None
                 self._in_col.hide(); self._add_btn.show()
                 self.changed.emit()
-                self._toast("Koleksi berhasil dihapus")
+                self._toast("Collection successfully removed")
             except Exception as e:
                 print(f"[CollectionPanel] Remove error: {e}")
 
@@ -557,7 +557,7 @@ class ReviewPanel(QWidget):
                 r = svc.add(manga_id=self._manga_id, collection_id=self._col_id, user_id=user_id, rating=rating, review_text=text, tags=tags)
                 if r:
                     self._review_id = r.id; self._del_btn.show()
-            self._toast("Review berhasil disimpan")
+            self._toast("Review successfully saved")
         except Exception as e:
             print(f"[ReviewPanel] Save error: {e}")
 
@@ -598,7 +598,7 @@ class ReviewPanel(QWidget):
                 ReviewService().delete(self._review_id)
                 self._review_id = None; self._text.clear()
                 self._rating.setValue(7); self._del_btn.hide()
-                self._toast("Review berhasil dihapus")
+                self._toast("Review successfully deleted")
             except Exception as e:
                 print(f"[ReviewPanel] Delete error: {e}")
 
