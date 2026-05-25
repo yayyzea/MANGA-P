@@ -827,8 +827,13 @@ class HomePage(QWidget):
 
         self._display_cards()
 
+        # Dismiss splash hanya saat load pertama kali
+        if not getattr(self, '_splash_dismissed', False):
+            self._splash_dismissed = True
+            if hasattr(self.main_window, 'dismiss_splash'):
+                self.main_window.dismiss_splash()
+
         # Kalau DB kosong / sedikit, kick off API refresh di background
-        # setelah UI sudah tampil — tidak memblokir apapun
         if len(manga_list) < 10 and not getattr(self, '_api_refreshed', False):
             self._api_refreshed = True
             from PyQt6.QtCore import QTimer
