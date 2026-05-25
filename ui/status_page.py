@@ -20,10 +20,10 @@ def _force_bg(widget, hex_color, radius=0):
 
 
 STATUS_COLORS = {
-    "Plan to Read": "#2cb5d3",   # Teal
-    "Reading":      "#006ec4",   # Sky Blue
-    "Completed":    "#9abe7c",   # Dewy Green
-    "Dropped":      "#f96a67",   # Petal Pink
+    "Plan to Read": "#a78fd4",   # Lilac — matches pie chart
+    "Reading":      "#f5c46a",   # Amber — matches pie chart
+    "Completed":    "#7ec8a0",   # Mint Green — matches pie chart
+    "Dropped":      "#f4918e",   # Coral — matches pie chart
 }
 
 
@@ -168,7 +168,7 @@ class StatusPage(QWidget):
         topbar = QWidget()
         topbar.setFixedHeight(60)
         topbar.setAttribute(__import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.WidgetAttribute.WA_StyledBackground, True)
-        topbar.setStyleSheet("background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #006ec4, stop:0.55 #2cb5d3, stop:1 #f96a67);")
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)

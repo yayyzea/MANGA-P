@@ -10,7 +10,7 @@ from PyQt6.QtGui import (
 )
 
 from .theme import (
-    BLUE_PRIMARY, BLUE_CARD, BLUE_DARK, BLUE_LIGHT,
+    BLUE_PRIMARY, BLUE_CARD, BLUE_DARK, BLUE_LIGHT, LILAC_MIST,
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
 
@@ -455,9 +455,9 @@ class LastReviewCard(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"""
             QWidget#lastReviewCard {{
-                background: #faf8ff;
+                background: #EBF7FF;
                 border-radius: {CARD_RADIUS}px;
-                border: 1.5px solid #c8b8e8;
+                border: 1.5px solid {LILAC_MIST};
             }}
         """)
         self._manga_id = None
@@ -597,9 +597,9 @@ def _chart_card(title: str, chart_widget: QWidget) -> QWidget:
     card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     card.setStyleSheet(f"""
         QWidget#chartCard {{
-            background: #faf8ff;
+            background: #EBF7FF;
             border-radius: {CARD_RADIUS}px;
-            border: 1.5px solid #c8b8e8;
+            border: 1.5px solid {LILAC_MIST};
         }}
     """)
 
