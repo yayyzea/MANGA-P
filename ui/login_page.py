@@ -96,10 +96,11 @@ class LoginPage(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0.0, QColor("#B3D9F5"))
-        gradient.setColorAt(0.5, QColor("#3DA8E8"))
-        gradient.setColorAt(1.0, QColor("#1E7BC4"))
+        gradient = QLinearGradient(0, 0, self.width(), self.height())
+        gradient.setColorAt(0.0,  QColor("#006ec4"))   # Sky Blue
+        gradient.setColorAt(0.35, QColor("#2cb5d3"))   # Teal
+        gradient.setColorAt(0.70, QColor("#9abe7c"))   # Dewy Green
+        gradient.setColorAt(1.0,  QColor("#c4b5de"))   # Lilac Mist
         painter.fillRect(self.rect(), gradient)
 
     def show_success(self, message: str):
