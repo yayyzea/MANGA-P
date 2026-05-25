@@ -96,14 +96,15 @@ class LoginPage(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0.0, QColor("#B3D9F5"))
-        gradient.setColorAt(0.5, QColor("#3DA8E8"))
-        gradient.setColorAt(1.0, QColor("#1E7BC4"))
+        gradient = QLinearGradient(0, 0, self.width(), self.height())
+        gradient.setColorAt(0.0,  QColor("#006ec4"))   # Sky Blue
+        gradient.setColorAt(0.35, QColor("#2cb5d3"))   # Teal
+        gradient.setColorAt(0.70, QColor("#9abe7c"))   # Dewy Green
+        gradient.setColorAt(1.0,  QColor("#c4b5de"))   # Lilac Mist
         painter.fillRect(self.rect(), gradient)
 
     def show_success(self, message: str):
-        self.error_lbl.setStyleSheet("color: #A9DFBF; background: transparent; font-size: 12px;")
+        self.error_lbl.setStyleSheet("color: #f0a8c8; background: transparent; font-size: 12px;")
         self.error_lbl.setText(message)
 
     def _build(self):
@@ -169,7 +170,7 @@ class LoginPage(QWidget):
         su_btn.setStyleSheet("""
             QPushButton { background: transparent; border: none; color: white;
                 font-size: 13px; font-weight: bold; padding: 0; text-decoration: underline; }
-            QPushButton:hover { color: #D6EAF8; }
+            QPushButton:hover { color: #c8b8e8; }
         """)
         su_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         su_btn.clicked.connect(self._go_signup)
@@ -217,7 +218,7 @@ class LoginPage(QWidget):
         rl.addSpacing(8)
 
         self.error_lbl = QLabel("")
-        self.error_lbl.setStyleSheet("color: #FADBD8; background: transparent; font-size: 12px;")
+        self.error_lbl.setStyleSheet("color: #f4918e; background: transparent; font-size: 12px;")
         self.error_lbl.setWordWrap(True)
         self.error_lbl.setFixedHeight(20)
         rl.addWidget(self.error_lbl)
@@ -264,9 +265,9 @@ class LoginPage(QWidget):
             }
             QComboBox::drop-down { border: none; width: 22px; }
             QComboBox QAbstractItemView {
-                background: #1565C0;
+                background: #6a5acd;
                 color: white;
-                selection-background-color: #1E90FF;
+                selection-background-color: #a78fd4;
                 border: none;
                 border-radius: 8px;
             }
@@ -282,10 +283,10 @@ class LoginPage(QWidget):
         self.signin_btn.setFixedWidth(220)
         self.signin_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         self.signin_btn.setStyleSheet("""
-            QPushButton { background: white; color: #1E90FF; border: none;
+            QPushButton { background: #f0ecff; color: #5a4abf; border: none;
                 border-radius: 24px; font-weight: bold; }
-            QPushButton:hover   { background: #EBF5FB; }
-            QPushButton:pressed { background: #D6EAF8; }
+            QPushButton:hover   { background: #ddd5f5; }
+            QPushButton:pressed { background: #c8b8e8; }
         """)
         self.signin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.signin_btn.clicked.connect(self._do_login)
@@ -362,7 +363,7 @@ class LoginPage(QWidget):
         w.setStyleSheet("""
             QLineEdit { background: white; border: none; border-radius: 24px;
                 padding: 0 20px; font-size: 14px; color: #1a1a1a; }
-            QLineEdit:focus { border: 2px solid #AED6F1; }
+            QLineEdit:focus { border: 2px solid #a78fd4; }
         """)
         return w
 
@@ -379,7 +380,7 @@ class LoginPage(QWidget):
             self._eye_btn.setIcon(self._eye_icon_hide)
 
     def _do_login(self):
-        self.error_lbl.setStyleSheet("color: #FADBD8; background: transparent; font-size: 12px;")
+        self.error_lbl.setStyleSheet("color: #f4918e; background: transparent; font-size: 12px;")
         self.error_lbl.setText("")
         self.signin_btn.setEnabled(False)
         self.signin_btn.setText("Signing in...")

@@ -2,10 +2,11 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox,
     QComboBox, QPushButton, QScrollArea, QWidget,
-    QMessageBox, QFrame, QFileDialog, QCheckBox, QGridLayout
+    QMessageBox, QFrame, QFileDialog, QCheckBox, QGridLayout,
+    QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import Qt, QDate, pyqtSignal
-from PyQt6.QtGui import QFont, QPixmap
+from PyQt6.QtGui import QFont, QPixmap, QColor
 
 from .theme import (
     BLUE_PRIMARY, BLUE_DARK, BLUE_LIGHT, BLUE_CARD,
@@ -51,7 +52,7 @@ def _input_style() -> str:
             padding: 6px 10px;
             font-size: 13px;
             color: {TEXT_DARK};
-            background: {WHITE};
+            background: transparent;
         }}
         QLineEdit:focus, QTextEdit:focus, QSpinBox:focus,
         QDoubleSpinBox:focus, QComboBox:focus {{
@@ -62,6 +63,7 @@ def _input_style() -> str:
             border: 1px solid {BLUE_LIGHT};
             border-radius: 6px;
             selection-background-color: {BLUE_LIGHT};
+            background-color: {WHITE};
         }}
         QSpinBox::up-button, QSpinBox::down-button,
         QDoubleSpinBox::up-button, QDoubleSpinBox::down-button {{
@@ -84,36 +86,33 @@ class AddMangaForm(QDialog):
         self.setStyleSheet(f"background: {WHITE};")
         self._build()
 
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 16, 16)
+        painter.setClipPath(path)
+        painter.fillPath(path, QColor(WHITE))
+        super().paintEvent(event)
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
-        # ── Blue header ──
+        # ── Header ──
         header = QWidget()
         header.setFixedHeight(56)
         header.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        header.setStyleSheet(f"background: {BLUE_PRIMARY}; border-radius: 0px;")
+        header.setStyleSheet("background: transparent;")
         h_lay = QHBoxLayout(header)
         h_lay.setContentsMargins(20, 0, 20, 0)
 
         title_lbl = QLabel("Add Manga Manually")
-        title_lbl.setStyleSheet(f"color: {WHITE}; font-size: 16px; font-weight: 700; background: transparent;")
+        title_lbl.setStyleSheet(f"color: {TEXT_DARK}; font-size: 16px; font-weight: 700; background: transparent;")
         h_lay.addWidget(title_lbl)
         h_lay.addStretch()
-
-        close_btn = QPushButton("✕")
-        close_btn.setFixedSize(32, 32)
-        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        close_btn.setStyleSheet(f"""
-            QPushButton {{
-                background: transparent; border: none;
-                color: {WHITE}; font-size: 16px;
-            }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.20); border-radius: 16px; }}
-        """)
-        close_btn.clicked.connect(self.reject)
-        h_lay.addWidget(close_btn)
         root.addWidget(header)
 
         # ── Scroll area ──
@@ -123,7 +122,7 @@ class AddMangaForm(QDialog):
         scroll.setStyleSheet("border: none; background: transparent;")
 
         body = QWidget()
-        body.setStyleSheet(f"background: {WHITE};")
+        body.setStyleSheet("background: transparent;")
         form = QVBoxLayout(body)
         form.setContentsMargins(24, 20, 24, 20)
         form.setSpacing(14)
@@ -165,7 +164,7 @@ class AddMangaForm(QDialog):
                 width: 16px; height: 16px;
                 border: 1.5px solid {BLUE_LIGHT};
                 border-radius: 4px;
-                background: white;
+                background: transparent;
             }}
             QCheckBox::indicator:checked {{
                 background: {BLUE_PRIMARY};
@@ -181,7 +180,7 @@ class AddMangaForm(QDialog):
             QWidget#genreBox {{
                 border: 1.5px solid {BLUE_LIGHT};
                 border-radius: 8px;
-                background: {WHITE};
+                background: transparent;
             }}
         """)
         genre_box.setObjectName("genreBox")
@@ -215,10 +214,10 @@ class AddMangaForm(QDialog):
                 padding: 2px 8px;
                 font-size: 12px;
                 color: {TEXT_DARK};
-                background: {WHITE};
+                background: transparent;
             }}
             QLineEdit:focus {{ border: 1.5px solid {BLUE_PRIMARY}; }}
-            QLineEdit:disabled {{ background: #F0F4FA; color: {TEXT_MUTED}; }}
+            QLineEdit:disabled {{ background: rgba(240,244,250,0.5); color: {TEXT_MUTED}; }}
         """)
         genre_grid.addWidget(self._other_input, other_row_idx, 1)
 
@@ -306,7 +305,7 @@ class AddMangaForm(QDialog):
         self._cover_name_lbl.setWordWrap(True)
         cover_right.addWidget(self._cover_name_lbl)
 
-        pick_btn = QPushButton("📁  Choose Image...")
+        pick_btn = QPushButton("Choose Image...")
         pick_btn.setFixedHeight(36)
         pick_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         pick_btn.setStyleSheet(f"""

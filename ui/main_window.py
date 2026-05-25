@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QFrame
 )
 from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QPoint
-from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon
+from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon, QPainter
 from pathlib import Path
  
 _ICON_DIR = Path(__file__).parent.parent / "assets"
@@ -18,7 +18,7 @@ class Toast(QLabel):
         super().__init__(message, parent)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(
-            "background: #1E1E2E; color: white; border-radius: 10px;"
+            "background: #0d2a40; color: white; border-radius: 10px;"
             "padding: 10px 20px; font-size: 13px; font-weight: 600;"
         )
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -53,9 +53,9 @@ class FontSizePopup(QFrame):
         self.setFixedWidth(200)
         self.setStyleSheet("""
             #FontSizePopup {
-                background: #1A237E;
+                background: #ede8f8;
                 border-radius: 16px;
-                border: 1.5px solid rgba(255,255,255,0.22);
+                border: 1.5px solid rgba(100,80,160,0.30);
             }
         """)
 
@@ -66,22 +66,22 @@ class FontSizePopup(QFrame):
         title = QLabel("Text Size")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(
-            "color: rgba(255,255,255,0.55); font-size: 11px;"
+            "color: rgba(60,40,130,0.75); font-size: 11px;"
             "font-weight: 600; letter-spacing: 1px; background: transparent;"
         )
         outer.addWidget(title)
 
         btn_style = """
             QPushButton {
-                background: rgba(255,255,255,0.12);
+                background: rgba(100,80,160,0.10);
                 border: none; border-radius: 14px;
-                color: white; font-size: 20px; font-weight: 700;
+                color: #3d2a8a; font-size: 20px; font-weight: 700;
             }
-            QPushButton:hover   { background: rgba(255,255,255,0.25); }
-            QPushButton:pressed { background: rgba(255,255,255,0.40); }
+            QPushButton:hover   { background: rgba(100,80,160,0.20); }
+            QPushButton:pressed { background: rgba(100,80,160,0.35); }
             QPushButton:disabled{
-                background: rgba(255,255,255,0.05);
-                color: rgba(255,255,255,0.20);
+                background: rgba(100,80,160,0.05);
+                color: rgba(100,80,160,0.25);
             }
         """
         self._btn_dec = QPushButton("−")
@@ -113,7 +113,7 @@ class FontSizePopup(QFrame):
         bar_bg = QFrame()
         bar_bg.setFixedHeight(4)
         bar_bg.setStyleSheet(
-            "background: rgba(255,255,255,0.15); border-radius: 2px;"
+            "background: rgba(100,80,160,0.20); border-radius: 2px;"
         )
         bar_layout = QHBoxLayout(bar_bg)
         bar_layout.setContentsMargins(0, 0, 0, 0)
@@ -142,18 +142,6 @@ class FontSizePopup(QFrame):
         hint_row.addWidget(lbl_max)
         outer.addLayout(hint_row)
 
-        reset_btn = QPushButton("Reset to default")
-        reset_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent; border: none;
-                color: rgba(255,255,255,0.45); font-size: 11px;
-                text-decoration: underline;
-            }
-            QPushButton:hover { color: white; }
-        """)
-        reset_btn.clicked.connect(self._reset)
-        outer.addWidget(reset_btn, alignment=Qt.AlignmentFlag.AlignCenter)
-
         self.adjustSize()
         self._refresh_ui()
 
@@ -175,10 +163,6 @@ class FontSizePopup(QFrame):
 
     def _increase(self):
         FontSizeManager.instance().increase()
-        self._refresh_ui()
-
-    def _reset(self):
-        FontSizeManager.instance().reset()
         self._refresh_ui()
 
     def show_near(self, sidebar_widget: QWidget, trigger_btn: QWidget):
@@ -279,7 +263,7 @@ class Sidebar(QWidget):
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
         self.setPalette(pal)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet("border-right: 2px solid rgba(255,255,255,0.18);")
+        self.setStyleSheet("border-right: 2px solid rgba(0,60,120,0.20);")
         self._build()
  
     def _build(self):
@@ -311,7 +295,7 @@ class Sidebar(QWidget):
             else: btn.setText(tip[:1])
             btn.setStyleSheet("""QPushButton { background: transparent; border: none; border-radius: 10px; } QPushButton:hover { background: rgba(255,255,255,0.20); } QPushButton:checked { background: rgba(255,255,255,0.30); }""")
             from PyQt6.QtWidgets import QGraphicsColorizeEffect
-            effect = QGraphicsColorizeEffect(); effect.setColor(QColor(255, 255, 255)); btn.setGraphicsEffect(effect)
+            effect = QGraphicsColorizeEffect(); effect.setColor(QColor(0, 60, 120)); btn.setGraphicsEffect(effect)
             btn.clicked.connect(lambda _, idx=page_idx: self._nav(idx))
             self._buttons.append((page_idx, btn))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -325,12 +309,14 @@ class Sidebar(QWidget):
         self._font_btn.setFixedSize(52, 52)
         px_font = QPixmap(str(_ICON_DIR / "font.png"))
         if not px_font.isNull():
-            self._font_btn.setIcon(QIcon(px_font))
+            _px_font_b = QPixmap(px_font.size()); _px_font_b.fill(Qt.GlobalColor.transparent)
+            _pp = QPainter(_px_font_b); _pp.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source); _pp.drawPixmap(0,0,px_font); _pp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn); _pp.fillRect(_px_font_b.rect(), QColor(0,60,120)); _pp.end()
+            self._font_btn.setIcon(QIcon(_px_font_b))
             self._font_btn.setIconSize(QSize(26, 26))
         else:
             self._font_btn.setText("Aa")
             self._font_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: white; } QPushButton:hover { background: rgba(255,255,255,0.20); } QPushButton:checked { background: rgba(255,255,255,0.30); }")
+        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: #003c78; } QPushButton:hover { background: rgba(255,255,255,0.45); } QPushButton:checked { background: rgba(255,255,255,0.60); }")
         self._font_btn.clicked.connect(self._toggle_font_popup)
         layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
 
@@ -340,12 +326,14 @@ class Sidebar(QWidget):
         self._exit_btn.setFixedSize(52, 52)
         px_exit = QPixmap(str(_ICON_DIR / "exit.png"))
         if not px_exit.isNull():
-            self._exit_btn.setIcon(QIcon(px_exit))
+            _px_exit_b = QPixmap(px_exit.size()); _px_exit_b.fill(Qt.GlobalColor.transparent)
+            _pp2 = QPainter(_px_exit_b); _pp2.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source); _pp2.drawPixmap(0,0,px_exit); _pp2.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn); _pp2.fillRect(_px_exit_b.rect(), QColor(0,60,120)); _pp2.end()
+            self._exit_btn.setIcon(QIcon(_px_exit_b))
             self._exit_btn.setIconSize(QSize(26, 26))
         else:
             self._exit_btn.setText("E")
             self._exit_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self._exit_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: white; } QPushButton:hover { background: rgba(255,255,255,0.20); }")
+        self._exit_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: #003c78; } QPushButton:hover { background: rgba(255,255,255,0.45); }")
         if self.on_logout:
             self._exit_btn.clicked.connect(self.on_logout)
         layout.addWidget(self._exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
@@ -456,93 +444,214 @@ class MainWindow(QMainWindow):
             print("Avatar load error:", e)
  
     def _build(self):
-        root = QWidget(); self.setCentralWidget(root)
+        root = QWidget()
+        root.setObjectName("CentralWidget")
+        root.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setCentralWidget(root)
         h = QHBoxLayout(root); h.setContentsMargins(0,0,0,0); h.setSpacing(0)
         self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile, on_logout=self.on_logout)
         h.addWidget(self.sidebar)
         self.stack = QStackedWidget(); h.addWidget(self.stack)
-        from .home_page import HomePage; from .library_page import LibraryPage
-        from .search_page import SearchPage; from .detail_page import DetailPage
-        from .about_page import AboutPage; from .dashboard_page import DashboardPage
-        from .profile_page import ProfilePage; from .genre_page import GenrePage
-        from .status_page import StatusPage; from .rating_page import RatingPage
-        from .author_page import AuthorPage; from .genre_list_page import GenreListPage, ScrapedGenrePage
-        self.home_page = HomePage(self); self.library_page = LibraryPage(self)
-        self.search_page = SearchPage(self); self.detail_page = DetailPage(self)
-        self.about_page = AboutPage(self); self.dashboard_page = DashboardPage(self)
-        self.profile_page = ProfilePage(self); self.genre_page = GenrePage(self)
-        self.status_page = StatusPage(self); self.rating_page = RatingPage(self)
-        self.author_page = AuthorPage(self); self.genre_list_page = GenreListPage(self)
-        self.scraped_genre_page = ScrapedGenrePage(self)
-        self.stack.addWidget(self.home_page); self.stack.addWidget(self.library_page)
-        self.stack.addWidget(self.search_page); self.stack.addWidget(self.detail_page)
-        self.stack.addWidget(self.about_page); self.stack.addWidget(self.dashboard_page)
-        self.stack.addWidget(self.profile_page); self.stack.addWidget(self.genre_page)
-        self.stack.addWidget(self.status_page); self.stack.addWidget(self.rating_page)
-        self.stack.addWidget(self.author_page); self.stack.addWidget(self.genre_list_page)
-        self.stack.addWidget(self.scraped_genre_page)
+
+        # ── Lazy page cache — page hanya dibuat saat pertama kali dibuka ──
+        self._page_cache = {}
+
+        # Hanya HomePage yang langsung dibuat (halaman pertama yang terlihat)
+        from .home_page import HomePage
+        self.home_page = HomePage(self)
+        self._page_cache[0] = self.home_page
+        self.stack.addWidget(self.home_page)  # index 0
+
+        # Sisanya pakai placeholder kosong dulu — diganti saat navigate
+        self._placeholder_indices = {
+            1: "library_page",
+            2: "search_page",
+            3: "detail_page",
+            4: "about_page",
+            5: "dashboard_page",
+            6: "profile_page",
+            7: "genre_page",
+            8: "status_page",
+            9: "rating_page",
+            10: "author_page",
+            11: "genre_list_page",
+            12: "scraped_genre_page",
+        }
+        for idx in range(1, 13):
+            self.stack.addWidget(QWidget())
+
         self.stack.setCurrentIndex(0)
+
+        # Restore history di background setelah UI tampil
         if self.current_user:
             last_id = load_history(self.current_user["id"])
             if last_id:
+                QTimer.singleShot(800, lambda: self._restore_history(last_id))
+
+    def _restore_history(self, last_id: int):
+        """Load history manga di background thread agar tidak freeze UI."""
+        from PyQt6.QtCore import QThread
+        from PyQt6.QtCore import pyqtSignal as _sig
+
+        class _HistoryLoader(QThread):
+            done = _sig(object)
+            def __init__(self, mid): super().__init__(); self._mid = mid
+            def run(self):
                 try:
                     from services.manga_service import MangaService
-                    manga = MangaService().get_by_id(last_id)
-                    if manga:
-                        self.home_page.history.load_manga(manga)
+                    manga = MangaService().get_by_id(self._mid)
+                    self.done.emit(manga)
                 except Exception as e:
                     print(f"[MainWindow] Restore history error: {e}")
+                    self.done.emit(None)
+
+        self._hist_loader = _HistoryLoader(last_id)
+        self._hist_loader.done.connect(
+            lambda m: self.home_page.history.load_manga(m) if m else None
+        )
+        self._hist_loader.start()
+
+    def _get_or_create_page(self, idx: int):
+        """Buat page jika belum ada, kembalikan widget-nya."""
+        if idx in self._page_cache:
+            return self._page_cache[idx]
+
+        name = self._placeholder_indices.get(idx)
+        if not name:
+            return None
+
+        page = None
+        if name == "library_page":
+            from .library_page import LibraryPage; page = LibraryPage(self)
+        elif name == "search_page":
+            from .search_page import SearchPage; page = SearchPage(self)
+        elif name == "detail_page":
+            from .detail_page import DetailPage; page = DetailPage(self)
+        elif name == "about_page":
+            from .about_page import AboutPage; page = AboutPage(self)
+        elif name == "dashboard_page":
+            from .dashboard_page import DashboardPage; page = DashboardPage(self)
+        elif name == "profile_page":
+            from .profile_page import ProfilePage; page = ProfilePage(self)
+        elif name == "genre_page":
+            from .genre_page import GenrePage; page = GenrePage(self)
+        elif name == "status_page":
+            from .status_page import StatusPage; page = StatusPage(self)
+        elif name == "rating_page":
+            from .rating_page import RatingPage; page = RatingPage(self)
+        elif name == "author_page":
+            from .author_page import AuthorPage; page = AuthorPage(self)
+        elif name == "genre_list_page":
+            from .genre_list_page import GenreListPage; page = GenreListPage(self)
+        elif name == "scraped_genre_page":
+            from .genre_list_page import ScrapedGenrePage; page = ScrapedGenrePage(self)
+
+        if page:
+            old = self.stack.widget(idx)
+            self.stack.removeWidget(old)
+            old.deleteLater()
+            self.stack.insertWidget(idx, page)
+            self._page_cache[idx] = page
+            setattr(self, name, page)
+
+        return page
  
+    def showEvent(self, event):
+        super().showEvent(event)
+
+        from PyQt6.QtCore import QTimer
+
+        QTimer.singleShot(300, self.home_page._relayout)
+
     def _navigate(self, idx):
-        if idx == 1: self.library_page.refresh()
-        if idx == 5: self.dashboard_page.refresh()
-        if idx == 6: self.profile_page.refresh()
+        # Inisialisasi page secara lazy saat pertama kali dibuka
+        page = self._get_or_create_page(idx)
+        if idx == 1 and page and hasattr(page, 'refresh'): page.refresh()
+        if idx == 5 and page and hasattr(page, 'refresh'): page.refresh()
+        if idx == 6 and page and hasattr(page, 'refresh'): page.refresh()
         self.stack.setCurrentIndex(idx)
-        if idx in (0,1,5): self.sidebar.set_active(idx)
- 
+        if idx in (0, 1, 5): self.sidebar.set_active(idx)
+
     def go_home(self): self._navigate(0)
     def go_library(self): self._navigate(1)
     def go_about(self): self._navigate(4)
     def go_dashboard(self): self._navigate(5)
     def go_profile(self): self._navigate(6)
-    def go_search(self, query=""): self.search_page.set_query(query); self._navigate(2)
- 
+
+    def go_search(self, query=""):
+        page = self._get_or_create_page(2)
+        if page: page.set_query(query)
+        self._navigate(2)
+
     def go_detail(self, manga_id: int):
-        try:
-            from services.manga_service import MangaService
-            manga = MangaService().get_by_id(manga_id)
-            if manga:
-                self.home_page.history.load_manga(manga)
-                if self.current_user:
-                    save_history(self.current_user["id"], manga_id)
-        except Exception as e: print(f"[MainWindow] History update error: {e}")
-        self.detail_page.load_manga(manga_id); self._navigate(3)
-    
+        # Simpan history dulu (hanya baca DB, cepat)
+        if self.current_user:
+            save_history(self.current_user["id"], manga_id)
+        page = self._get_or_create_page(3)
+        if page: page.load_manga(manga_id)
+        self._navigate(3)
+
     def go_genre(self, genre: str):
-        self.genre_page.load_genre(genre)
+        page = self._get_or_create_page(7)
+        if page: page.load_genre(genre)
         self.stack.setCurrentIndex(7)
 
     def go_status(self, status: str):
-        self.status_page.load_status(status)
+        page = self._get_or_create_page(8)
+        if page: page.load_status(status)
         self.stack.setCurrentIndex(8)
 
     def go_rating(self, rating: int):
-        self.rating_page.load_rating(rating)
+        page = self._get_or_create_page(9)
+        if page: page.load_rating(rating)
         self.stack.setCurrentIndex(9)
 
     def go_author(self, author: str):
-        self.author_page.load_author(author)
+        page = self._get_or_create_page(10)
+        if page: page.load_author(author)
         self.stack.setCurrentIndex(10)
 
     def go_genre_list(self, genre_counts: dict, top_genre: str = None):
-        self.genre_list_page.load_data(genre_counts, top_genre)
+        page = self._get_or_create_page(11)
+        if page: page.load_data(genre_counts, top_genre)
         self.stack.setCurrentIndex(11)
 
     def go_scraped_genre(self, genre: str):
-        self.scraped_genre_page.load_genre(genre)
+        page = self._get_or_create_page(12)
+        if page: page.load_genre(genre)
         self.stack.setCurrentIndex(12)
 
     def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
 
     def update_sidebar_avatar(self, avatar_path: str):
         self.sidebar.update_logo(avatar_path)
+
+    def _switch_to_user(self, user: dict):
+        """Reload seluruh halaman untuk user baru setelah switch account."""
+        self.current_user = user
+
+        # Hanya refresh page yang sudah pernah dibuat (lazy)
+        for idx, page in self._page_cache.items():
+            if hasattr(page, 'refresh'):
+                page.refresh()
+
+        # Load avatar sidebar user baru kalau ada
+        try:
+            from services.user_service import UserService
+            profile = UserService().get_profile(user["id"])
+            if profile and profile.avatar_path:
+                self.update_sidebar_avatar(profile.avatar_path)
+            else:
+                # Reset ke logo default
+                from PyQt6.QtGui import QPixmap
+                _logo_px = QPixmap(str(_ICON_DIR / "logo_kucing.png"))
+                if not _logo_px.isNull():
+                    self.sidebar._logo_lbl.setPixmap(
+                        _logo_px.scaled(40, 40, Qt.AspectRatioMode.KeepAspectRatio,
+                                        Qt.TransformationMode.SmoothTransformation)
+                    )
+        except Exception as e:
+            print(f"[Switch] avatar load error: {e}")
+
+        self.go_home()
+        self.show_toast(f"✓ Switched to {user.get('username', 'account')}")

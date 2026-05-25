@@ -15,6 +15,7 @@ from .theme import (
     BLUE_PRIMARY, BLUE_CARD, BLUE_DARK, BLUE_LIGHT,
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
+from .widgets import _CARD_MIN_W, _CARD_MAX_W, _PAD
 
 
 def _force_bg(widget, hex_color, radius=0):
@@ -184,7 +185,7 @@ class GenreBarChart(QWidget):
             painter.drawPath(path)
 
             # Genre label ON the bar
-            painter.setPen(QColor(WHITE))
+            painter.setPen(QColor(WHITE) if genre == self._selected else QColor(TEXT_DARK))
             font = QFont("Segoe UI", 10, QFont.Weight.Bold)
             painter.setFont(font)
             label_rect = QRectF(10, y, bar_w - 20, bar_h)
@@ -244,7 +245,15 @@ class MangaCardSmall(QWidget):
         self.manga_id = manga_data.get("id", 0)
         self.setFixedSize(130, 210)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        _force_bg(self, BLUE_CARD, radius=10)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet(f"background: {BLUE_CARD}; border-radius: 10px;")
+
+        # Force black text via QPalette — overrides APP_STYLESHEET inheritance
+        from PyQt6.QtGui import QPalette, QColor
+        pal = self.palette()
+        pal.setColor(QPalette.ColorRole.WindowText, QColor("#111111"))
+        pal.setColor(QPalette.ColorRole.Text, QColor("#111111"))
+        self.setPalette(pal)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -265,21 +274,23 @@ class MangaCardSmall(QWidget):
         if len(title) > 18:
             title = title[:16] + "…"
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(
-            f"color: {WHITE}; font-size: 10px; font-weight: 700; background: transparent;"
-        )
         title_lbl.setWordWrap(True)
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_pal = title_lbl.palette()
+        title_pal.setColor(QPalette.ColorRole.WindowText, QColor("#111111"))
+        title_lbl.setPalette(title_pal)
+        title_lbl.setStyleSheet("font-size: 10px; font-weight: 700; background: transparent;")
         layout.addWidget(title_lbl)
 
         # Score badge
         score = manga_data.get("score", 0)
         if score:
             score_lbl = QLabel(f"★ {score:.1f}")
-            score_lbl.setStyleSheet(
-                f"color: rgba(255,255,255,0.85); font-size: 9px; font-weight: 600; background: transparent;"
-            )
             score_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            score_pal = score_lbl.palette()
+            score_pal.setColor(QPalette.ColorRole.WindowText, QColor("#F5C518"))
+            score_lbl.setPalette(score_pal)
+            score_lbl.setStyleSheet("font-size: 9px; font-weight: 600; background: transparent;")
             layout.addWidget(score_lbl)
 
         layout.addStretch()
@@ -319,6 +330,8 @@ class GenrePage(QWidget):
         self.main_window = main_window
         self._current_genre = ""
         self._loader = None
+        self._manga_list = []
+        self._cards = []
         self._build()
 
     def _build(self):
@@ -329,7 +342,8 @@ class GenrePage(QWidget):
         # ── Top bar ──
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        _force_bg(topbar, BLUE_PRIMARY)
+        topbar.setAttribute(__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)
@@ -370,10 +384,10 @@ class GenrePage(QWidget):
         root.addWidget(topbar)
 
         # ── Info banner ──
-        self._info_banner = QLabel("ℹ️  One manga may appear in multiple genres.")
+        self._info_banner = QLabel("Showing all scraped manga with this genre")
         self._info_banner.setStyleSheet(f"""
             QLabel {{
-                background: {BLUE_LIGHT};
+                background: rgba(196,181,222,0.22);
                 color: {TEXT_DARK};
                 font-size: 11px;
                 padding: 6px 16px;
@@ -389,7 +403,8 @@ class GenrePage(QWidget):
         splitter.setChildrenCollapsible(False)
 
         # ── LEFT: Manga grid in scroll area ──
-        left_scroll = QScrollArea()
+        self._left_scroll = QScrollArea()
+        left_scroll = self._left_scroll
         left_scroll.setWidgetResizable(True)
         left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         left_scroll.setStyleSheet("background: transparent; border: none;")
@@ -458,6 +473,7 @@ class GenrePage(QWidget):
 
     @pyqtSlot(list, dict, str)
     def _on_loaded(self, manga_list, genre_counts, genre_name):
+        self._manga_list = manga_list
         self._count_lbl.setText(f"• {len(manga_list)} manga")
         self._clear_grid()
 
@@ -470,16 +486,90 @@ class GenrePage(QWidget):
             self._grid_layout.addWidget(empty, 0, 0, 1, 4)
             return
 
-        container_width = self._grid_container.width() - 24
-        card_w = 130
-        spacing = 14
-        cols = max(1, (container_width + spacing) // (card_w + spacing))
+        self._display_cards()
 
-        for i, manga in enumerate(manga_list):
-            card = MangaCardSmall(manga)
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(150, self._relayout)
+
+    def _get_cols(self):
+        vw = self._left_scroll.viewport().width() - 4
+        if vw < 50:
+            vw = self.width() - 320
+        if vw < 50:
+            vw = 700
+        spacing = self._grid_layout.spacing()
+        for cols in [6, 5, 4, 3, 2, 1]:
+            if vw >= cols * 110 + spacing * (cols - 1):
+                return cols, vw
+        return 1, vw
+
+    def _display_cards(self):
+        self._clear_grid()
+        self._cards = []
+
+        from .widgets import MangaCard
+        from types import SimpleNamespace
+
+        cols, container_width = self._get_cols()
+        spacing = self._grid_layout.spacing()
+        card_w = min(_CARD_MAX_W, max(_CARD_MIN_W, (container_width - spacing * (cols - 1)) // cols))
+        cover_w = card_w - _PAD * 2
+
+        for i, manga_data in enumerate(self._manga_list):
+            manga_obj = SimpleNamespace(
+                id=manga_data.get("id", 0),
+                title=manga_data.get("title", "—"),
+                cover_url=manga_data.get("cover_url", ""),
+                genres=", ".join(manga_data.get("genres", [])) if isinstance(manga_data.get("genres"), list) else manga_data.get("genres", ""),
+                score=manga_data.get("score", 0),
+                status=manga_data.get("status", ""),
+            )
+            card = MangaCard(manga_obj, show_labels=True)
             card.clicked.connect(self.main_window.go_detail)
-            row, col = divmod(i, cols)
-            self._grid_layout.addWidget(card, row, col, alignment=Qt.AlignmentFlag.AlignCenter)
+            card.setFixedWidth(card_w)
+            if hasattr(card, "lbl_title"):
+                card.lbl_title.setMaximumWidth(cover_w)
+                card.lbl_title.setStyleSheet(
+                    card.lbl_title.styleSheet() + " color: #111111;"
+                )
+            if hasattr(card, "lbl_genre"):
+                card.lbl_genre.setMaximumWidth(cover_w)
+                card.lbl_genre.setStyleSheet(
+                    card.lbl_genre.styleSheet() + " color: #555555;"
+                )
+            if hasattr(card, "lbl_score"):
+                card.lbl_score.setStyleSheet(
+                    card.lbl_score.styleSheet() + " color: #111111;"
+                )
+            self._cards.append(card)
+            self._grid_layout.addWidget(card, i // cols, i % cols)
+
+    def _relayout(self):
+        widgets = []
+        while self._grid_layout.count():
+            item = self._grid_layout.takeAt(0)
+            if item.widget():
+                widgets.append(item.widget())
+        if not widgets:
+            return
+
+        cols, container_width = self._get_cols()
+        spacing = self._grid_layout.spacing()
+        card_w = min(_CARD_MAX_W, max(_CARD_MIN_W, (container_width - spacing * (cols - 1)) // cols))
+        cover_w = card_w - _PAD * 2
+
+        for i, widget in enumerate(widgets):
+            widget.setFixedWidth(card_w)
+            if hasattr(widget, "lbl_title"):
+                widget.lbl_title.setMaximumWidth(cover_w)
+            if hasattr(widget, "lbl_genre"):
+                widget.lbl_genre.setMaximumWidth(cover_w)
+            self._grid_layout.addWidget(widget, i // cols, i % cols)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(50, self._relayout)
             
     def _on_bar_clicked(self, genre: str):
         """When user clicks a bar in the chart, switch to that genre."""
@@ -488,6 +578,7 @@ class GenrePage(QWidget):
 
     def _clear_grid(self):
         """Remove all widgets from grid."""
+        self._cards = []
         while self._grid_layout.count():
             item = self._grid_layout.takeAt(0)
             if item.widget():

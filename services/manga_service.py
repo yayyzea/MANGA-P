@@ -46,6 +46,11 @@ class MangaService:
             session.close()
 
     def get_top_manga(self, limit: int = 100) -> list[Manga]:
+        """
+        Selalu kembalikan data dari DB secara instan (tidak pernah block untuk fetch API).
+        Kalau data DB kurang dari limit, kembalikan sebanyak yang ada.
+        Background refresh dilakukan oleh TopMangaLoader secara terpisah.
+        """
         session = get_session()
         try:
             cached = (
@@ -55,17 +60,19 @@ class MangaService:
                 .limit(limit)
                 .all()
             )
-            if len(cached) >= limit:
-                return cached
+            return cached
+        finally:
+            session.close()
+
+    def refresh_top_manga_from_api(self, limit: int = 100):
+        """
+        Fetch top manga dari Jikan dan upsert ke DB.
+        Harus dipanggil dari background thread (QThread), BUKAN dari main/UI thread.
+        """
+        session = get_session()
+        try:
             raw_list = self.jikan.get_top_manga(limit=limit)
             self._bulk_upsert(raw_list, session)
-            return (
-                session.query(Manga)
-                .filter(Manga.is_manual == False, Manga.score != None)
-                .order_by(Manga.score.desc())
-                .limit(limit)
-                .all()
-            )
         finally:
             session.close()
 
@@ -285,6 +292,9 @@ class MangaService:
                 session.rollback()
         try:
             session.commit()
+            # Broadcast ke UI bahwa ada data baru di DB
+            from signals import app_signals
+            app_signals.db_updated.emit()
         except Exception as e:
             print(f"[MangaService] Commit failed: {e}")
             session.rollback()

@@ -44,7 +44,13 @@ class Manga(Base):
     def authors_list(self):
         if not self.authors:
             return []
-        return [a.strip() for a in self.authors.split(",")]
+        # Format dari MAL: "Lastname, Firstname, Lastname2, Firstname2"
+        # Setiap 2 elemen = 1 author (nama belakang + nama depan)
+        parts = [a.strip() for a in self.authors.split(",")]
+        if len(parts) % 2 == 0:
+            return [f"{parts[i]} {parts[i+1]}" for i in range(0, len(parts), 2)]
+        # Fallback: kalau jumlah ganjil, kembalikan apa adanya
+        return parts
 
     def __repr__(self):
         return f"<Manga(id={self.id}, title='{self.title}')>"

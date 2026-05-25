@@ -149,7 +149,7 @@ class AuthorBarChart(QWidget):
                 painter.setPen(Qt.PenStyle.NoPen)
 
             path = QPainterPath()
-            path.addRoundedRect(bar_rect, 6, 6)
+            path.addRoundedRect(bar_rect, 14, 14)
             painter.drawPath(path)
 
             display_name = author
@@ -247,7 +247,7 @@ class MangaCardCompact(QWidget):
             title = title[:16] + "…"
         title_lbl = QLabel(title)
         title_lbl.setStyleSheet(
-            f"color: {WHITE}; font-size: 10px; font-weight: 700; background: transparent;"
+            f"color: #111111; font-size: 10px; font-weight: 700; background: transparent;"
         )
         title_lbl.setWordWrap(True)
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -257,7 +257,7 @@ class MangaCardCompact(QWidget):
         if score:
             score_lbl = QLabel(f"★ {score:.1f}")
             score_lbl.setStyleSheet(
-                f"color: rgba(255,255,255,0.85); font-size: 9px; font-weight: 600; background: transparent;"
+                f"color: rgba(0,0,0,0.60); font-size: 9px; font-weight: 600; background: transparent;"
             )
             score_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
             layout.addWidget(score_lbl)
@@ -299,7 +299,8 @@ class AuthorPage(QWidget):
 
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        _force_bg(topbar, BLUE_PRIMARY)
+        topbar.setAttribute(__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
         tb.setSpacing(12)
@@ -325,16 +326,16 @@ class AuthorPage(QWidget):
 
         self._count_lbl = QLabel("")
         self._count_lbl.setStyleSheet(
-            f"color: rgba(255,255,255,0.75); font-size: 12px; background: transparent;"
+            f"color: rgba(0,0,0,0.55); font-size: 12px; background: transparent;"
         )
         tb.addWidget(self._count_lbl)
         tb.addStretch()
         root.addWidget(topbar)
 
-        info_banner = QLabel("ℹ️  One manga may have multiple authors.")
+        info_banner = QLabel("One manga may have multiple authors.")
         info_banner.setStyleSheet(f"""
             QLabel {{
-                background: {BLUE_LIGHT};
+                background: rgba(196,181,222,0.22);
                 color: {TEXT_DARK};
                 font-size: 11px;
                 padding: 6px 16px;

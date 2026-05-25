@@ -1,5 +1,6 @@
 __pycache__/
 *.db
 remember_me.json
-*.pyc
+user_history.json
+git chec*.pyc
 .env

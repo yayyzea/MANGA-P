@@ -21,10 +21,12 @@ class SignUpPage(QWidget):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0.0, QColor("#B3D9F5"))
-        gradient.setColorAt(0.5, QColor("#3DA8E8"))
-        gradient.setColorAt(1.0, QColor("#1E7BC4"))
+        # 水のドレス diagonal gradient background
+        gradient = QLinearGradient(0, 0, self.width(), self.height())
+        gradient.setColorAt(0.0,  QColor("#006ec4"))   # Sky Blue
+        gradient.setColorAt(0.35, QColor("#2cb5d3"))   # Teal
+        gradient.setColorAt(0.70, QColor("#9abe7c"))   # Dewy Green
+        gradient.setColorAt(1.0,  QColor("#c4b5de"))   # Lilac Mist
         painter.fillRect(self.rect(), gradient)
 
     def _build(self):
@@ -40,7 +42,7 @@ class SignUpPage(QWidget):
         root.setSpacing(40)
         outer.addLayout(root)
 
-        # ── KIRI: kucing ──────────────────────────────────────────────────
+        # ── Left: cat image ──
         left = QWidget()
         left.setStyleSheet("background: transparent;")
         left.setFixedHeight(380)
@@ -63,16 +65,12 @@ class SignUpPage(QWidget):
         left_layout.addWidget(logo)
         root.addWidget(left, stretch=1, alignment=Qt.AlignmentFlag.AlignRight)
 
-        # ── KANAN: form ───────────────────────────────────────────────────
+        # ── Right: form ──
         right = QWidget()
-        right.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Preferred
-        )
+        right.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
         right.setStyleSheet("background: transparent;")
         right.setMinimumWidth(340)
         right.setMaximumWidth(700)
-        right.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
         rl = QVBoxLayout(right)
         rl.setContentsMargins(0, 0, 0, 0)
         rl.setSpacing(0)
@@ -81,19 +79,32 @@ class SignUpPage(QWidget):
         title.setFont(QFont("Motley", 32, QFont.Weight.Bold))
         title.setStyleSheet("color: white; background: transparent;")
         rl.addWidget(title)
-        rl.addSpacing(24)
+        rl.addSpacing(6)
+
+        # Colorful accent line under title
+        accent = QLabel()
+        accent.setFixedHeight(3)
+        accent.setMaximumWidth(140)
+        accent.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        accent.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                stop:0 rgba(255,255,255,0.9), stop:1 rgba(255,255,255,0.2));
+            border-radius: 2px;
+        """)
+        rl.addWidget(accent)
+        rl.addSpacing(20)
 
         rl.addWidget(self._lbl("Enter Username"))
         rl.addSpacing(6)
         self.username_input = self._input()
         rl.addWidget(self.username_input)
-        rl.addSpacing(16)
+        rl.addSpacing(14)
 
         rl.addWidget(self._lbl("Enter E-mail"))
         rl.addSpacing(6)
         self.email_input = self._input()
         rl.addWidget(self.email_input)
-        rl.addSpacing(16)
+        rl.addSpacing(14)
 
         rl.addWidget(self._lbl("Enter Password"))
         rl.addSpacing(6)
@@ -128,7 +139,7 @@ class SignUpPage(QWidget):
         rl.addSpacing(8)
 
         self.error_lbl = QLabel("")
-        self.error_lbl.setStyleSheet("color: #FADBD8; background: transparent; font-size: 12px;")
+        self.error_lbl.setStyleSheet("color: #fff3cd; background: transparent; font-size: 12px;")
         self.error_lbl.setWordWrap(True)
         self.error_lbl.setFixedHeight(20)
         rl.addWidget(self.error_lbl)
@@ -139,8 +150,13 @@ class SignUpPage(QWidget):
         self.signup_btn.setFixedWidth(220)
         self.signup_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
         self.signup_btn.setStyleSheet("""
-            QPushButton { background: white; color: #1E90FF; border: none;
-                border-radius: 24px; font-weight: bold; }
+            QPushButton {
+                background: white;
+                color: #006ec4;
+                border: none;
+                border-radius: 24px;
+                font-weight: bold;
+            }
             QPushButton:hover { background: #EBF5FB; }
             QPushButton:pressed { background: #D6EAF8; }
         """)
@@ -163,7 +179,7 @@ class SignUpPage(QWidget):
         back_btn.setStyleSheet("""
             QPushButton { background: transparent; border: none; color: white;
                 font-size: 12px; font-weight: bold; padding: 0; text-decoration: underline; }
-            QPushButton:hover { color: #AED6F1; }
+            QPushButton:hover { color: #DCF0F7; }
         """)
         back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         back_btn.clicked.connect(self._go_login)
@@ -189,7 +205,7 @@ class SignUpPage(QWidget):
         w.setStyleSheet("""
             QLineEdit { background: white; border: none; border-radius: 24px;
                 padding: 0 20px; font-size: 14px; color: #1a1a1a; }
-            QLineEdit:focus { border: 2px solid #AED6F1; }
+            QLineEdit:focus { border: 2px solid rgba(249,106,103,0.5); }
         """)
         return w
 
@@ -206,16 +222,21 @@ class SignUpPage(QWidget):
             self._eye_btn.setIcon(self._eye_icon_hide)
 
     def _do_register(self):
-        self.error_lbl.setStyleSheet("color: #FADBD8; background: transparent; font-size: 12px;")
         self.error_lbl.setText("")
-
         username = self.username_input.text().strip()
         email = self.email_input.text().strip()
         password = self.pass_input.text()
 
-        # Validasi sisi klien sebelum memanggil service
         if not username or not email or not password:
             self.error_lbl.setText("⚠  All fields are required")
+            return
+
+        if "@" not in email or email.index("@") == 0 or email.index("@") == len(email) - 1:
+            self.error_lbl.setText("⚠  Please enter a valid email address")
+            return
+
+        if len(password) < 6:
+            self.error_lbl.setText("⚠  Password must be at least 6 characters")
             return
 
         self.signup_btn.setEnabled(False)
@@ -230,6 +251,5 @@ class SignUpPage(QWidget):
             self.error_lbl.setText(f"⚠  {error}")
             return
 
-        # Hanya pindah ke login jika registrasi benar-benar berhasil
         if success and self.on_signup:
-            self.on_signup(email)
+            self.on_signup(email, password)

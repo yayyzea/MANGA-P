@@ -93,7 +93,7 @@ class ProfileTopBar(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 8, 20, 8)
         title = QLabel("My Profile")
-        title.setStyleSheet(f"color: {WHITE}; font-size: 18px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        title.setStyleSheet(f"color: {TEXT_DARK}; font-size: 18px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
         layout.addWidget(title); layout.addStretch()
 
 
@@ -215,15 +215,20 @@ class SwitchAccountDialog(QDialog):
 
         # Active badge or switch button
         if is_active:
-            badge = QLabel("Active")
+            badge = QPushButton("Active")
+            badge.setFixedHeight(28)
+            badge.setEnabled(False)
             badge.setStyleSheet(f"""
-                background: rgba(255,255,255,0.25);
-                color: {WHITE};
-                border-radius: 10px;
-                padding: 2px 10px;
-                font-size: 11px;
-                font-weight: 600;
-                font-family: '{FONT_FAMILY}';
+                QPushButton {{
+                    background: rgba(255,255,255,0.25);
+                    color: {WHITE};
+                    border: none;
+                    border-radius: 14px;
+                    padding: 0 14px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    font-family: '{FONT_FAMILY}';
+                }}
             """)
             rl.addWidget(badge)
         else:
@@ -251,7 +256,9 @@ class SwitchAccountDialog(QDialog):
     def _do_switch(self, acc: dict):
         """Login ke akun lain dan reload MainWindow."""
         from services.auth_service import AuthService
-        user = AuthService().login(acc["email"], acc["password"])
+        from .login_page import _deobfuscate
+        password = _deobfuscate(acc["password"])
+        user = AuthService().login(acc["email"], password)
         if not user:
             self.main_window.show_toast("⚠ Failed to switch account, please log in again.")
             self.reject()
@@ -262,7 +269,8 @@ class SwitchAccountDialog(QDialog):
     def _on_add_account(self):
         """Buka AuthWindow untuk login akun baru."""
         self.reject()
-        self.main_window._logout()
+        if callable(self.main_window.on_logout):
+            self.main_window.on_logout()
 
 
 class ProfilePage(QWidget):
@@ -303,7 +311,7 @@ class ProfilePage(QWidget):
 
         change_btn = QPushButton("Change Photo")
         change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        change_btn.setStyleSheet(f"QPushButton {{ background: rgba(255,255,255,0.20); color: {WHITE}; border: 1px solid rgba(255,255,255,0.55); border-radius: 14px; padding: 6px 16px; font-size: 12px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(255,255,255,0.32); }}")
+        change_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {TEXT_DARK}; border: 1.5px solid {TEXT_DARK}; border-radius: 14px; padding: 6px 16px; font-size: 12px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(0,0,0,0.07); }}")
         change_btn.clicked.connect(self._on_change_avatar)
         change_row = QHBoxLayout(); change_row.addStretch(); change_row.addWidget(change_btn); change_row.addStretch()
         card_layout.addLayout(change_row)
@@ -314,7 +322,7 @@ class ProfilePage(QWidget):
         self._build_password_field(card_layout)
 
         bio_label = QLabel("Short Bio")
-        bio_label.setStyleSheet(f"color: {WHITE}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        bio_label.setStyleSheet(f"color: {TEXT_DARK}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
         card_layout.addWidget(bio_label)
         self.bio_input = QTextEdit()
         self.bio_input.setPlaceholderText("Tell us a little about yourself...")
@@ -324,34 +332,58 @@ class ProfilePage(QWidget):
         card_layout.addSpacing(10)
 
         btn_row = QHBoxLayout(); btn_row.setSpacing(10)
+
+        # Delete account icon button (bottom-left of card)
+        delete_icon_btn = QPushButton()
+        delete_icon_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        delete_icon_btn.setFixedSize(38, 38)
+        delete_icon_btn.setToolTip("Delete Account")
+        delete_user_icon = QPixmap(str(_ICON_DIR / "deleteuser.png"))
+        if not delete_user_icon.isNull():
+            delete_icon_btn.setIcon(QIcon(delete_user_icon))
+            delete_icon_btn.setIconSize(QSize(24, 24))
+        else:
+            delete_icon_btn.setText("🗑")
+        delete_icon_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.15);
+                border-radius: 19px;
+            }
+        """)
+        delete_icon_btn.clicked.connect(self._on_delete_account)
+
         cancel_btn = QPushButton("Back")
         cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor); cancel_btn.setFixedHeight(38)
-        cancel_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {WHITE}; border: 1.5px solid {WHITE}; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(255,255,255,0.15); }}")
+        cancel_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {TEXT_DARK}; border: 1.5px solid {TEXT_DARK}; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(0,0,0,0.07); }}")
         cancel_btn.clicked.connect(self.main_window.go_home)
         save_btn = QPushButton("Save Profile")
         save_btn.setCursor(Qt.CursorShape.PointingHandCursor); save_btn.setFixedHeight(38)
         save_btn.setStyleSheet(f"QPushButton {{ background: {WHITE}; color: {BLUE_DARK}; border: none; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 700; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: {BLUE_FOOTER}; }}")
         save_btn.clicked.connect(self._on_save)
-        btn_row.addStretch(); btn_row.addWidget(cancel_btn); btn_row.addWidget(save_btn)
+        btn_row.addWidget(delete_icon_btn); btn_row.addStretch(); btn_row.addWidget(cancel_btn); btn_row.addWidget(save_btn)
         card_layout.addLayout(btn_row)
 
         # Switch Account button
         card_layout.addSpacing(8)
-        switch_btn = QPushButton("🔄  Switch Account")
+        switch_btn = QPushButton("Switch Account")
         switch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         switch_btn.setFixedHeight(40)
         switch_btn.setStyleSheet(f"""
             QPushButton {{
-                background: rgba(255,255,255,0.18);
-                color: {WHITE};
-                border: 1.5px solid rgba(255,255,255,0.55);
+                background: transparent;
+                color: {TEXT_DARK};
+                border: 1.5px solid {TEXT_DARK};
                 border-radius: 20px;
                 padding: 0 22px;
                 font-size: 13px;
                 font-weight: 700;
                 font-family: '{FONT_FAMILY}';
             }}
-            QPushButton:hover {{ background: rgba(255,255,255,0.30); }}
+            QPushButton:hover {{ background: rgba(0,0,0,0.07); }}
         """)
         switch_btn.clicked.connect(self._on_switch_account)
         switch_row = QHBoxLayout()
@@ -365,7 +397,7 @@ class ProfilePage(QWidget):
 
     def _make_field(self, parent_layout, label_text, placeholder, is_password=False):
         label = QLabel(label_text)
-        label.setStyleSheet(f"color: {WHITE}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        label.setStyleSheet(f"color: {TEXT_DARK}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
         parent_layout.addWidget(label)
         field = QLineEdit()
         field.setPlaceholderText(placeholder); field.setFixedHeight(36)
@@ -378,13 +410,13 @@ class ProfilePage(QWidget):
         header_layout = QHBoxLayout()
         header_layout.setContentsMargins(0, 0, 0, 0)
         label = QLabel("Password")
-        label.setStyleSheet(f"color: {WHITE}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        label.setStyleSheet(f"color: {TEXT_DARK}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
         header_layout.addWidget(label)
         header_layout.addStretch()
         
         self.change_pwd_btn = QPushButton("Change Password")
         self.change_pwd_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.change_pwd_btn.setStyleSheet(f"QPushButton {{ background: transparent; border: none; color: {WHITE}; font-size: 11px; font-weight: 600; text-decoration: underline; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ color: {BLUE_LIGHT}; }}")
+        self.change_pwd_btn.setStyleSheet(f"QPushButton {{ background: transparent; border: none; color: {TEXT_DARK}; font-size: 11px; font-weight: 600; text-decoration: underline; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ color: {BLUE_LIGHT}; }}")
         self.change_pwd_btn.clicked.connect(self._on_ganti_password)
         header_layout.addWidget(self.change_pwd_btn)
         
@@ -415,6 +447,39 @@ class ProfilePage(QWidget):
         dialog.setWindowTitle("Confirm Password")
         dialog.setLabelText("Enter your old password:")
         dialog.setTextEchoMode(QLineEdit.EchoMode.Password)
+        dialog.setStyleSheet(f"""
+            QInputDialog {{
+                background: {BLUE_DARK};
+            }}
+            QLabel {{
+                color: {WHITE};
+                font-family: '{FONT_FAMILY}';
+                font-size: 13px;
+                background: transparent;
+            }}
+            QLineEdit {{
+                background: rgba(255,255,255,0.12);
+                color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.35);
+                border-radius: 8px;
+                padding: 4px 10px;
+                font-size: 13px;
+                font-family: '{FONT_FAMILY}';
+            }}
+            QPushButton {{
+                background: rgba(255,255,255,0.15);
+                color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.40);
+                border-radius: 10px;
+                padding: 5px 16px;
+                font-size: 12px;
+                font-weight: 600;
+                font-family: '{FONT_FAMILY}';
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.28);
+            }}
+        """)
         if dialog.exec() == QDialog.DialogCode.Accepted:
             old_pwd = dialog.textValue()
             if old_pwd:
@@ -472,6 +537,61 @@ class ProfilePage(QWidget):
             self.main_window.current_user["avatar_path"] = self._avatar_path
             self.main_window.update_sidebar_avatar(self._avatar_path)
         self._toast("Profile saved successfully ✓")
+
+    def _on_delete_account(self):
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Delete Account")
+        msg.setText("Are you sure you want to delete your account?")
+        msg.setInformativeText("This action is permanent and cannot be undone. All your data will be lost.")
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        msg.button(QMessageBox.StandardButton.Yes).setText("Yes, Delete")
+        msg.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
+        msg.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {BLUE_DARK};
+                font-family: '{FONT_FAMILY}';
+            }}
+            QMessageBox QLabel {{
+                color: {WHITE};
+                background-color: transparent;
+                font-family: '{FONT_FAMILY}';
+                font-size: 13px;
+            }}
+            QMessageBox QTextEdit {{
+                background-color: transparent;
+                color: {WHITE};
+                border: none;
+            }}
+            QPushButton {{
+                background: rgba(255,255,255,0.15);
+                color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.40);
+                border-radius: 12px;
+                padding: 6px 18px;
+                font-family: '{FONT_FAMILY}';
+                font-size: 12px;
+                font-weight: 600;
+                min-width: 80px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.28);
+            }}
+        """)
+        result = msg.exec()
+        if result == QMessageBox.StandardButton.Yes:
+            from services.user_service import UserService
+            from .login_page import _remove_remember
+            user_id = self.main_window.current_user.get("id")
+            current_email = self.main_window.current_user.get("email", "")
+            success = UserService().delete_account(user_id)
+            if success:
+                _remove_remember(current_email)
+                if callable(self.main_window.on_logout):
+                    self.main_window.on_logout()
+            else:
+                self._toast("Failed to delete account. Please try again.")
 
     def _on_switch_account(self):
         dialog = SwitchAccountDialog(self.main_window, parent=self)
