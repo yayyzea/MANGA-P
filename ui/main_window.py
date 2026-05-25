@@ -53,9 +53,9 @@ class FontSizePopup(QFrame):
         self.setFixedWidth(200)
         self.setStyleSheet("""
             #FontSizePopup {
-                background: #8b3a6e;
+                background: #ede8f8;
                 border-radius: 16px;
-                border: 1.5px solid rgba(255,255,255,0.22);
+                border: 1.5px solid rgba(100,80,160,0.30);
             }
         """)
 
@@ -66,22 +66,22 @@ class FontSizePopup(QFrame):
         title = QLabel("Text Size")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(
-            "color: rgba(255,255,255,0.55); font-size: 11px;"
+            "color: rgba(60,40,130,0.75); font-size: 11px;"
             "font-weight: 600; letter-spacing: 1px; background: transparent;"
         )
         outer.addWidget(title)
 
         btn_style = """
             QPushButton {
-                background: rgba(255,255,255,0.12);
+                background: rgba(100,80,160,0.10);
                 border: none; border-radius: 14px;
-                color: white; font-size: 20px; font-weight: 700;
+                color: #3d2a8a; font-size: 20px; font-weight: 700;
             }
-            QPushButton:hover   { background: rgba(255,255,255,0.25); }
-            QPushButton:pressed { background: rgba(255,255,255,0.40); }
+            QPushButton:hover   { background: rgba(100,80,160,0.20); }
+            QPushButton:pressed { background: rgba(100,80,160,0.35); }
             QPushButton:disabled{
-                background: rgba(255,255,255,0.05);
-                color: rgba(255,255,255,0.20);
+                background: rgba(100,80,160,0.05);
+                color: rgba(100,80,160,0.25);
             }
         """
         self._btn_dec = QPushButton("−")
@@ -113,7 +113,7 @@ class FontSizePopup(QFrame):
         bar_bg = QFrame()
         bar_bg.setFixedHeight(4)
         bar_bg.setStyleSheet(
-            "background: rgba(255,255,255,0.15); border-radius: 2px;"
+            "background: rgba(100,80,160,0.20); border-radius: 2px;"
         )
         bar_layout = QHBoxLayout(bar_bg)
         bar_layout.setContentsMargins(0, 0, 0, 0)
@@ -263,7 +263,7 @@ class Sidebar(QWidget):
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
         self.setPalette(pal)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet("border-right: 2px solid rgba(255,255,255,0.18);")
+        self.setStyleSheet("border-right: 2px solid rgba(0,60,120,0.20);")
         self._build()
  
     def _build(self):
@@ -309,20 +309,14 @@ class Sidebar(QWidget):
         self._font_btn.setFixedSize(52, 52)
         px_font = QPixmap(str(_ICON_DIR / "font.png"))
         if not px_font.isNull():
-            px_font_blue = QPixmap(px_font.size())
-            px_font_blue.fill(Qt.GlobalColor.transparent)
-            _p = QPainter(px_font_blue)
-            _p.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
-            _p.drawPixmap(0, 0, px_font)
-            _p.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-            _p.fillRect(px_font_blue.rect(), QColor(0, 60, 120))
-            _p.end()
-            self._font_btn.setIcon(QIcon(px_font_blue))
+            _px_font_b = QPixmap(px_font.size()); _px_font_b.fill(Qt.GlobalColor.transparent)
+            _pp = QPainter(_px_font_b); _pp.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source); _pp.drawPixmap(0,0,px_font); _pp.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn); _pp.fillRect(_px_font_b.rect(), QColor(0,60,120)); _pp.end()
+            self._font_btn.setIcon(QIcon(_px_font_b))
             self._font_btn.setIconSize(QSize(26, 26))
         else:
             self._font_btn.setText("Aa")
             self._font_btn.setFont(QFont("Segoe UI", 14, QFont.Weight.Bold))
-        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: #003c78; } QPushButton:hover { background: rgba(255,255,255,0.45); } QPushButton:checked { background: rgba(255,255,255,0.55); }")
+        self._font_btn.setStyleSheet("QPushButton { background: transparent; border: none; border-radius: 10px; color: #003c78; } QPushButton:hover { background: rgba(255,255,255,0.45); } QPushButton:checked { background: rgba(255,255,255,0.60); }")
         self._font_btn.clicked.connect(self._toggle_font_popup)
         layout.addWidget(self._font_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
 
@@ -332,15 +326,9 @@ class Sidebar(QWidget):
         self._exit_btn.setFixedSize(52, 52)
         px_exit = QPixmap(str(_ICON_DIR / "exit.png"))
         if not px_exit.isNull():
-            px_exit_blue = QPixmap(px_exit.size())
-            px_exit_blue.fill(Qt.GlobalColor.transparent)
-            _p2 = QPainter(px_exit_blue)
-            _p2.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source)
-            _p2.drawPixmap(0, 0, px_exit)
-            _p2.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
-            _p2.fillRect(px_exit_blue.rect(), QColor(0, 60, 120))
-            _p2.end()
-            self._exit_btn.setIcon(QIcon(px_exit_blue))
+            _px_exit_b = QPixmap(px_exit.size()); _px_exit_b.fill(Qt.GlobalColor.transparent)
+            _pp2 = QPainter(_px_exit_b); _pp2.setCompositionMode(QPainter.CompositionMode.CompositionMode_Source); _pp2.drawPixmap(0,0,px_exit); _pp2.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn); _pp2.fillRect(_px_exit_b.rect(), QColor(0,60,120)); _pp2.end()
+            self._exit_btn.setIcon(QIcon(_px_exit_b))
             self._exit_btn.setIconSize(QSize(26, 26))
         else:
             self._exit_btn.setText("E")
