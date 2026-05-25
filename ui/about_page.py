@@ -3,11 +3,17 @@ from PyQt6.QtWidgets import (
     QLabel, QPushButton
 )
 from PyQt6.QtCore import Qt
-from .theme import BLUE_PRIMARY, BLUE_CARD, WHITE, CARD_RADIUS
+from PyQt6.QtGui import QColor
+from .theme import (
+    BLUE_PRIMARY, BLUE_CARD, BLUE_LIGHT, WHITE, CARD_RADIUS, TEXT_DARK
+)
+
+
+
 
 
 class AboutPage(QWidget):
-    """About page — matches the mockup (title + blue description card)."""
+    """About page — 水のドレス palette with gradient card."""
 
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
@@ -17,45 +23,64 @@ class AboutPage(QWidget):
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(40, 32, 40, 32)
-        root.setSpacing(24)
+        root.setSpacing(28)
 
-        # Title
+        # ── Title ──
         title = QLabel("ABOUT")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(f"""
-            font-size: 36px;
-            font-weight: 800;
-            color: #0D1B2A;
+            font-size: 38px;
+            font-weight: 1200;
+            letter-spacing: 1px;
+            color: {BLUE_PRIMARY};
             background: transparent;
         """)
         root.addWidget(title)
 
-        # Description card
+        # Thin colored divider
+        divider = QLabel()
+        divider.setFixedHeight(3)
+        divider.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        divider.setStyleSheet(f"""
+            background: {BLUE_PRIMARY};
+            border-radius: 2px;
+        """)
+        root.addWidget(divider)
+        root.addSpacing(8)
+
+        # ── Gradient card ──
         card = QWidget()
+        card.setObjectName("aboutCard")
+        card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         card.setStyleSheet(f"""
-            background: {BLUE_CARD};
-            border-radius: {CARD_RADIUS}px;
+            QWidget#aboutCard {{
+                background: {BLUE_CARD};
+                border-radius: {CARD_RADIUS}px;
+                border: 1.5px solid {BLUE_LIGHT};
+            }}
         """)
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(40, 40, 40, 40)
+        card_layout.setContentsMargins(48, 40, 48, 40)
 
         desc = QLabel(
             "MANGA:P is a personal manga tracking desktop application "
             "designed to help you organize, discover, and review your manga collection. "
             "Search millions of titles from MyAnimeList, keep track of what you're reading, "
-            "rate your favorites, and get recommendations based on your taste. "
+            "rate your favorites, and get recommendations based on your taste.\n\n"
             "All your data is stored locally — no account needed, no internet dependency "
             "once manga data is cached. Your library, your way."
         )
         desc.setWordWrap(True)
         desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        desc.setStyleSheet(f"""
-            color: {WHITE};
+        desc.setStyleSheet("""
+            color: rgba(0,0,0,0.75);
             font-size: 14px;
-            line-height: 1.7;
+            line-height: 1.8;
             background: transparent;
+            font-weight: 500;
         """)
         card_layout.addWidget(desc)
-        root.addWidget(card)
 
+
+        root.addWidget(card)
         root.addStretch()

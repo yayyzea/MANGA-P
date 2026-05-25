@@ -190,7 +190,7 @@ class FilterPanel(QWidget):
         super().__init__(parent)
         self.setFixedWidth(320)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"background: {WHITE};")
+        self.setStyleSheet("background: transparent;")
         self._genre_cbs  = {}
         self._status_cbs = {}
         self._year_input = None
@@ -208,7 +208,7 @@ class FilterPanel(QWidget):
         scroll.setStyleSheet("background: transparent; border: none;")
 
         inner_widget = QWidget()
-        inner_widget.setStyleSheet(f"background: {WHITE};")
+        inner_widget.setStyleSheet("background: transparent;")
         root = QVBoxLayout(inner_widget)
         root.setContentsMargins(20, 20, 20, 20)
         root.setSpacing(14)
@@ -285,7 +285,7 @@ class FilterPanel(QWidget):
         apply_btn.setFixedHeight(46)
         apply_btn.setStyleSheet(f"""
             QPushButton {{
-                background: {WHITE};
+                background: transparent;
                 border: 2.5px solid {BLUE_PRIMARY};
                 border-radius: 23px;
                 color: {BLUE_PRIMARY};
@@ -328,7 +328,7 @@ class FilterPanel(QWidget):
                 width: 14px; height: 14px;
                 border: 2px solid {TEXT_MUTED};
                 border-radius: 3px;
-                background: {WHITE};
+                background: transparent;
             }}
             QCheckBox::indicator:checked {{
                 background: {BLUE_PRIMARY};
