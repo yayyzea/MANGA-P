@@ -536,6 +536,7 @@ class SearchPage(QWidget):
             col = self._card_count % self.COLS
             card = MangaCard(manga, show_labels=True)
             card.clicked.connect(self.main_window.go_detail)
+            card.clicked.connect(lambda mid, m=manga: self.main_window.home_page.history.load_manga(m))
             self._grid.addWidget(card, row, col)
             self._card_count += 1
 
