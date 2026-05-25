@@ -35,7 +35,7 @@ CARD_H         = 200
 FONT_FAMILY    = "Helvetica"
 
 # Gradient helper strings (used in QSS qlineargradient)
-_SIDEBAR_GRAD  = f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 {BLUE_DARK}, stop:0.40 {SKY_BLUE}, stop:0.68 {TEAL}, stop:0.88 #9abe7c, stop:1 #d4689a)"
+_SIDEBAR_GRAD  = f"qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #7aaee0, stop:0.40 #82c8ef, stop:0.68 #80d9e8, stop:0.88 #b5dfa0, stop:1 #f0a8c8)"
 _PAGE_GRAD     = f"qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 {BG_PAGE}, stop:0.40 #E4F5FC, stop:0.72 #FFF0F0, stop:1 #FAE8F5)"
 
 APP_STYLESHEET = f"""
@@ -55,6 +55,7 @@ QWidget {{
     background: {_SIDEBAR_GRAD};
     min-width: {SIDEBAR_WIDTH}px;
     max-width: {SIDEBAR_WIDTH}px;
+    border-right: 2px solid rgba(0,80,160,0.18);
 }}
 
 #SidebarIcon {{
@@ -64,11 +65,11 @@ QWidget {{
     border-radius: 10px;
 }}
 #SidebarIcon:hover {{
-    background: rgba(255,255,255,0.20);
+    background: rgba(255,255,255,0.45);
 }}
 #SidebarIcon:checked {{
-    background: rgba(255,255,255,0.32);
-    border-left: 3px solid {WHITE};
+    background: rgba(255,255,255,0.55);
+    border-left: 3px solid #004f9a;
 }}
 
 /* ── Top search bar ── */

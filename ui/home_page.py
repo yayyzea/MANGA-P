@@ -274,7 +274,9 @@ class HistoryPanel(QWidget):
         self.empty_lbl.setStyleSheet(
             "color: rgba(0,0,0,0.40); font-size: 12px; background: transparent;"
         )
+        layout.addStretch()
         layout.addWidget(self.empty_lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addStretch()
 
         self.title_lbl = QLabel("")
         self.title_lbl.setStyleSheet(

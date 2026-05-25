@@ -192,10 +192,10 @@ class WideCard(QWidget):
 
 
 STATUS_COLORS = {
-    "Plan to Read": "#2cb5d3",
-    "Reading":      "#2cb5d3",
-    "Completed":    "#9abe7c",
-    "Dropped":      "#f96a67",
+    "Plan to Read": "#a78fd4",   # lavender pastel
+    "Reading":      "#f5c46a",   # amber pastel
+    "Completed":    "#7ec8a0",   # mint pastel
+    "Dropped":      "#f4918e",   # coral pastel
 }
 
 
@@ -665,11 +665,12 @@ class DashboardPage(QWidget):
 
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        _force_bg(topbar, BLUE_DARK)
+        topbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #82c8ef,stop:1 #80d9e8);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(24, 0, 24, 0)
         title = QLabel("Dashboard")
-        title.setStyleSheet(f"color:{WHITE};font-size:18px;font-weight:700;background:transparent;")
+        title.setStyleSheet("color:#003c78;font-size:18px;font-weight:700;background:transparent;")
         tb.addWidget(title)
         tb.addStretch()
         root.addWidget(topbar)
