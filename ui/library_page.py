@@ -549,7 +549,7 @@ def _status_combo_style(status: str) -> str:
 class SelectableMangaCard(QWidget):
     clicked = pyqtSignal(int)
 
-    _SHADOW_MARGIN = 10
+    _SHADOW_MARGIN = 6
 
     def __init__(self, manga, entry_id: int, show_labels: bool = True,
                  mode: str = None, entry=None, on_update=None, parent=None):
@@ -657,7 +657,7 @@ class CardRow(QWidget):
     def _build(self):
         self._grid = QGridLayout(self)
         self._grid.setContentsMargins(0, 8, 0, 8)
-        self._grid.setSpacing(16)
+        self._grid.setSpacing(10)
         self._grid.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop)
 
     def set_scroll_area(self, scroll_area):
@@ -675,14 +675,14 @@ class CardRow(QWidget):
         return w if w > 10 else 800
 
     def _get_cols_and_card_w(self):
-        """Hitung jumlah kolom dan lebar kartu — maksimal 140px per card agar sama dengan homepage."""
+        """Hitung jumlah kolom dan lebar kartu — card max 120px agar sepadat genre page."""
         avail = self._available_width()
         spacing = self._grid.spacing()
-        for cols in [6, 5, 4, 3, 2, 1]:
-            if avail >= cols * 110 + spacing * (cols - 1):
+        # Threshold 120px per kolom agar kolom lebih banyak di layar lebar
+        for cols in [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]:
+            if avail >= cols * 120 + spacing * (cols - 1):
                 break
-        # Batasi lebar card maksimal 140px agar seukuran homepage
-        card_w = min(140, max(_CARD_MIN_W, (avail - spacing * (cols - 1)) // cols))
+        card_w = min(120, max(_CARD_MIN_W, (avail - spacing * (cols - 1)) // cols))
         return cols, card_w
 
     def _relayout(self):
@@ -946,6 +946,10 @@ class LibraryPage(QWidget):
     def _toggle_filter(self):
         self.filter_panel.toggle_visibility()
         self._add_btn.setVisible(not self.filter_panel.isVisible())
+        # Re-hitung kolom setelah panel muncul/hilang — lebar scroll area berubah
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(10, self.last_read_row._relayout)
+        QTimer.singleShot(10, self.my_books_row._relayout)
 
     def _open_add_form(self):
         try:
