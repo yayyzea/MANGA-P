@@ -181,7 +181,7 @@ class GenreBarChart(QWidget):
             painter.setBrush(QBrush(grad))
             painter.setPen(Qt.PenStyle.NoPen)
             path = QPainterPath()
-            path.addRoundedRect(bar_rect, 6, 6)
+            path.addRoundedRect(bar_rect, 14, 14)
             painter.drawPath(path)
 
             # Genre label ON the bar

@@ -400,7 +400,7 @@ class RatingBarChart(QWidget):
                 painter.setPen(Qt.PenStyle.NoPen)
 
             path = QPainterPath()
-            path.addRoundedRect(bar_rect, 4, 4)
+            path.addRoundedRect(bar_rect, 6, 6)
             painter.drawPath(path)
 
             if count > 0:

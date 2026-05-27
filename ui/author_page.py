@@ -1,9 +1,9 @@
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QRectF, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QPushButton, QSizePolicy, QGridLayout,
-    QSplitter
+    QSplitter, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QRectF
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont,
     QPainterPath, QLinearGradient, QPixmap
@@ -156,7 +156,7 @@ class AuthorBarChart(QWidget):
             if len(display_name) > 18:
                 display_name = display_name[:16] + "…"
 
-            painter.setPen(QColor(WHITE))
+            painter.setPen(QColor(TEXT_DARK))
             font = QFont("Segoe UI", 9, QFont.Weight.Bold)
             painter.setFont(font)
             label_rect = QRectF(10, y, bar_w - 20, bar_h)
@@ -231,6 +231,15 @@ class MangaCardCompact(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         _force_bg(self, BLUE_CARD, radius=10)
 
+        self._shadow = QGraphicsDropShadowEffect(self)
+        self._shadow.setBlurRadius(12)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(0, 0, 0, 60))
+        self.setGraphicsEffect(self._shadow)
+        self._anim = QPropertyAnimation(self, b"pos")
+        self._anim.setDuration(150)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
@@ -277,6 +286,26 @@ class MangaCardCompact(QWidget):
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation)
         )
+
+    def enterEvent(self, event):
+        self._shadow.setBlurRadius(28)
+        self._shadow.setOffset(0, 8)
+        self._shadow.setColor(QColor(0, 0, 0, 100))
+        self._anim.stop()
+        self._anim.setStartValue(self.pos())
+        self._anim.setEndValue(self.pos() + QPoint(0, -6))
+        self._anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._shadow.setBlurRadius(12)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(0, 0, 0, 60))
+        self._anim.stop()
+        self._anim.setStartValue(self.pos())
+        self._anim.setEndValue(self.pos() + QPoint(0, 6))
+        self._anim.start()
+        super().leaveEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
