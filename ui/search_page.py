@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLineEdit, QScrollArea, QCheckBox,
     QGridLayout, QSizePolicy, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QPoint
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QPoint, QTimer
 from PyQt6.QtGui import QColor, QPalette, QIcon, QPixmap
 from pathlib import Path
 
@@ -14,7 +14,7 @@ from .theme import (
     WHITE, TEXT_DARK, TEXT_MUTED,
     TOPBAR_HEIGHT, CARD_W, CARD_H, CARD_RADIUS
 )
-from .widgets import MangaCard
+from .widgets import MangaCard, _CARD_MIN_W, _CARD_MAX_W, _ASPECT, _PAD
 
 
 GENRES = [
@@ -91,7 +91,6 @@ class SearchBar(QWidget):
         layout.setContentsMargins(16, 8, 16, 8)
         layout.setSpacing(10)
 
-        # ── Search input wrapper (icon inside oval pill) ──
         input_wrapper = QWidget()
         input_wrapper.setStyleSheet(f"""
             QWidget {{
@@ -190,7 +189,6 @@ class FilterPanel(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        # ── Scroll area untuk semua konten filter ──────────────────────────
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -204,7 +202,6 @@ class FilterPanel(QWidget):
 
         root.addWidget(self._heading("Filter"))
 
-        # ── Genre ──────────────────────────────────────────────────────────
         root.addWidget(self._subheading("Genre"))
         g_grid = QGridLayout()
         g_grid.setSpacing(6)
@@ -232,7 +229,6 @@ class FilterPanel(QWidget):
         """)
         root.addWidget(self._custom_genre_input)
 
-        # ── Status ─────────────────────────────────────────────────────────
         root.addWidget(self._subheading("Status"))
         s_grid = QGridLayout()
         s_grid.setSpacing(6)
@@ -244,7 +240,6 @@ class FilterPanel(QWidget):
             s_grid.addWidget(cb, i // 2, i % 2)
         root.addLayout(s_grid)
 
-        # ── Tahun ──────────────────────────────────────────────────────────
         root.addWidget(self._subheading("Tahun"))
         self._year_input = QLineEdit()
         self._year_input.setPlaceholderText("e.g. 2023")
@@ -269,7 +264,6 @@ class FilterPanel(QWidget):
         scroll.setWidget(inner_widget)
         outer.addWidget(scroll, stretch=1)
 
-        # ── Apply — di luar scroll, selalu terlihat ────────────────────────
         apply_btn = QPushButton("Apply")
         apply_btn.setFixedHeight(46)
         apply_btn.setStyleSheet(f"""
@@ -288,8 +282,6 @@ class FilterPanel(QWidget):
         """)
         apply_btn.clicked.connect(self._emit_apply)
         outer.addWidget(apply_btn)
-
-    # ── Helpers ───────────────────────────────────────────────────────────
 
     def _heading(self, text):
         lbl = QLabel(text)
@@ -331,8 +323,6 @@ class FilterPanel(QWidget):
         year   = self.selected_year()
         self.apply_clicked.emit(genres, status, year)
 
-    # ── Getters ───────────────────────────────────────────────────────────
-
     def selected_genres(self) -> list:
         genres = [g for g, cb in self._genre_cbs.items() if cb.isChecked()]
         custom = self._custom_genre_input.text().strip()
@@ -357,7 +347,6 @@ class FilterPanel(QWidget):
 # ── Search page ───────────────────────────────────────────────────────────────
 
 class SearchPage(QWidget):
-    COLS = 4
 
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
@@ -384,7 +373,6 @@ class SearchPage(QWidget):
         body.setContentsMargins(0, 0, 0, 0)
         body.setSpacing(0)
 
-        # Kiri: grid hasil
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -427,17 +415,39 @@ class SearchPage(QWidget):
         root.addLayout(body, stretch=1)
         self._show_placeholders(8)
 
-    def _toggle_filter(self):
-        self.filter_panel.setVisible(not self.filter_panel.isVisible())
+    # ── Layout helpers ────────────────────────────────────────────────────────
+
+    def _get_cols(self):
+        # Ambil lebar viewport scroll area; kurangi 4px untuk scrollbar
+        vw = self._scroll.viewport().width() - 4
+        if vw < 50:
+            vw = self.width()
+        if vw < 50:
+            vw = 800
+        spacing = self._grid.spacing()
+        # Margin kiri+kanan grid_root (24+24)
+        margins = 48
+        usable = vw - margins
+        # Cari kolom terbanyak yang muat dengan minimum card 100px
+        # Maksimum 7 kolom
+        for cols in [7, 6, 5, 4, 3, 2, 1]:
+            card_w = (usable - spacing * (cols - 1)) // cols
+            if card_w >= _CARD_MIN_W:
+                return cols, usable
+        return 1, usable
 
     def _show_placeholders(self, count=8):
         self._clear_grid()
+        cols, container_width = self._get_cols()
+        spacing = self._grid.spacing()
+        card_w = (container_width - spacing * (cols - 1)) // cols
+        card_h = int(card_w * _ASPECT) + _PAD * 2 + 40
         for i in range(count):
             ph = QWidget()
-            ph.setFixedSize(CARD_W, CARD_H)
+            ph.setFixedSize(card_w, card_h)
             ph.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
             ph.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
-            self._grid.addWidget(ph, i // self.COLS, i % self.COLS)
+            self._grid.addWidget(ph, i // cols, i % cols)
 
     def _clear_grid(self):
         self._card_count = 0
@@ -445,6 +455,35 @@ class SearchPage(QWidget):
             item = self._grid.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+
+    def _relayout(self):
+        widgets = []
+        while self._grid.count():
+            item = self._grid.takeAt(0)
+            if item.widget():
+                widgets.append(item.widget())
+        if not widgets:
+            return
+
+        cols, container_width = self._get_cols()
+        spacing = self._grid.spacing()
+        card_w = (container_width - spacing * (cols - 1)) // cols
+        cover_w = card_w - _PAD * 2
+
+        for i, widget in enumerate(widgets):
+            widget.setFixedWidth(card_w)
+            if hasattr(widget, "lbl_title"):
+                widget.lbl_title.setMaximumWidth(cover_w)
+            if hasattr(widget, "lbl_genre"):
+                widget.lbl_genre.setMaximumWidth(cover_w)
+            self._grid.addWidget(widget, i // cols, i % cols)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        QTimer.singleShot(50, self._relayout)
+
+    def _toggle_filter(self):
+        self.filter_panel.setVisible(not self.filter_panel.isVisible())
 
     def _on_scroll(self, value):
         sb = self._scroll.verticalScrollBar()
@@ -520,10 +559,20 @@ class SearchPage(QWidget):
                 self._grid.addWidget(empty, 0, 0)
             return
 
+        cols, container_width = self._get_cols()
+        spacing = self._grid.spacing()
+        card_w = (container_width - spacing * (cols - 1)) // cols
+        cover_w = card_w - _PAD * 2
+
         for manga in manga_list:
-            row = self._card_count // self.COLS
-            col = self._card_count % self.COLS
+            row = self._card_count // cols
+            col = self._card_count % cols
             card = MangaCard(manga, show_labels=True)
+            card.setFixedWidth(card_w)
+            if hasattr(card, "lbl_title"):
+                card.lbl_title.setMaximumWidth(cover_w)
+            if hasattr(card, "lbl_genre"):
+                card.lbl_genre.setMaximumWidth(cover_w)
             card.clicked.connect(self.main_window.go_detail)
             card.clicked.connect(lambda mid, m=manga: self.main_window.home_page.history.load_manga(m))
             self._grid.addWidget(card, row, col)
