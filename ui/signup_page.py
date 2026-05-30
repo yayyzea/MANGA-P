@@ -175,7 +175,7 @@ class SignUpPage(QWidget):
         back_row.addStretch()
         have = QLabel("Already have an account?")
         have.setStyleSheet("color: rgba(255,255,255,0.85); background: transparent; font-size: 12px;")
-        back_btn = QPushButton("Login")
+        back_btn = QPushButton("Sign In")
         back_btn.setStyleSheet("""
             QPushButton { background: transparent; border: none; color: white;
                 font-size: 12px; font-weight: bold; padding: 0; text-decoration: underline; }
