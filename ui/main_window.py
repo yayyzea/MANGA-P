@@ -92,7 +92,7 @@ class FontSizePopup(QFrame):
         self._px_lbl = QLabel("13 px")
         self._px_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._px_lbl.setStyleSheet(
-            "color: white; font-size: 18px; font-weight: 700;"
+            "color: rgba(60,40,130,0.75); font-size: 18px; font-weight: 700;"
             "background: transparent; min-width: 64px;"
         )
 
@@ -122,7 +122,7 @@ class FontSizePopup(QFrame):
         self._bar_fill = QFrame()
         self._bar_fill.setFixedHeight(4)
         self._bar_fill.setStyleSheet(
-            "background: white; border-radius: 2px;"
+            "background: rgba(60,40,130,0.75); border-radius: 2px;"
         )
         bar_layout.addWidget(self._bar_fill)
         bar_layout.addStretch()
@@ -135,7 +135,7 @@ class FontSizePopup(QFrame):
         lbl_max = QLabel(f"{FONT_MAX_PX}px")
         for l in (lbl_min, lbl_max):
             l.setStyleSheet(
-                "color: rgba(255,255,255,0.35); font-size: 10px; background: transparent;"
+                "color: rgba(60,40,130,0.40); font-size: 10px; background: transparent;"
             )
         hint_row.addWidget(lbl_min)
         hint_row.addStretch()

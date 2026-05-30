@@ -195,6 +195,7 @@ class HistoryPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("HistoryPanel")
         self.setFixedWidth(220)
+        self.setMinimumHeight(320)
         self._loader   = None
         self._manga_id = None
         self._synopsis_text = ""
@@ -268,17 +269,19 @@ class HistoryPanel(QWidget):
 
         # Placeholder kosong — tampil kalau user belum pernah klik manga
         self.empty_lbl = QLabel("Click a manga\nto see its\ndetails here")
-        self.empty_lbl.setFixedSize(190, 260)
         self.empty_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.empty_lbl.setWordWrap(True)
+        self.empty_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.empty_lbl.setStyleSheet(
-            "color: rgba(0,0,0,0.40); font-size: 12px; background: transparent;"
+        "color: rgba(0,0,0,0.40); font-size: 12px; background: transparent;"
         )
-        layout.addWidget(self.empty_lbl, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addStretch()
+        layout.addWidget(self.empty_lbl)
+        layout.addStretch()
 
         self.title_lbl = QLabel("")
         self.title_lbl.setStyleSheet(
-            f"color: #003c78; font-size: 14px; font-weight: 700; background: transparent;"
+        f"color: #003c78; font-size: 14px; font-weight: 700; background: transparent;"
         )
         self.title_lbl.setWordWrap(True)
         layout.addWidget(self.title_lbl)
@@ -291,10 +294,9 @@ class HistoryPanel(QWidget):
         self.desc_lbl.setMaximumHeight(120)
         layout.addWidget(self.desc_lbl)
 
-        layout.addStretch()
-
         # Awal: tampilkan state kosong
-        self.cover_lbl.setVisible(False)
+        self._cover_wrapper.setVisible(False)
+        self._cover_wrapper.setFixedHeight(0)
         self.empty_lbl.setVisible(True)
 
     def resizeEvent(self, event):
@@ -305,16 +307,19 @@ class HistoryPanel(QWidget):
         """Update panel saat user klik kartu manga (in-memory, tidak simpan ke DB)."""
         if not manga:
             self._manga_id = None
+            self._cover_wrapper.setFixedHeight(0)
+            self._cover_wrapper.setVisible(False)
             self.empty_lbl.setVisible(True)
-            self.cover_lbl.setVisible(False)
             self.title_lbl.setText("")
             self.desc_lbl.setText("")
             self._synopsis_text = ""
             self._synopsis_overlay.setText("")
             return
+
         self._manga_id = manga.id
+        self._cover_wrapper.setFixedSize(190, 260)
+        self._cover_wrapper.setVisible(True)
         self.empty_lbl.setVisible(False)
-        self.cover_lbl.setVisible(True)
         self.title_lbl.setText(manga.title or "")
         synopsis = manga.synopsis or ""
         self._synopsis_text = synopsis
@@ -699,9 +704,14 @@ class HomePage(QWidget):
         left_wrapper_layout = QVBoxLayout(left_wrapper)
         left_wrapper_layout.setContentsMargins(0, 0, 0, 0)
         left_wrapper_layout.setSpacing(12)
+        left_wrapper_layout.setSizeConstraint(QVBoxLayout.SizeConstraint.SetMinimumSize)
         outer_row_layout.addWidget(left_wrapper, stretch=1)
 
         self._most_genre_card = MostGenreCard()
+        self._most_genre_card.setSizePolicy(
+            QSizePolicy.Policy.Expanding, 
+            QSizePolicy.Policy.Fixed
+        )
         self._most_genre_card.clicked.connect(self._on_most_genre_clicked)
         left_wrapper_layout.addWidget(self._most_genre_card)
 

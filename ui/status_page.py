@@ -1,10 +1,11 @@
 # status_page.py
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QPushButton, QSizePolicy, QGridLayout
+    QScrollArea, QPushButton, QSizePolicy, QGridLayout,
+    QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QPropertyAnimation, QEasingCurve, QPoint
+from PyQt6.QtGui import QPixmap, QColor
 
 from .theme import (
     SKY_BLUE, TEAL, DEWY_GREEN, PETAL_PINK, LILAC_MIST,
@@ -90,6 +91,18 @@ class MangaCardCompact(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         _force_bg(self, '#DCF0F7', radius=10)
 
+        # Shadow — tipis saat normal, lebih besar saat hover (identik MangaCard)
+        self._shadow = QGraphicsDropShadowEffect(self)
+        self._shadow.setBlurRadius(12)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(0, 0, 0, 60))
+        self.setGraphicsEffect(self._shadow)
+
+        # Animasi posisi pop-out ke atas (identik MangaCard)
+        self._anim = QPropertyAnimation(self, b"pos")
+        self._anim.setDuration(150)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(6)
@@ -147,6 +160,30 @@ class MangaCardCompact(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.manga_id)
         super().mousePressEvent(event)
+
+    def enterEvent(self, event):
+        # Shadow lebih besar & gelap — identik MangaCard
+        self._shadow.setBlurRadius(28)
+        self._shadow.setOffset(0, 8)
+        self._shadow.setColor(QColor(0, 0, 0, 100))
+        # Pop ke atas 6px
+        self._anim.stop()
+        self._anim.setStartValue(self.pos())
+        self._anim.setEndValue(self.pos() + QPoint(0, -6))
+        self._anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        # Kembalikan shadow normal — identik MangaCard
+        self._shadow.setBlurRadius(12)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(0, 0, 0, 60))
+        # Kembali ke posisi asal
+        self._anim.stop()
+        self._anim.setStartValue(self.pos())
+        self._anim.setEndValue(self.pos() + QPoint(0, 6))
+        self._anim.start()
+        super().leaveEvent(event)
 
 
 class StatusPage(QWidget):

@@ -52,7 +52,7 @@ class CoverLabel(QLabel):
         super().__init__(parent)
         self.setFixedSize(w, h)
         self._w, self._h = w, h
-        self.setStyleSheet("background: rgba(255,255,255,0.18); border-radius: 10px;")
+        self.setStyleSheet("background: rgba(255,255,255,1.0); border-radius: 10px;")
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
     def set_cover(self, pixmap: QPixmap):
@@ -123,7 +123,7 @@ class CollectionPanel(QWidget):
         self._ch_spin.setRange(0, 9999)
         self._ch_spin.setFixedWidth(80)
         self._ch_spin.setStyleSheet(f"""
-            QSpinBox {{ background: rgba(255,255,255,0.25); color: {BLACK};
+            QSpinBox {{ background: rgba(255,255,255,1.0); color: {BLACK};
                 border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 6px; font-size: 11px; }}
             QSpinBox::up-button, QSpinBox::down-button {{ background: rgba(255,255,255,0.15); border: none; width: 16px; }} """)
         r2.addWidget(lbl2); r2.addWidget(self._ch_spin); r2.addStretch()
@@ -335,10 +335,10 @@ class TagBar(QWidget):
         self._add_btn.setFixedSize(26, 26)
         self._add_btn.setToolTip("Add tag")
         self._add_btn.setStyleSheet(
-            "QPushButton{background:rgba(255,255,255,0.20);color:white;"
-            "border:1px solid rgba(255,255,255,0.40);border-radius:13px;"
+            f"QPushButton{{background:{BLUE_PRIMARY};color:white;"
+            "border:none;border-radius:13px;"
             "font-size:13px;font-weight:700;}"
-            "QPushButton:hover{background:rgba(255,255,255,0.35);}"
+            f"QPushButton:hover{{background:{BLUE_DARK};}}"
             "QPushButton:disabled{opacity:0.35;}"
         )
         self._add_btn.clicked.connect(self._on_add)
@@ -471,7 +471,7 @@ class ReviewPanel(QWidget):
         self._rating = QSpinBox()
         self._rating.setRange(1, 10); self._rating.setValue(7); self._rating.setFixedWidth(60)
         self._rating.setStyleSheet(f"""
-            QSpinBox {{ background: rgba(255,255,255,0.25); color: {BLACK};
+            QSpinBox {{ background: rgba(255,255,255,1.0); color: {BLACK};
                 border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 6px; font-size: 12px; }}
             QSpinBox::up-button, QSpinBox::down-button {{ background: rgba(255,255,255,0.15); border: none; width: 16px; }} """)
         r1.addWidget(lbl); r1.addWidget(self._rating); r1.addStretch()
@@ -480,7 +480,7 @@ class ReviewPanel(QWidget):
         self._text.setPlaceholderText("Write your review here…")
         self._text.setFixedHeight(70)
         self._text.setStyleSheet(f"""
-            QTextEdit {{ background: rgba(255,255,255,0.18); color: {BLACK};
+            QTextEdit {{ background: rgba(255,255,255,1.0); color: {BLACK};
                 border: 1px solid rgba(255,255,255,0.35); border-radius: 8px; padding: 6px; font-size: 11px; }} """)
         layout.addWidget(self._text)
         r2 = QHBoxLayout(); r2.setSpacing(8)
@@ -537,7 +537,7 @@ class ReviewPanel(QWidget):
             self.setGraphicsEffect(effect)
         effect.setOpacity(0.35 if locked else 1.0)
         self._text.setPlaceholderText(
-            'Set status selain "Plan to Read" untuk menulis review…'
+            'Set a status other than "Plan to Read" to write a review…'
             if locked else "Write your review here…"
         )
 
@@ -722,7 +722,7 @@ class DetailPage(QWidget):
         mc.addLayout(top_row)
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("background: rgba(255,255,255,0.25); border: none; max-height: 1px;")
+        sep.setStyleSheet("background: rgba(255,255,255,1.0); border: none; max-height: 1px;")
         mc.addWidget(sep)
         bottom_row = QHBoxLayout()
         bottom_row.setSpacing(32)
