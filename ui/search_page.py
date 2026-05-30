@@ -1,39 +1,9 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QScrollArea, QCheckBox,
-    QGridLayout, QSizePolicy
+    QGridLayout, QSizePolicy, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
-
-from .theme import (
-    BLUE_PRIMARY, BLUE_CARD, BLUE_LIGHT, BLUE_DARK,
-    WHITE, TEXT_DARK, TEXT_MUTED,
-    TOPBAR_HEIGHT, CARD_W, CARD_H, CARD_RADIUS
-)
-from .widgets import MangaCard
-from pathlib import Path
-from PyQt6.QtGui import QIcon, QPixmap, QPalette, QPixmap, QColor
-_ICON_DIR = Path(__file__).parent.parent / "assets"
-
-
-GENRES = [
-    "Action",       "Drama",
-    "Adventure",    "Fantasy",
-    "Avant Garde",  "Gourmet",
-    "Award Winning","Horror",
-    "Comedy",       "Mystery",
-    "Romance",      "Sci-Fi",
-    "Slice of Life","Sports",
-    "Supernatural",
-]
-STATUS_OPTIONS = ["Publishing", "Finished", "On Hiatus"]
-
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QLineEdit, QScrollArea, QCheckBox,
-    QGridLayout, QSizePolicy
-)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QPoint
 from PyQt6.QtGui import QColor, QPalette, QIcon, QPixmap
 from pathlib import Path
 
@@ -102,7 +72,7 @@ class SearchLoader(QThread):
 # ── Search bar ────────────────────────────────────────────────────────────────
 
 class SearchBar(QWidget):
-    
+
     search_triggered = pyqtSignal(str)
     filter_triggered = pyqtSignal()
 
@@ -121,8 +91,30 @@ class SearchBar(QWidget):
         layout.setContentsMargins(16, 8, 16, 8)
         layout.setSpacing(10)
 
+        # ── Search input wrapper (icon inside oval pill) ──
+        input_wrapper = QWidget()
+        input_wrapper.setStyleSheet(f"""
+            QWidget {{
+                background: {WHITE};
+                border-radius: 22px;
+            }}
+        """)
+        input_wrapper.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        input_wrapper.setFixedHeight(44)
+
+        self._search_shadow = QGraphicsDropShadowEffect(input_wrapper)
+        self._search_shadow.setBlurRadius(12)
+        self._search_shadow.setOffset(0, 4)
+        self._search_shadow.setColor(QColor(0, 0, 0, 60))
+        input_wrapper.setGraphicsEffect(self._search_shadow)
+
+        self._input_wrapper = input_wrapper
+        wrapper_layout = QHBoxLayout(input_wrapper)
+        wrapper_layout.setContentsMargins(14, 0, 14, 0)
+        wrapper_layout.setSpacing(8)
+
         icon = QLabel()
-        icon.setFixedSize(20, 20)
+        icon.setFixedSize(18, 18)
         _sx = QPixmap(str(_ICON_DIR / "search.png"))
         if not _sx.isNull():
             icon.setPixmap(_sx.scaled(18, 18,
@@ -131,40 +123,37 @@ class SearchBar(QWidget):
         else:
             icon.setText("🔍")
         icon.setStyleSheet("background: transparent;")
-        layout.addWidget(icon)
+        wrapper_layout.addWidget(icon)
 
         self.input = QLineEdit()
         self.input.setObjectName("SearchInput")
         self.input.setPlaceholderText("Search Mangas...")
         self.input.setStyleSheet(f"""
             QLineEdit {{
-                background: {WHITE}; #tengah search bar
-                border: none;
-                border-radius: 20px;
-                padding: 8px 16px;
-                font-size: 14px;
-                color: {TEXT_DARK};
+                background: transparent; border: none;
+                padding: 0; font-size: 14px; color: {TEXT_DARK};
             }}
         """)
         self.input.returnPressed.connect(
             lambda: self.search_triggered.emit(self.input.text().strip())
         )
-        layout.addWidget(self.input)
+        wrapper_layout.addWidget(self.input)
+        layout.addWidget(input_wrapper)
 
         filter_btn = QPushButton()
         filter_btn.setObjectName("FilterBtn")
-        filter_btn.setFixedSize(36, 36)
+        filter_btn.setFixedSize(44, 44)
         _fx = QPixmap(str(_ICON_DIR / "filter.png"))
         if not _fx.isNull():
             filter_btn.setIcon(QIcon(_fx))
-            filter_btn.setIconSize(filter_btn.size() * 0.6)
+            filter_btn.setIconSize(filter_btn.size() * 0.55)
         else:
             filter_btn.setText("⚙")
         filter_btn.setStyleSheet(f"""
             QPushButton {{
                 background: {WHITE};
                 border: none;
-                border-radius: 18px;
+                border-radius: 22px;
                 font-size: 16px;
                 color: {BLUE_PRIMARY};
             }}
@@ -183,7 +172,7 @@ class SearchBar(QWidget):
 # ── Filter panel ──────────────────────────────────────────────────────────────
 
 class FilterPanel(QWidget):
-    
+
     apply_clicked = pyqtSignal(list, object, object)
 
     def __init__(self, parent=None):
@@ -337,7 +326,7 @@ class FilterPanel(QWidget):
         """
 
     def _emit_apply(self):
-        genres = self.selected_genres()  # sudah include custom genre dari _custom_genre_input
+        genres = self.selected_genres()
         status = self.selected_status()
         year   = self.selected_year()
         self.apply_clicked.emit(genres, status, year)
@@ -540,6 +529,5 @@ class SearchPage(QWidget):
             self._grid.addWidget(card, row, col)
             self._card_count += 1
 
-        # Jika hasil kurang dari PAGE_SIZE berarti sudah habis
         if len(manga_list) < SearchLoader.PAGE_SIZE:
             self._no_more = True
