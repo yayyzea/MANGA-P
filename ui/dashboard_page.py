@@ -1,9 +1,9 @@
 import copy
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QSizePolicy, QGraphicsDropShadowEffect
+    QScrollArea, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QRectF, QPropertyAnimation, QEasingCurve, QPoint
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QRectF
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont,
     QPainterPath, QLinearGradient
@@ -14,12 +14,10 @@ from .theme import (
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
 
-
 def _force_bg(widget, hex_color, radius=0):
     widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     r = f"border-radius: {radius}px;" if radius else ""
     widget.setStyleSheet(f"background: {hex_color}; {r}")
-
 
 class DashboardLoader(QThread):
     finished = pyqtSignal(dict, object, list)
@@ -69,7 +67,6 @@ class DashboardLoader(QThread):
 
         self.finished.emit(stats, last_review_data, ratings)
 
-
 class StatCard(QWidget):
     clicked = pyqtSignal()
 
@@ -80,15 +77,6 @@ class StatCard(QWidget):
         self.setFixedHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self.setGraphicsEffect(self._shadow)
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(150)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
@@ -103,31 +91,10 @@ class StatCard(QWidget):
     def set_value(self, v):
         self._val.setText(str(v))
 
-    def enterEvent(self, event):
-        self._shadow.setBlurRadius(28)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(0, 0, 0, 100))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, -6))
-        self._anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, 6))
-        self._anim.start()
-        super().leaveEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
-
 
 class WideCard(QWidget):
     clicked = pyqtSignal(str)
@@ -139,15 +106,6 @@ class WideCard(QWidget):
         self.setFixedHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self.setGraphicsEffect(self._shadow)
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(150)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(18, 14, 18, 14)
@@ -165,31 +123,10 @@ class WideCard(QWidget):
         self._card_value = str(v) if v else "—"
         self._val.setText(self._card_value)
 
-    def enterEvent(self, event):
-        self._shadow.setBlurRadius(28)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(0, 0, 0, 100))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, -6))
-        self._anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, 6))
-        self._anim.start()
-        super().leaveEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self._card_value != "—":
             self.clicked.emit(self._card_value)
         super().mousePressEvent(event)
-
 
 STATUS_COLORS = {
     "Plan to Read": "#a78fd4",
@@ -197,7 +134,6 @@ STATUS_COLORS = {
     "Completed":    "#7ec8a0",
     "Dropped":      "#f4918e",
 }
-
 
 class PieChartWidget(QWidget):
     clicked_status = pyqtSignal(str)
@@ -247,9 +183,9 @@ class PieChartWidget(QWidget):
             painter.setBrush(QBrush(color))
 
             if label == self._hovered_label:
-                painter.setPen(QPen(QColor(WHITE), 3))
+                painter.setPen(Qt.PenStyle.NoPen)
             else:
-                painter.setPen(QPen(QColor(WHITE), 2))
+                painter.setPen(Qt.PenStyle.NoPen)
 
             painter.drawPie(pie_rect, start_angle, span)
             self._slices.append((pie_rect, start_angle, span, label))
@@ -323,7 +259,6 @@ class PieChartWidget(QWidget):
         self._hovered_label = None
         self.update()
         super().leaveEvent(event)
-
 
 class RatingBarChart(QWidget):
     clicked_rating = pyqtSignal(int)
@@ -445,7 +380,6 @@ class RatingBarChart(QWidget):
         self.update()
         super().leaveEvent(event)
 
-
 class LastReviewCard(QWidget):
     clicked = pyqtSignal(int)
 
@@ -453,24 +387,9 @@ class LastReviewCard(QWidget):
         super().__init__(parent)
         self.setObjectName("lastReviewCard")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"""
-            QWidget#lastReviewCard {{
-                background: #EBF7FF;
-                border-radius: {CARD_RADIUS}px;
-                border: 1.5px solid {LILAC_MIST};
-            }}
-        """)
+        _force_bg(self, BLUE_CARD, radius=CARD_RADIUS)
         self._manga_id = None
         self._img_loader = None
-
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self.setGraphicsEffect(self._shadow)
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(150)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(14, 14, 18, 14)
@@ -552,6 +471,9 @@ class LastReviewCard(QWidget):
         cover_url = review_data.get("cover_url", "")
         if cover_url:
             from .widgets import ImageLoader
+            if self._img_loader and self._img_loader.isRunning():
+                self._img_loader.quit()
+                self._img_loader.wait()
             self._img_loader = ImageLoader(str(cover_url))
             self._img_loader.loaded.connect(self._on_cover)
             self._img_loader.start()
@@ -565,76 +487,15 @@ class LastReviewCard(QWidget):
     def _on_cover(self, pixmap):
         self._cover.setPixmap(pixmap.scaled(60, 85, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
 
-    def enterEvent(self, event):
-        self._shadow.setBlurRadius(28)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(0, 0, 0, 100))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, -6))
-        self._anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, 6))
-        self._anim.start()
-        super().leaveEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self._manga_id:
             self.clicked.emit(self._manga_id)
         super().mousePressEvent(event)
 
-
 def _chart_card(title: str, chart_widget: QWidget) -> QWidget:
     card = QWidget()
     card.setObjectName("chartCard")
-    card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-    card.setStyleSheet(f"""
-        QWidget#chartCard {{
-            background: #EBF7FF;
-            border-radius: {CARD_RADIUS}px;
-            border: 1.5px solid {LILAC_MIST};
-        }}
-    """)
-
-    shadow = QGraphicsDropShadowEffect(card)
-    shadow.setBlurRadius(12)
-    shadow.setOffset(0, 4)
-    shadow.setColor(QColor(0, 0, 0, 60))
-    card.setGraphicsEffect(shadow)
-    card._shadow = shadow
-
-    anim = QPropertyAnimation(card, b"pos")
-    anim.setDuration(150)
-    anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-    card._anim = anim
-
-    def enter(event):
-        card._shadow.setBlurRadius(28)
-        card._shadow.setOffset(0, 8)
-        card._shadow.setColor(QColor(0, 0, 0, 100))
-        card._anim.stop()
-        card._anim.setStartValue(card.pos())
-        card._anim.setEndValue(card.pos() + QPoint(0, -6))
-        card._anim.start()
-
-    def leave(event):
-        card._shadow.setBlurRadius(12)
-        card._shadow.setOffset(0, 4)
-        card._shadow.setColor(QColor(0, 0, 0, 60))
-        card._anim.stop()
-        card._anim.setStartValue(card.pos())
-        card._anim.setEndValue(card.pos() + QPoint(0, 6))
-        card._anim.start()
-
-    card.enterEvent = enter
-    card.leaveEvent = leave
+    _force_bg(card, BLUE_CARD, radius=CARD_RADIUS)
 
     layout = QVBoxLayout(card)
     layout.setContentsMargins(16, 14, 16, 14)
@@ -646,7 +507,6 @@ def _chart_card(title: str, chart_widget: QWidget) -> QWidget:
     layout.addWidget(hdr)
     layout.addWidget(chart_widget)
     return card
-
 
 class DashboardPage(QWidget):
     def __init__(self, main_window, parent=None):

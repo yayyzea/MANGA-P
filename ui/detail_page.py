@@ -669,7 +669,7 @@ class DetailPage(QWidget):
             QPushButton {{ background: rgba(0,60,120,0.12); color: #003c78;
                 border: 1px solid rgba(0,60,120,0.25); border-radius: 8px; font-size: 13px; font-weight: 600; }}
             QPushButton:hover {{ background: rgba(0,60,120,0.22); }} """)
-        back_btn.clicked.connect(self.main_window.go_home)
+        back_btn.clicked.connect(self.main_window.go_back)
         tb.addWidget(back_btn); tb.addStretch()
         root.addWidget(topbar)
         scroll = QScrollArea()
