@@ -1,9 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QPushButton, QSizePolicy, QGridLayout,
-    QGraphicsDropShadowEffect
+    QScrollArea, QPushButton, QSizePolicy, QGridLayout
 )
-from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread, pyqtSlot, QPropertyAnimation, QEasingCurve, QPoint
+from PyQt6.QtCore import Qt, QRectF, pyqtSignal, QThread, pyqtSlot
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont,
     QPainterPath, QLinearGradient, QPixmap
@@ -14,12 +13,10 @@ from .theme import (
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
 
-
 def _force_bg(widget, hex_color, radius=0):
     widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     r = f"border-radius: {radius}px;" if radius else ""
     widget.setStyleSheet(f"background: {hex_color}; {r}")
-
 
 # ── Bar Chart ────────────────────────────────────────────────────────────────
 
@@ -138,20 +135,6 @@ class GenreBarChart(QWidget):
             self.clicked_genre.emit(self._hovered_genre)
         super().mousePressEvent(event)
 
-    def enterEvent(self, event):
-        if self._data:
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.setCursor(Qt.CursorShape.ArrowCursor)
-        self._hovered_genre = None
-        self.update()
-        super().leaveEvent(event)
-
-
-# ── Genre count loader (DB only, NO scrape) ──────────────────────────────────
-
 class GenreCountLoader(QThread):
     """
     Query genre distribution + total manga count langsung dari DB.
@@ -191,7 +174,6 @@ class GenreCountLoader(QThread):
         except Exception as e:
             print(f"[GenreCountLoader] Error: {e}")
             self.finished.emit({}, 0)
-
 
 # ── Scrape +100 worker ───────────────────────────────────────────────────────
 
@@ -260,7 +242,6 @@ class AddMangaWorker(QThread):
             print(f"[AddMangaWorker] Fatal: {e}")
             self.finished.emit(0)
 
-
 # ── ScrapedGenreLoader ────────────────────────────────────────────────────────
 
 class ScrapedGenreLoader(QThread):
@@ -300,7 +281,6 @@ class ScrapedGenreLoader(QThread):
 
         self.finished.emit(results, self.genre)
 
-
 # ── MangaCardSmall ────────────────────────────────────────────────────────────
 
 class MangaCardSmall(QWidget):
@@ -320,17 +300,7 @@ class MangaCardSmall(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setMouseTracking(True)
 
-        # ── Drop shadow (sama seperti homepage MangaCard) ──
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(8)
-        self._shadow.setOffset(0, 3)
-        self._shadow.setColor(QColor(0, 0, 0, 50))
-        self.setGraphicsEffect(self._shadow)
-
         # ── Animasi lift (naik saat hover) ──
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(120)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         self._set_style(hovered=False)
 
@@ -400,38 +370,6 @@ class MangaCardSmall(QWidget):
                 background: transparent;
             }}
         """)
-        if hasattr(self, "_shadow"):
-            if hovered:
-                self._shadow.setBlurRadius(20)
-                self._shadow.setOffset(0, 8)
-                self._shadow.setColor(QColor(0, 0, 0, 80))
-            else:
-                self._shadow.setBlurRadius(8)
-                self._shadow.setOffset(0, 3)
-                self._shadow.setColor(QColor(0, 0, 0, 50))
-
-    def enterEvent(self, event):
-        self._hovered = True
-        self._set_style(hovered=True)
-        # Animasi naik 4px
-        cur = self.pos()
-        self._anim.stop()
-        self._anim.setStartValue(cur)
-        self._anim.setEndValue(QPoint(cur.x(), cur.y() - 4))
-        self._anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._hovered = False
-        self._set_style(hovered=False)
-        # Animasi balik ke posisi semula
-        cur = self.pos()
-        self._anim.stop()
-        self._anim.setStartValue(cur)
-        self._anim.setEndValue(QPoint(cur.x(), cur.y() + 4))
-        self._anim.start()
-        super().leaveEvent(event)
-
     def _on_cover(self, pixmap, w, h):
         try:
             if not self.cover or not self.isVisible():
@@ -448,7 +386,6 @@ class MangaCardSmall(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.manga_id)
         super().mousePressEvent(event)
-
 
 # ── ScrapedGenrePage ──────────────────────────────────────────────────────────
 
@@ -620,7 +557,6 @@ class ScrapedGenrePage(QWidget):
     def _go_back(self):
         if hasattr(self.main_window, 'go_genre_list'):
             self.main_window.go_genre_list(self.main_window.genre_list_page._genre_counts)
-
 
 # ── GenreListPage ─────────────────────────────────────────────────────────────
 
