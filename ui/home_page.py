@@ -545,6 +545,8 @@ class MostGenreCard(QWidget):
         self._anim = QPropertyAnimation(self, b"pos")
         self._anim.setDuration(150)
         self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._base_pos = None
+        self._hovered = False
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 15, 20, 15)
@@ -596,23 +598,35 @@ class MostGenreCard(QWidget):
     def set_genre(self, genre: str):
         self._value.setText(genre if genre else "—")
 
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        from PyQt6.QtCore import QAbstractAnimation
+        if not self._hovered and self._anim.state() == QAbstractAnimation.State.Stopped:
+            self._base_pos = event.pos()
+
     def enterEvent(self, event):
+        self._hovered = True
         self._shadow.setBlurRadius(28)
         self._shadow.setOffset(0, 8)
         self._shadow.setColor(QColor(0, 0, 0, 100))
+        if self._base_pos is None:
+            self._base_pos = self.pos()
         self._anim.stop()
         self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, -6))
+        self._anim.setEndValue(self._base_pos + QPoint(0, -6))
         self._anim.start()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
+        self._hovered = False
         self._shadow.setBlurRadius(12)
         self._shadow.setOffset(0, 4)
         self._shadow.setColor(QColor(0, 0, 0, 60))
+        if self._base_pos is None:
+            self._base_pos = self.pos()
         self._anim.stop()
         self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, 6))
+        self._anim.setEndValue(self._base_pos)
         self._anim.start()
         super().leaveEvent(event)
 
@@ -620,6 +634,7 @@ class MostGenreCard(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
+
 
 
 class _GenreOnlyLoader(QThread):
