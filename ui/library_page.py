@@ -858,6 +858,23 @@ class LibraryPage(QWidget):
         self._build()
         self._start_loading()
 
+    def adjust_content_width(self):
+        if hasattr(self, 'scroll') and self.scroll and self.scroll.widget():
+            vp_w = self.scroll.viewport().width()
+            if vp_w > 10:
+                self.scroll.widget().setFixedWidth(vp_w)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.adjust_content_width()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Force correct layout every time this page becomes visible
+        QTimer.singleShot(50, self.adjust_content_width)
+        QTimer.singleShot(100, self.last_read_row._relayout)
+        QTimer.singleShot(100, self.my_books_row._relayout)
+
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -873,10 +890,10 @@ class LibraryPage(QWidget):
         self.body.setContentsMargins(0, 0, 0, 0)
         self.body.setSpacing(0)
 
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("background: transparent; border: none;")
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setStyleSheet("background: transparent; border: none;")
 
         content = QWidget()
         cl = QVBoxLayout(content)
@@ -906,19 +923,19 @@ class LibraryPage(QWidget):
         cl.addLayout(lr_header)
 
         self.last_read_row = CardRow()
-        self.last_read_row.set_scroll_area(scroll)
+        self.last_read_row.set_scroll_area(self.scroll)
         self.last_read_row.show_placeholders(6)
         cl.addWidget(self.last_read_row)
 
         cl.addWidget(self._sec("My Books"))
         self.my_books_row = CardRow()
-        self.my_books_row.set_scroll_area(scroll)
+        self.my_books_row.set_scroll_area(self.scroll)
         self.my_books_row.show_placeholders(6)
         cl.addWidget(self.my_books_row)
 
         cl.addStretch()
-        scroll.setWidget(content)
-        self.body.addWidget(scroll, stretch=1)
+        self.scroll.setWidget(content)
+        self.body.addWidget(self.scroll, stretch=1)
 
         self.filter_panel = LibraryFilterPanel()
         self.filter_panel.apply_clicked.connect(self._apply_filters)
@@ -946,10 +963,13 @@ class LibraryPage(QWidget):
     def _toggle_filter(self):
         self.filter_panel.toggle_visibility()
         self._add_btn.setVisible(not self.filter_panel.isVisible())
-        # Re-hitung kolom setelah panel muncul/hilang — lebar scroll area berubah
+        
+        # Schedul relayout setelah layout engine selesai menyesuaikan lebar
         from PyQt6.QtCore import QTimer
-        QTimer.singleShot(10, self.last_read_row._relayout)
-        QTimer.singleShot(10, self.my_books_row._relayout)
+        QTimer.singleShot(50, self.adjust_content_width)
+        QTimer.singleShot(100, self.last_read_row._relayout)
+        QTimer.singleShot(100, self.my_books_row._relayout)
+
 
     def _open_add_form(self):
         try:
@@ -1086,6 +1106,15 @@ class LibraryPage(QWidget):
                                       mode="chapter", on_update=self._update_entry)
         self.my_books_row.load_cards(filtered_mb,       self.main_window.go_detail,
                                      mode="status",  on_update=self._update_entry)
+
+        # Force correct layout on initial load — cascade relayouts so cards
+        # never appear stacked/overlapping before the user interacts
+        QTimer.singleShot(50, self.adjust_content_width)
+        QTimer.singleShot(100, self.last_read_row._relayout)
+        QTimer.singleShot(100, self.my_books_row._relayout)
+        QTimer.singleShot(300, self.adjust_content_width)
+        QTimer.singleShot(350, self.last_read_row._relayout)
+        QTimer.singleShot(350, self.my_books_row._relayout)
 
     def _update_entry(self, entry_id: int, **kwargs):
         """Update current_chapter atau status langsung dari dropdown di card."""
