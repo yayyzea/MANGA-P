@@ -1,8 +1,8 @@
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QRectF, QPropertyAnimation, QEasingCurve, QPoint
+from PyQt6.QtCore import Qt, pyqtSignal, pyqtSlot, QThread, QRectF
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QScrollArea, QPushButton, QSizePolicy, QGridLayout,
-    QSplitter, QGraphicsDropShadowEffect
+    QSplitter
 )
 from PyQt6.QtGui import (
     QPainter, QColor, QPen, QBrush, QFont,
@@ -14,12 +14,10 @@ from .theme import (
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
 
-
 def _force_bg(widget, hex_color, radius=0):
     widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     r = f"border-radius: {radius}px;" if radius else ""
     widget.setStyleSheet(f"background: {hex_color}; {r}")
-
 
 class AuthorPageLoader(QThread):
     finished = pyqtSignal(list, dict, str)
@@ -82,7 +80,6 @@ class AuthorPageLoader(QThread):
             print(f"[AuthorPage] Error loading author '{self.author}': {e}")
 
         self.finished.emit(manga_list, author_counts, author_display)
-
 
 class AuthorBarChart(QWidget):
     clicked_author = pyqtSignal(str)
@@ -209,18 +206,6 @@ class AuthorBarChart(QWidget):
             self.clicked_author.emit(self._hovered_author)
         super().mousePressEvent(event)
 
-    def enterEvent(self, event):
-        if self._data:
-            self.setCursor(Qt.CursorShape.PointingHandCursor)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.setCursor(Qt.CursorShape.ArrowCursor)
-        self._hovered_author = None
-        self.update()
-        super().leaveEvent(event)
-
-
 class MangaCardCompact(QWidget):
     clicked = pyqtSignal(int)
 
@@ -230,15 +215,6 @@ class MangaCardCompact(QWidget):
         self.setFixedSize(130, 210)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         _force_bg(self, BLUE_CARD, radius=10)
-
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self.setGraphicsEffect(self._shadow)
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(150)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -287,31 +263,10 @@ class MangaCardCompact(QWidget):
                 Qt.TransformationMode.SmoothTransformation)
         )
 
-    def enterEvent(self, event):
-        self._shadow.setBlurRadius(28)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(0, 0, 0, 100))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, -6))
-        self._anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, 6))
-        self._anim.start()
-        super().leaveEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.manga_id)
         super().mousePressEvent(event)
-
 
 class AuthorPage(QWidget):
     def __init__(self, main_window, parent=None):
@@ -328,7 +283,7 @@ class AuthorPage(QWidget):
 
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        topbar.setAttribute(__import__('PyQt6.QtCore', fromlist=['Qt']).Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
@@ -430,7 +385,7 @@ class AuthorPage(QWidget):
             self._loader.quit()
             self._loader.wait()
 
-        uid = self.main_window.current_user["id"]
+        uid = (self.main_window.current_user or {}).get('id', 1)
         self._loader = AuthorPageLoader(user_id=uid, author=author)
         self._loader.finished.connect(self._on_loaded)
         self._loader.start()

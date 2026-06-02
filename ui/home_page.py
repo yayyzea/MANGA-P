@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel,
-    QPushButton, QLineEdit, QScrollArea, QSizePolicy, QGraphicsDropShadowEffect
+    QPushButton, QLineEdit, QScrollArea, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer, QPointF, QPropertyAnimation, QEasingCurve, QPoint
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer, QPointF, QPoint
 from PyQt6.QtGui import QFont, QPixmap, QColor, QPalette, QIcon, QPainter, QPainterPath, QBrush, QPen
 from pathlib import Path
 _ICON_DIR = Path(__file__).parent.parent / "assets"
@@ -14,12 +14,10 @@ from .theme import (
 from .widgets import MangaCard, ImageLoader, _CARD_MIN_W, _CARD_MAX_W, _ASPECT, _PAD
 from .search_page import FilterPanel, SearchLoader
 
-
 def _force_bg(widget, hex_color, radius=0):
     widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     r = f"border-radius: {radius}px;" if radius else ""
     widget.setStyleSheet(f"background: {hex_color}; {r}")
-
 
 class WalkingCat(QWidget):
     SIZE  = 36
@@ -135,7 +133,6 @@ class WalkingCat(QWidget):
         p.drawPath(tail)
         p.end()
 
-
 class TopMangaLoader(QThread):
     finished = pyqtSignal(list, dict)
 
@@ -170,7 +167,6 @@ class TopMangaLoader(QThread):
             print(f"[HomePage] Load error: {e}")
             self.finished.emit([], {})
 
-
 class ApiRefreshLoader(QThread):
     """
     Background thread yang fetch top manga dari Jikan API lalu emit sinyal
@@ -186,7 +182,6 @@ class ApiRefreshLoader(QThread):
             self.refresh_done.emit()
         except Exception as e:
             print(f"[ApiRefreshLoader] Error: {e}")
-
 
 class HistoryPanel(QWidget):
     manga_clicked = pyqtSignal(int)
@@ -207,18 +202,6 @@ class HistoryPanel(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet(f"border-radius: {CARD_RADIUS}px;")
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        # Shadow
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self.setGraphicsEffect(self._shadow)
-
-        # Animasi pop-out
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(150)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         self._build()
 
@@ -345,13 +328,6 @@ class HistoryPanel(QWidget):
         super().mousePressEvent(event)
 
     def enterEvent(self, event):
-        self._shadow.setBlurRadius(28)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(0, 0, 0, 100))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, -6))
-        self._anim.start()
         if self._manga_id:
             self._synopsis_overlay.setGeometry(0, 0, self.width(), self.height())
             self._synopsis_overlay.raise_()
@@ -359,16 +335,8 @@ class HistoryPanel(QWidget):
         super().enterEvent(event)
 
     def leaveEvent(self, event):
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, 6))
-        self._anim.start()
         self._synopsis_overlay.setVisible(False)
         super().leaveEvent(event)
-
 
 class SearchBar(QWidget):
     search_triggered = pyqtSignal(str)
@@ -400,16 +368,6 @@ class SearchBar(QWidget):
         input_wrapper.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         input_wrapper.setFixedHeight(44)
 
-        # Shadow + animasi seperti MangaCard
-        self._search_shadow = QGraphicsDropShadowEffect(input_wrapper)
-        self._search_shadow.setBlurRadius(12)
-        self._search_shadow.setOffset(0, 4)
-        self._search_shadow.setColor(QColor(0, 0, 0, 60))
-        input_wrapper.setGraphicsEffect(self._search_shadow)
-
-        self._search_anim = QPropertyAnimation(input_wrapper, b"pos")
-        self._search_anim.setDuration(150)
-        self._search_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._input_wrapper = input_wrapper
         wrapper_layout = QHBoxLayout(input_wrapper)
         wrapper_layout.setContentsMargins(14, 0, 14, 0)
@@ -456,27 +414,11 @@ class SearchBar(QWidget):
             }}
         """)
 
-        self._filter_shadow = QGraphicsDropShadowEffect(self.filter_btn)
-        self._filter_shadow.setBlurRadius(12)
-        self._filter_shadow.setOffset(0, 4)
-        self._filter_shadow.setColor(QColor(0, 0, 0, 60))
-        self.filter_btn.setGraphicsEffect(self._filter_shadow)
-
-        self._filter_anim = QPropertyAnimation(self.filter_btn, b"pos")
-        self._filter_anim.setDuration(150)
-        self._filter_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-
         self.filter_btn.clicked.connect(self.filter_triggered)
         self.filter_btn.installEventFilter(self)
         layout.addWidget(self.filter_btn)
 
     def eventFilter(self, obj, event):
-        from PyQt6.QtCore import QEvent
-        if obj == self.filter_btn:
-            if event.type() == QEvent.Type.Enter:
-                self._on_filter_btn_enter()
-            elif event.type() == QEvent.Type.Leave:
-                self._on_filter_btn_leave()
         return super().eventFilter(obj, event)
 
     def _on_search(self):
@@ -484,45 +426,6 @@ class SearchBar(QWidget):
 
     def set_text(self, text: str):
         self.input.setText(text)
-
-    def enterEvent(self, event):
-        self._search_shadow.setBlurRadius(28)
-        self._search_shadow.setOffset(0, 8)
-        self._search_shadow.setColor(QColor(0, 0, 0, 100))
-        self._search_anim.stop()
-        self._search_anim.setStartValue(self._input_wrapper.pos())
-        self._search_anim.setEndValue(self._input_wrapper.pos() + QPoint(0, -4))
-        self._search_anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._search_shadow.setBlurRadius(12)
-        self._search_shadow.setOffset(0, 4)
-        self._search_shadow.setColor(QColor(0, 0, 0, 60))
-        self._search_anim.stop()
-        self._search_anim.setStartValue(self._input_wrapper.pos())
-        self._search_anim.setEndValue(self._input_wrapper.pos() + QPoint(0, 4))
-        self._search_anim.start()
-        super().leaveEvent(event)
-
-    def _on_filter_btn_enter(self):
-        self._filter_shadow.setBlurRadius(28)
-        self._filter_shadow.setOffset(0, 8)
-        self._filter_shadow.setColor(QColor(0, 0, 0, 100))
-        self._filter_anim.stop()
-        self._filter_anim.setStartValue(self.filter_btn.pos())
-        self._filter_anim.setEndValue(self.filter_btn.pos() + QPoint(0, -4))
-        self._filter_anim.start()
-
-    def _on_filter_btn_leave(self):
-        self._filter_shadow.setBlurRadius(12)
-        self._filter_shadow.setOffset(0, 4)
-        self._filter_shadow.setColor(QColor(0, 0, 0, 60))
-        self._filter_anim.stop()
-        self._filter_anim.setStartValue(self.filter_btn.pos())
-        self._filter_anim.setEndValue(self.filter_btn.pos() + QPoint(0, 4))
-        self._filter_anim.start()
-
 
 class MostGenreCard(QWidget):
     clicked = pyqtSignal()
@@ -533,18 +436,6 @@ class MostGenreCard(QWidget):
         self.setFixedHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-        # Drop shadow
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self.setGraphicsEffect(self._shadow)
-
-        # Animasi pop-out
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(150)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(20, 15, 20, 15)
@@ -596,31 +487,10 @@ class MostGenreCard(QWidget):
     def set_genre(self, genre: str):
         self._value.setText(genre if genre else "—")
 
-    def enterEvent(self, event):
-        self._shadow.setBlurRadius(28)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(0, 0, 0, 100))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, -6))
-        self._anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, 6))
-        self._anim.start()
-        super().leaveEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit()
         super().mousePressEvent(event)
-
 
 class _GenreOnlyLoader(QThread):
     """Lightweight loader: hanya hitung genre_counts dari seluruh DB, tanpa fetch top manga."""
@@ -650,7 +520,6 @@ class _GenreOnlyLoader(QThread):
         except Exception as e:
             print(f"[_GenreOnlyLoader] Error: {e}")
             self.finished.emit({})
-
 
 class HomePage(QWidget):
     GENRE_POLL_MS = 30_000  # refresh genre counts tiap 30 detik
@@ -682,6 +551,13 @@ class HomePage(QWidget):
         # Update instan setiap kali MangaService commit data baru ke DB
         from signals import app_signals
         app_signals.db_updated.connect(self.refresh_genre_counts)
+
+    def _get_uid(self) -> int | None:
+        """Kembalikan user_id dari current_user jika sudah login."""
+        try:
+            return self.main_window.current_user["id"]
+        except (AttributeError, KeyError, TypeError):
+            return None
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -733,21 +609,21 @@ class HomePage(QWidget):
             btn.setFixedWidth(75)
             btn.setCheckable(True)
             btn.setChecked(n == 50)
-            btn.setStyleSheet(f"""
-                QPushButton {{
-                    background: {BLUE_PRIMARY};
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #1a6aab;
                     color: white;
                     border: none;
                     border-radius: 16px;
                     font-size: 13px;
                     font-weight: 600;
-                }}
-                QPushButton:hover {{ background: #7aaee0; }}
-                QPushButton:checked {{
+                }
+                QPushButton:hover { background: #155d96; }
+                QPushButton:checked {
                     background: white;
-                    color: {BLUE_PRIMARY};
-                    border: 2px solid {BLUE_PRIMARY};
-                }}
+                    color: #1a6aab;
+                    border: 2px solid #1a6aab;
+                }
             """)
             btn.clicked.connect(lambda _, lim=n: self._set_limit(lim))
             self._top_buttons[n] = btn
@@ -971,8 +847,8 @@ class HomePage(QWidget):
             genres=self._filter_genres,
             status=self._filter_status,
             year=self._filter_year,
-            page=page,
-        )
+            page=page
+)
         loader.finished.connect(lambda results, p=page: self._on_filter_results(results, p))
         loader.start()
         self._loader = loader

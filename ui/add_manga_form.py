@@ -2,8 +2,7 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QTextEdit, QSpinBox, QDoubleSpinBox,
     QComboBox, QPushButton, QScrollArea, QWidget,
-    QMessageBox, QFrame, QFileDialog, QCheckBox, QGridLayout,
-    QGraphicsDropShadowEffect
+    QMessageBox, QFrame, QFileDialog, QCheckBox, QGridLayout
 )
 from PyQt6.QtCore import Qt, QDate, pyqtSignal
 from PyQt6.QtGui import QFont, QPixmap, QColor
@@ -28,7 +27,6 @@ GENRE_OPTIONS = [
 
 STATUS_OPTIONS = ["Publishing", "Finished", "On Hiatus", "Discontinued", "Not yet published"]
 
-
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
 def _label(text: str, required: bool = False) -> QLabel:
@@ -37,12 +35,10 @@ def _label(text: str, required: bool = False) -> QLabel:
     lbl.setStyleSheet(f"font-size: 13px; font-weight: 600; color: {TEXT_DARK}; background: transparent;")
     return lbl
 
-
 def _hint(text: str) -> QLabel:
     lbl = QLabel(text)
     lbl.setStyleSheet(f"font-size: 11px; color: {TEXT_MUTED}; background: transparent;")
     return lbl
-
 
 def _input_style() -> str:
     return f"""
@@ -70,7 +66,6 @@ def _input_style() -> str:
             width: 18px;
         }}
     """
-
 
 # ── Main form dialog ──────────────────────────────────────────────────────────
 
@@ -429,8 +424,8 @@ class AddMangaForm(QDialog):
         thumb = px.scaled(
             60, 84,
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation,
-        )
+            Qt.TransformationMode.SmoothTransformation
+)
         x = (thumb.width()  - 60) // 2
         y = (thumb.height() - 84) // 2
         self._cover_preview.setPixmap(thumb.copy(x, y, 60, 84))
@@ -561,8 +556,8 @@ class AddMangaForm(QDialog):
                 chapters=chapters,
                 year=year,
                 cover_url=cover_url,
-                score=score,
-            )
+                score=score
+)
 
             # Save title_en if provided
             if title_en and manga:
@@ -596,8 +591,8 @@ class AddMangaForm(QDialog):
                 col_svc.add(
                     user_id=user_id,
                     manga_id=manga.id,
-                    status="Plan to Read",
-                )
+                    status="Plan to Read"
+)
 
             self.manga_added.emit(manga.id)
             self.accept()

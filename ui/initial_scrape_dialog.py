@@ -1,8 +1,8 @@
 """
 InitialScrapeDialog
 -------------------
-Ditampilkan sekali saat pertama kali login (DB kosong).
-Scrape 500 manga top dari Jikan API, simpan ke DB, lalu tutup otomatis.
+Displayed once on first login (empty DB).
+Scrapes top manga from Jikan API, saves to DB, then closes automatically.
 """
 
 from PyQt6.QtWidgets import (
@@ -70,7 +70,7 @@ class ScrapeWorker(QThread):
 class InitialScrapeDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("MANGA:P — Setup Awal")
+        self.setWindowTitle("MANGA:P — Initial Setup")
         self.setModal(True)
         self.setFixedSize(520, 340)
         self.setWindowFlags(
@@ -107,14 +107,14 @@ class InitialScrapeDialog(QDialog):
         root.addWidget(emoji)
         root.addSpacing(12)
 
-        title = QLabel("Menyiapkan MANGA:P…")
+        title = QLabel("Setting up MANGA:P…")
         title.setFont(QFont("Segoe UI", 18, QFont.Weight.Bold))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet("background: transparent; color: white;")
         root.addWidget(title)
         root.addSpacing(8)
 
-        self._sub = QLabel("Mengambil 500 manga terpopuler dari MyAnimeList.\nIni hanya dilakukan sekali.")
+        self._sub = QLabel("Fetching the most popular manga from MyAnimeList.\nThis only needs to be done once.")
         self._sub.setFont(QFont("Segoe UI", 11))
         self._sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._sub.setWordWrap(True)
@@ -142,14 +142,14 @@ class InitialScrapeDialog(QDialog):
         root.addWidget(self._bar)
         root.addSpacing(10)
 
-        self._count_lbl = QLabel(f"0 / {TARGET} manga")
+        self._count_lbl = QLabel("0 manga fetched")
         self._count_lbl.setFont(QFont("Segoe UI", 10))
         self._count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._count_lbl.setStyleSheet("background: transparent; color: rgba(255,255,255,0.78);")
         root.addWidget(self._count_lbl)
         root.addStretch()
 
-        self._status_lbl = QLabel("⏳  Menghubungi Jikan API…")
+        self._status_lbl = QLabel("⏳  Connecting to Jikan API…")
         self._status_lbl.setFont(QFont("Segoe UI", 10))
         self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._status_lbl.setStyleSheet("background: transparent; color: rgba(255,255,255,0.65);")
@@ -164,15 +164,15 @@ class InitialScrapeDialog(QDialog):
     @pyqtSlot(int, int)
     def _on_progress(self, current: int, total: int):
         self._bar.setValue(current)
-        self._count_lbl.setText(f"{current} / {total} manga")
+        self._count_lbl.setText(f"{current} manga fetched")
         pct = int(current / total * 100) if total else 0
-        self._status_lbl.setText(f"⏳  Mengambil data… {pct}%")
+        self._status_lbl.setText(f"⏳  Fetching data… {pct}%")
 
     @pyqtSlot(int)
     def _on_finished(self, count: int):
         self._bar.setValue(TARGET)
-        self._count_lbl.setText(f"{count} manga berhasil disimpan ✓")
-        self._status_lbl.setText("✅  Selesai! Membuka aplikasi…")
+        self._count_lbl.setText(f"{count} manga saved successfully ✓")
+        self._status_lbl.setText("✅  Done! Opening app…")
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(1200, self.accept)
 
