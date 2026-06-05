@@ -833,7 +833,16 @@ class LibraryPage(QWidget):
         """)
         self._add_btn.clicked.connect(self._open_add_form)
         lr_header.addWidget(self._add_btn)
-        cl.addLayout(lr_header)
+
+        # Bungkus lr_header ke dalam QWidget agar bisa di-hide/show sebagai satu unit
+        self._last_read_header_widget = QWidget()
+        self._last_read_header_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._last_read_header_widget.setStyleSheet("background: transparent;")
+        lrh_outer = QHBoxLayout(self._last_read_header_widget)
+        lrh_outer.setContentsMargins(0, 0, 0, 0)
+        lrh_outer.setSpacing(0)
+        lrh_outer.addLayout(lr_header)
+        cl.addWidget(self._last_read_header_widget)
 
         self.last_read_row = CardRow()
         self.last_read_row.set_scroll_area(scroll)
@@ -1009,13 +1018,38 @@ class LibraryPage(QWidget):
         statuses = self.filter_panel.selected_statuses()
         year     = self.filter_panel.selected_year()
 
-        filtered_lr = _filter_entries(self._all_last_read, query, genres, statuses, year)
-        filtered_mb = _filter_entries(self._all_my_books,  query, genres, statuses, year)
+        # Tentukan apakah filter aktif (selain status)
+        any_filter_active = bool(query or genres or statuses or year)
 
-        self.last_read_row.load_cards(filtered_lr[:12], self.main_window.go_detail,
-                                      mode="chapter", on_update=self._update_entry)
-        self.my_books_row.load_cards(filtered_mb,       self.main_window.go_detail,
-                                     mode="status",  on_update=self._update_entry)
+        # --- Last Read section ---
+        # Sembunyikan Last Read jika filter status aktif, atau filter lain aktif.
+        # Last Read TIDAK boleh dipakai sebagai fallback saat filter dijalankan.
+        if statuses or any_filter_active:
+            # Sembunyikan seluruh widget Last Read agar tidak muncul sebagai fallback
+            self.last_read_row.setVisible(False)
+            # Sembunyikan juga label header "Last Read" (widget sebelum last_read_row di layout)
+            self._set_last_read_header_visible(False)
+        else:
+            # Tidak ada filter aktif → tampilkan Last Read seperti biasa
+            self.last_read_row.setVisible(True)
+            self._set_last_read_header_visible(True)
+            filtered_lr = _filter_entries(self._all_last_read, query, genres, statuses, year)
+            self.last_read_row.load_cards(filtered_lr[:12], self.main_window.go_detail,
+                                          mode="chapter", on_update=self._update_entry)
+
+        # --- My Books section ---
+        # Filter My Books berdasarkan semua kriteria yang dipilih pengguna.
+        # Jika status dipilih tapi tidak ada manga yang cocok → tampilkan kosong (bukan Last Read).
+        filtered_mb = _filter_entries(self._all_my_books, query, genres, statuses, year)
+        self.my_books_row.load_cards(filtered_mb, self.main_window.go_detail,
+                                     mode="status", on_update=self._update_entry)
+
+    def _set_last_read_header_visible(self, visible: bool):
+        """Sembunyikan / tampilkan header 'Last Read' beserta baris kartu-nya."""
+        # Header Last Read adalah widget layout (lr_header) yang berisi label + add button.
+        # Kita simpan referensi _last_read_header saat _build() dipanggil.
+        if hasattr(self, '_last_read_header_widget'):
+            self._last_read_header_widget.setVisible(visible)
 
     def _update_entry(self, entry_id: int, **kwargs):
         """Update current_chapter atau status langsung dari dropdown di card."""
