@@ -567,7 +567,7 @@ class ProfilePage(QWidget):
             # Update remembered credentials
             _update_remembered_account(old_email, email, name, pwd if pwd else None)
             
-            self._toast("Profile saved successfully ✓")
+            self._toast("Profile saved successfully")
         else:
             self._toast("Failed to save profile. Username/Email might be taken.")
 
