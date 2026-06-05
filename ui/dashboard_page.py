@@ -406,7 +406,7 @@ class LastReviewCard(QWidget):
         self._title_lbl = QLabel("No reviews yet.")
         self._title_lbl.setStyleSheet(f"color:#4a72b8;font-size:14px;font-weight:700;background:transparent;")
         self._title_lbl.setWordWrap(True)
-        self._hint = QLabel("→ Lihat detail")
+        self._hint = QLabel("→ See details")
         self._hint.setStyleSheet("color:rgba(0,0,0,0.45);font-size:11px;background:transparent;")
         self._hint.setVisible(False)
         top_row.addWidget(self._title_lbl)

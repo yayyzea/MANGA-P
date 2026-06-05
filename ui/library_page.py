@@ -297,7 +297,7 @@ class LibraryFilterPanel(QWidget):
                 s_grid.addWidget(cb, row_idx, col_idx)
         root.addLayout(s_grid)
 
-        root.addWidget(self._subheading("Tahun"))
+        root.addWidget(self._subheading("Year"))
         self._year_input = QLineEdit()
         self._year_input.setPlaceholderText("e.g. 2023")
         self._year_input.setFixedHeight(32)
@@ -306,8 +306,10 @@ class LibraryFilterPanel(QWidget):
             QLineEdit {{
                 background: transparent;
                 border: 1.5px solid {BLUE_LIGHT};
-                border-radius: 6px; padding: 4px 10px;
-                font-size: 13px; color: {TEXT_DARK};
+                border-radius: 6px; 
+                padding: 4px 10px;
+                font-size: 13px; 
+                color: {TEXT_DARK};
             }}
             QLineEdit:focus {{ border-color: {BLUE_PRIMARY}; }}
         """)
@@ -326,7 +328,8 @@ class LibraryFilterPanel(QWidget):
                 border: 2.5px solid {BLUE_PRIMARY};
                 border-radius: 23px;
                 color: {BLUE_PRIMARY};
-                font-size: 15px; font-weight: 700;
+                font-size: 15px; 
+                font-weight: 700;
             }}
             QPushButton:hover {{
                 background: {BLUE_PRIMARY};
