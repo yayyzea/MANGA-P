@@ -230,7 +230,7 @@ class FilterPanel(QWidget):
             s_grid.addWidget(cb, i // 2, i % 2)
         root.addLayout(s_grid)
 
-        root.addWidget(self._subheading("Tahun"))
+        root.addWidget(self._subheading("Year"))
         self._year_input = QLineEdit()
         self._year_input.setPlaceholderText("e.g. 2023")
         self._year_input.setFixedHeight(32)
@@ -244,9 +244,7 @@ class FilterPanel(QWidget):
                 font-size: 13px;
                 color: {TEXT_DARK};
             }}
-            QLineEdit:focus {{
-                border-color: {BLUE_PRIMARY};
-            }}
+            QLineEdit:focus {{ border-color: {BLUE_PRIMARY};}}
         """)
         root.addWidget(self._year_input)
         root.addStretch()
