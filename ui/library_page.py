@@ -365,7 +365,7 @@ class LibraryFilterPanel(QWidget):
                 s_grid.addWidget(cb, row_idx, col_idx)
         root.addLayout(s_grid)
 
-        root.addWidget(self._subheading("Tahun"))
+        root.addWidget(self._subheading("Year"))
         self._year_input = QLineEdit()
         self._year_input.setFixedHeight(32)
         self._year_input.setMaximumWidth(110)
