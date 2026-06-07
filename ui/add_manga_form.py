@@ -74,7 +74,7 @@ class AddMangaForm(QDialog):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Add Manga Manually")
+        self.setWindowTitle("Add Manga")
         self.setMinimumWidth(520)
         self.setMaximumWidth(640)
         self.setModal(True)
@@ -104,7 +104,7 @@ class AddMangaForm(QDialog):
         h_lay = QHBoxLayout(header)
         h_lay.setContentsMargins(20, 0, 20, 0)
 
-        title_lbl = QLabel("Add Manga Manually")
+        title_lbl = QLabel("Add Manga")
         title_lbl.setStyleSheet(f"color: {TEXT_DARK}; font-size: 16px; font-weight: 700; background: transparent;")
         h_lay.addWidget(title_lbl)
         h_lay.addStretch()
@@ -128,13 +128,6 @@ class AddMangaForm(QDialog):
         self._title.setPlaceholderText("e.g. One Piece")
         self._title.setStyleSheet(_input_style())
         form.addWidget(self._title)
-
-        # ── English / Alternative Title ──
-        form.addWidget(_label("English / Alternative Title"))
-        self._title_en = QLineEdit()
-        self._title_en.setPlaceholderText("e.g. Naruto: The Movie (optional)")
-        self._title_en.setStyleSheet(_input_style())
-        form.addWidget(self._title_en)
 
         # ── Author ──
         form.addWidget(_label("Author"))
@@ -257,12 +250,10 @@ class AddMangaForm(QDialog):
         form.addLayout(row1)
 
         # ── Score ──
-        form.addWidget(_label("Score / Rating (1.0 – 10.0)"))
-        self._score = QDoubleSpinBox()
-        self._score.setRange(0.0, 10.0)
-        self._score.setSingleStep(0.1)
-        self._score.setDecimals(1)
-        self._score.setValue(0.0)
+        form.addWidget(_label("Rating (1 – 10)"))
+        self._score = QSpinBox()
+        self._score.setRange(0, 10)
+        self._score.setValue(0)
         self._score.setSpecialValueText("No score yet")
         self._score.setStyleSheet(_input_style())
         self._score.setFixedWidth(160)
@@ -533,12 +524,11 @@ class AddMangaForm(QDialog):
             return
 
         # Collect values
-        title_en  = self._title_en.text().strip() or None
         authors   = self._authors.text().strip() or None
         status    = self._status.currentData()
         year      = self._year.value() if self._year.value() != 1900 else None
         chapters  = self._chapters.value() if self._chapters.value() > 0 else None
-        score     = self._score.value() if self._score.value() > 0.0 else None
+        score     = self._score.value() if self._score.value() > 0 else None
         cover_url = self._cover_path or None
         synopsis  = self._synopsis.toPlainText().strip() or None
 
@@ -557,21 +547,8 @@ class AddMangaForm(QDialog):
                 year=year,
                 cover_url=cover_url,
                 score=score
-)
-
-            # Save title_en if provided
-            if title_en and manga:
-                from database import get_session
-                session = get_session()
-                try:
-                    from models.manga import Manga
-                    obj = session.query(Manga).filter(Manga.id == manga.id).first()
-                    if obj:
-                        obj.title_en = title_en
-                        session.commit()
-                finally:
-                    session.close()
-
+            )
+            
             # Add to UserCollection so it appears in My Library
             user_id = None
             parent = self.parent()
