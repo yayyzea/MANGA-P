@@ -1,368 +1,666 @@
 from PyQt6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QLineEdit, QPushButton, QSizePolicy,
-    QCheckBox, QComboBox
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
+    QPushButton, QLineEdit, QTextEdit, QScrollArea,
+    QFileDialog, QSizePolicy, QFrame, QMessageBox,
+    QDialog, QInputDialog
 )
-from PyQt6.QtCore import Qt, QSize
-from PyQt6.QtGui import QPixmap, QFont, QPainter, QLinearGradient, QColor, QIcon
+from PyQt6.QtCore import Qt, pyqtSignal, QSize
+from PyQt6.QtGui import (
+    QPixmap, QPainter, QPainterPath, QColor, QPalette, QFont, QPen, QIcon, QAction
+)
 from pathlib import Path
-import json, base64
-from services.auth_service import AuthService
-_ASSET_DIR     = Path(__file__).parent.parent / "assets"
-_REMEMBER_FILE = Path(__file__).parent.parent / "remember_me.json"
-# ── Simple reversible obfuscation (NOT encryption — just avoids plaintext) ──
-# Password is obfuscated with base64 so it isn't stored as raw plaintext.
-# This is intentional: the combo-account feature requires auto-filling the
-# password field so users can switch accounts in one click.
-def _obfuscate(text: str) -> str:
-    return base64.b64encode(text.encode()).decode()
-def _deobfuscate(text: str) -> str:
-    try:
-        return base64.b64decode(text.encode()).decode()
-    except Exception:
-        return text   # fallback for entries saved before this change
-def _load_remember() -> dict:
-    if _REMEMBER_FILE.exists():
-        try:
-            return json.loads(_REMEMBER_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {"last": None, "accounts": []}
-def _save_remember(email: str, username: str, password_plain: str):
-    """
-    Save/update a remembered account.
-    - Deduplicates by email (one entry per email).
-    - Marks this account as 'last' (will be pre-filled on next open).
-    - Password stored obfuscated (base64), not plaintext.
-    """
-    data  = _load_remember()
-    entry = {
-        "username": username,
-        "email":    email,
-        "password": _obfuscate(password_plain),
-    }
-    # Remove any existing entry for this email, then insert at front
-    data["accounts"] = [a for a in data.get("accounts", []) if a.get("email") != email]
-    data["accounts"].insert(0, entry)
-    data["last"] = entry
-    _REMEMBER_FILE.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-def _remove_remember(email: str):
-    """
-    Remove a specific account from remembered list.
-    Updates 'last' to the next available account, or None.
-    """
-    data = _load_remember()
-    data["accounts"] = [a for a in data.get("accounts", []) if a.get("email") != email]
-    # If we removed the 'last' account, fall back to the next one
-    last = data.get("last")
-    if last and last.get("email") == email:
-        data["last"] = data["accounts"][0] if data["accounts"] else None
-    _REMEMBER_FILE.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-def _clear_last_remember():
-    """Clear the 'last' pointer without removing the account list."""
-    data = _load_remember()
-    data["last"] = None
-    _REMEMBER_FILE.write_text(
-        json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-class LoginPage(QWidget):
-    def __init__(self, on_login=None, on_switch_signup=None, parent=None):
+
+_ICON_DIR = Path(__file__).parent.parent / "assets"
+
+from .theme import (
+    BLUE_PRIMARY, BLUE_CARD, BLUE_DARK, BLUE_LIGHT, BLUE_FOOTER,
+    WHITE, TEXT_DARK, TEXT_MUTED, FONT_FAMILY,
+    TOPBAR_HEIGHT, CARD_RADIUS
+)
+
+
+class AvatarLabel(QLabel):
+    clicked = pyqtSignal()
+
+    def __init__(self, size: int = 140, parent=None):
         super().__init__(parent)
-        self.on_login         = on_login
-        self.on_switch_signup = on_switch_signup
-        self._auth            = AuthService()
-        self._remember_data   = _load_remember()
-        self._build()
-        self._apply_remember()
+        self._size = size
+        self.setFixedSize(size, size)
+        self._pixmap = None
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setToolTip("Click to change profile photo")
+        self.setStyleSheet("background: transparent;")
+
+    def set_image(self, pixmap: QPixmap):
+        if pixmap and not pixmap.isNull():
+
+            scaled = pixmap.scaled(
+                self._size,
+                self._size,
+                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                Qt.TransformationMode.SmoothTransformation
+            )
+
+            x = (scaled.width() - self._size) // 2
+            y = (scaled.height() - self._size) // 2
+
+            self._pixmap = scaled.copy(x, y, self._size, self._size)
+
+            self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
     def paintEvent(self, event):
-        painter = QPainter(self)
-        gradient = QLinearGradient(0, 0, self.width(), self.height())
-        gradient.setColorAt(0.0,  QColor("#006ec4"))   # Sky Blue
-        gradient.setColorAt(0.35, QColor("#2cb5d3"))   # Teal
-        gradient.setColorAt(0.70, QColor("#9abe7c"))   # Dewy Green
-        gradient.setColorAt(1.0,  QColor("#c4b5de"))   # Lilac Mist
-        painter.fillRect(self.rect(), gradient)
-    def show_success(self, message: str):
-        self.error_lbl.setStyleSheet("color: #f0a8c8; background: transparent; font-size: 12px;")
-        self.error_lbl.setText(message)
-    def _build(self):
-        self.setStyleSheet("QWidget { background: transparent; }")
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(0)
-        outer.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        root = QHBoxLayout()
-        root.setContentsMargins(0, 0, 0, 0)
-        root.setSpacing(20)
-        root.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        outer.addLayout(root)
-        # ── KIRI: kucing ──────────────────────────────────────────────────
-        left = QWidget()
-        left.setStyleSheet("background: transparent;")
-        left.setFixedWidth(380)
-        left.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
-        left_layout = QVBoxLayout(left)
-        left_layout.setContentsMargins(0, 0, 0, 0)
-        left_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo = QLabel()
-        logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo.setStyleSheet("background: transparent;")
-        px = QPixmap(str(_ASSET_DIR / "logo_kucing.png"))
-        if not px.isNull():
-            logo.setPixmap(px.scaled(
-                380, 400,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.SmoothTransformation,
-            ))
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addEllipse(2, 2, self._size - 4, self._size - 4)
+        p.setClipPath(path)
+        if self._pixmap:
+            p.drawPixmap(0, 0, self._pixmap)
         else:
-            logo.setText("🐱⭐")
-            logo.setFont(QFont("Segoe UI", 72))
-        left_layout.addWidget(logo)
-        root.addWidget(left)
-        # ── KANAN: form ───────────────────────────────────────────────────
-        right = QWidget()
-        right.setStyleSheet("background: transparent;")
-        right.setMinimumWidth(380)
-        right.setMaximumWidth(520)
-        right.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Preferred)
-        rl = QVBoxLayout(right)
-        rl.setContentsMargins(0, 0, 0, 0)
-        rl.setSpacing(0)
-        title = QLabel("Welcome Back!")
-        title.setFont(QFont("Segoe UI", 30, QFont.Weight.Bold))
-        title.setStyleSheet("color: white; background: transparent;")
-        rl.addWidget(title)
-        rl.addSpacing(6)
-        row = QHBoxLayout()
-        row.setSpacing(4)
-        dont = QLabel("Don't have an account?")
-        dont.setStyleSheet("color: rgba(255,255,255,0.90); background: transparent; font-size: 13px;")
-        su_btn = QPushButton("Sign Up")
-        su_btn.setStyleSheet("""
-            QPushButton { background: transparent; border: none; color: white;
-                font-size: 13px; font-weight: bold; padding: 0; text-decoration: underline; }
-            QPushButton:hover { color: #c8b8e8; }
-        """)
-        su_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        su_btn.clicked.connect(self._go_signup)
-        row.addWidget(dont)
-        row.addWidget(su_btn)
-        row.addStretch()
-        rl.addLayout(row)
-        rl.addSpacing(24)
-        rl.addWidget(self._lbl("Enter E-mail / Username"))
-        rl.addSpacing(6)
-        self.email_input = self._input()
-        rl.addWidget(self.email_input)
-        rl.addSpacing(16)
-        rl.addWidget(self._lbl("Enter Password"))
-        rl.addSpacing(6)
-        pass_container = QWidget()
-        pass_container.setFixedHeight(48)
-        pass_container.setStyleSheet("QWidget { background: white; border-radius: 24px; }")
-        pass_row = QHBoxLayout(pass_container)
-        pass_row.setContentsMargins(20, 0, 8, 0)
-        pass_row.setSpacing(0)
-        self.pass_input = QLineEdit()
-        self.pass_input.setFixedHeight(48)
-        self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-        self.pass_input.setStyleSheet("QLineEdit { background: transparent; border: none; font-size: 14px; color: #1a1a1a; }")
-        pass_row.addWidget(self.pass_input)
-        self._eye_icon_show = QIcon(QPixmap(str(_ASSET_DIR / "view.png")))
-        self._eye_icon_hide = QIcon(QPixmap(str(_ASSET_DIR / "hide.png")))
-        self._eye_btn = QPushButton()
-        self._eye_btn.setFixedSize(32, 32)
-        self._eye_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._eye_btn.setStyleSheet("background: transparent; border: none;")
-        self._eye_btn.setIcon(self._eye_icon_hide)
-        self._eye_btn.setIconSize(QSize(22, 22))
-        self._eye_btn.clicked.connect(self._toggle_password)
-        pass_row.addWidget(self._eye_btn)
-        rl.addWidget(pass_container)
-        rl.addSpacing(8)
-        self.error_lbl = QLabel("")
-        self.error_lbl.setStyleSheet("color: #f4918e; background: transparent; font-size: 12px;")
-        self.error_lbl.setWordWrap(True)
-        self.error_lbl.setFixedHeight(20)
-        rl.addWidget(self.error_lbl)
-        rl.addSpacing(10)
-        # ── Remember Me row ───────────────────────────────────────────────
-        rem_row = QHBoxLayout()
-        rem_row.setSpacing(10)
-        rem_row.setContentsMargins(4, 0, 0, 0)
-        self._remember_cb = QCheckBox("Remember me")
-        asset_url = (_ASSET_DIR / "check.png").as_posix()
-        self._remember_cb.setStyleSheet(f"""
-            QCheckBox {{
-                color: rgba(255,255,255,0.92);
-                background: transparent;
-                font-size: 13px;
-                spacing: 8px;
-            }}
-            QCheckBox::indicator {{
-                width: 18px; height: 18px;
-                border: 2px solid rgba(255,255,255,0.70);
-                border-radius: 4px;
-                background: rgba(255,255,255,0.15);
-            }}
-            QCheckBox::indicator:checked {{
-                background: white;
-                border-color: white;
-                image: url("{asset_url}");
-            }}
-        """)
-        rem_row.addWidget(self._remember_cb)
-        rem_row.addStretch()
-        self._account_combo = QComboBox()
-        self._account_combo.setFixedHeight(32)
-        self._account_combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._account_combo.setStyleSheet("""
-            QComboBox {
-                background: rgba(255,255,255,0.20);
-                color: white;
-                border: 1.5px solid rgba(255,255,255,0.55);
+            p.fillPath(path, QColor(BLUE_CARD))
+            cat_px = QPixmap(str(_ICON_DIR / "logo_kucing.png"))
+            if not cat_px.isNull():
+                cat_px = cat_px.scaled(self._size, self._size,
+                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                    Qt.TransformationMode.SmoothTransformation)
+                x = (self._size - cat_px.width()) // 2
+                y = (self._size - cat_px.height()) // 2
+                p.drawPixmap(x, y, cat_px)
+            else:
+                p.setPen(QColor(WHITE))
+                f = QFont(FONT_FAMILY, int(self._size * 0.4))
+                f.setBold(True); p.setFont(f)
+                p.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, "🐱")
+        p.setClipping(False)
+        pen = QPen(QColor(WHITE), 4)
+        p.setPen(pen); p.setBrush(Qt.BrushStyle.NoBrush)
+        p.drawEllipse(2, 2, self._size - 4, self._size - 4)
+        p.end()
+
+class ProfileTopBar(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(TOPBAR_HEIGHT)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(20, 8, 20, 8)
+        title = QLabel("My Profile")
+        title.setStyleSheet(f"color: {TEXT_DARK}; font-size: 18px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        layout.addWidget(title); layout.addStretch()
+
+
+class SwitchAccountDialog(QDialog):
+
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.setWindowTitle("Switch Account")
+        self.setFixedWidth(380)
+        self.setStyleSheet(f"""
+            QDialog {{
+                background: {BLUE_DARK};
                 border-radius: 16px;
-                padding: 2px 14px;
-                font-size: 12px;
-            }
-            QComboBox::drop-down { border: none; width: 22px; }
-            QComboBox QAbstractItemView {
-                background: #6a5acd;
-                color: white;
-                selection-background-color: #a78fd4;
-                border: none;
-                border-radius: 8px;
-            }
+            }}
         """)
-        self._account_combo.currentIndexChanged.connect(self._on_account_selected)
-        rem_row.addWidget(self._account_combo)
-        rl.addLayout(rem_row)
-        rl.addSpacing(16)
-        self.signin_btn = QPushButton("Sign In")
-        self.signin_btn.setFixedHeight(48)
-        self.signin_btn.setFixedWidth(220)
-        self.signin_btn.setFont(QFont("Segoe UI", 13, QFont.Weight.Bold))
-        self.signin_btn.setStyleSheet("""
-            QPushButton { background: #f0ecff; color: #5a4abf; border: none;
-                border-radius: 24px; font-weight: bold; }
-            QPushButton:hover   { background: #ddd5f5; }
-            QPushButton:pressed { background: #c8b8e8; }
-        """)
-        self.signin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.signin_btn.clicked.connect(self._do_login)
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        btn_row.addWidget(self.signin_btn)
-        btn_row.addStretch()
-        rl.addLayout(btn_row)
-        root.addWidget(right)
-        self.email_input.returnPressed.connect(self._do_login)
-        self.pass_input.returnPressed.connect(self._do_login)
-    def _apply_remember(self):
-        """
-        On startup:
-        - Populate the account combo with all remembered accounts.
-        - If a 'last' account exists (user had Remember Me checked last time),
-          pre-fill the fields and check the checkbox.
-        - If no 'last', leave fields empty — user must type credentials.
-        """
-        data     = self._remember_data
+        self._build()
+
+    def _build(self):
+        from .login_page import _load_remember
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
+        # ── Account list ──
+        body = QWidget()
+        body.setStyleSheet(f"background: {BLUE_DARK};")
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(16, 16, 16, 8)
+        body_layout.setSpacing(8)
+
+        data = _load_remember()
         accounts = data.get("accounts", [])
-        self._account_combo.blockSignals(True)
-        self._account_combo.clear()
-        for acc in accounts:
-            label = f"{acc['username']}  ({acc['email']})"
-            self._account_combo.addItem(label, acc)
-        self._account_combo.blockSignals(False)
-        # Show combo only when there are remembered accounts
-        self._account_combo.setVisible(len(accounts) > 0)
-        last = data.get("last")
-        if last:
-            # User had Remember Me on — pre-fill and keep checkbox checked
-            self._remember_cb.setChecked(True)
-            self.email_input.setText(last.get("email", ""))
-            self.pass_input.setText(_deobfuscate(last.get("password", "")))
-            # Select matching account in combo
-            for i in range(self._account_combo.count()):
-                acc = self._account_combo.itemData(i)
-                if acc and acc.get("email") == last.get("email"):
-                    self._account_combo.blockSignals(True)
-                    self._account_combo.setCurrentIndex(i)
-                    self._account_combo.blockSignals(False)
-                    break
+        current_email = self.main_window.current_user.get("email", "")
+
+        if accounts:
+            for acc in accounts:
+                is_active = acc["email"] == current_email
+                row = self._make_account_row(acc, is_active)
+                body_layout.addWidget(row)
         else:
-            # No remembered session — start with empty fields
-            self._remember_cb.setChecked(False)
-            self.email_input.clear()
-            self.pass_input.clear()
-    def _on_account_selected(self, idx: int):
-        acc = self._account_combo.itemData(idx)
-        if acc:
-            self.email_input.setText(acc.get("email", ""))
-            self.pass_input.setText(_deobfuscate(acc.get("password", "")))
-            self._remember_cb.setChecked(True)
-    def _lbl(self, text):
-        l = QLabel(text)
-        l.setStyleSheet("color: white; background: transparent; font-size: 13px; font-weight: 500;")
-        return l
-    def _input(self, password=False):
-        w = QLineEdit()
-        w.setFixedHeight(48)
-        if password:
-            w.setEchoMode(QLineEdit.EchoMode.Password)
-        w.setStyleSheet("""
-            QLineEdit { background: white; border: none; border-radius: 24px;
-                padding: 0 20px; font-size: 14px; color: #1a1a1a; }
-            QLineEdit:focus { border: 2px solid #a78fd4; }
+            empty = QLabel("No saved accounts.")
+            empty.setStyleSheet(f"color: rgba(255,255,255,0.60); font-size: 13px; background: transparent;")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            body_layout.addWidget(empty)
+
+        # ── Add account button ──
+        body_layout.addSpacing(8)
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet("background: rgba(255,255,255,0.15); border: none; max-height: 1px;")
+        body_layout.addWidget(sep)
+        body_layout.addSpacing(8)
+
+        add_btn = QPushButton("＋  Add Account")
+        add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        add_btn.setFixedHeight(42)
+        add_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: rgba(255,255,255,0.10);
+                color: {WHITE};
+                border: 1.5px solid rgba(255,255,255,0.35);
+                border-radius: 21px;
+                font-size: 13px;
+                font-weight: 600;
+                font-family: '{FONT_FAMILY}';
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,0.20); }}
         """)
-        return w
-    def _go_signup(self):
-        if self.on_switch_signup:
-            self.on_switch_signup()
-    def _toggle_password(self):
+        add_btn.clicked.connect(self._on_add_account)
+        body_layout.addWidget(add_btn)
+        body_layout.addSpacing(8)
+
+        layout.addWidget(body)
+
+    def _make_account_row(self, acc: dict, is_active: bool) -> QWidget:
+        row = QWidget()
+        row.setCursor(Qt.CursorShape.PointingHandCursor)
+        row.setFixedHeight(60)
+        row.setStyleSheet(f"""
+            QWidget {{
+                background: {"rgba(255,255,255,0.15)" if is_active else "rgba(255,255,255,0.06)"};
+                border-radius: 12px;
+            }}
+            QWidget:hover {{
+                background: rgba(255,255,255,0.22);
+            }}
+        """)
+        rl = QHBoxLayout(row)
+        rl.setContentsMargins(12, 0, 12, 0)
+        rl.setSpacing(12)
+
+        # Avatar circle
+        avatar = QLabel()
+        avatar.setFixedSize(38, 38)
+        avatar.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar.setStyleSheet(f"""
+            background: {BLUE_PRIMARY};
+            border-radius: 19px;
+            color: {WHITE};
+            font-size: 15px;
+            font-weight: 700;
+            font-family: '{FONT_FAMILY}';
+        """)
+        avatar.setText(acc.get("username", "?")[0].upper())
+        rl.addWidget(avatar)
+
+        # Username & email
+        info = QVBoxLayout()
+        info.setSpacing(2)
+        uname = QLabel(acc.get("username", ""))
+        uname.setStyleSheet(f"color: {WHITE}; font-size: 13px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        email_lbl = QLabel(acc.get("email", ""))
+        email_lbl.setStyleSheet(f"color: rgba(255,255,255,0.65); font-size: 11px; background: transparent; font-family: '{FONT_FAMILY}';")
+        info.addWidget(uname)
+        info.addWidget(email_lbl)
+        rl.addLayout(info)
+        rl.addStretch()
+
+        # Active badge or switch button
+        if is_active:
+            badge = QPushButton("Active")
+            badge.setFixedHeight(28)
+            badge.setEnabled(False)
+            badge.setStyleSheet(f"""
+                QPushButton {{
+                    background: rgba(255,255,255,0.25);
+                    color: {WHITE};
+                    border: none;
+                    border-radius: 14px;
+                    padding: 0 14px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    font-family: '{FONT_FAMILY}';
+                }}
+            """)
+            rl.addWidget(badge)
+        else:
+            switch_btn = QPushButton("Switch")
+            switch_btn.setFixedHeight(28)
+            switch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            switch_btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {WHITE};
+                    color: {BLUE_DARK};
+                    border: none;
+                    border-radius: 14px;
+                    padding: 0 14px;
+                    font-size: 11px;
+                    font-weight: 700;
+                    font-family: '{FONT_FAMILY}';
+                }}
+                QPushButton:hover {{ background: {BLUE_LIGHT}; }}
+            """)
+            switch_btn.clicked.connect(lambda _, a=acc: self._do_switch(a))
+            rl.addWidget(switch_btn)
+
+        return row
+
+    def _do_switch(self, acc: dict):
+        """Login ke akun lain dan reload MainWindow."""
+        from services.auth_service import AuthService
+        from .login_page import _deobfuscate, _save_remember
+        password = _deobfuscate(acc["password"])
+        user = AuthService().login(acc["email"], password)
+        if not user:
+            self.main_window.show_toast("⚠ Failed to switch account, please log in again.")
+            self.reject()
+            return
+        # Update 'last' di remember_me.json ke akun yang baru dipilih,
+        # sehingga auto-fill di login page ikut berubah sesuai akun terakhir dipakai.
+        _save_remember(
+            email=user["email"],
+            username=user["username"],
+            password_plain=password,
+        )
+        self.reject()
+        self.main_window._switch_to_user(user)
+
+    def _on_add_account(self):
+        """Buka AuthWindow untuk login akun baru."""
+        self.reject()
+        if callable(self.main_window.on_logout):
+            self.main_window.on_logout()
+
+
+def _update_remembered_account(old_email: str, new_email: str, new_username: str, new_password_plain: str = None):
+    try:
+        from .login_page import _load_remember, _obfuscate, _REMEMBER_FILE
+        import json
+        data = _load_remember()
+        updated = False
+        
+        # Update in accounts list
+        for acc in data.get("accounts", []):
+            if acc.get("email") == old_email:
+                acc["email"] = new_email
+                acc["username"] = new_username
+                if new_password_plain:
+                    acc["password"] = _obfuscate(new_password_plain)
+                updated = True
+                
+        # Update in last
+        last = data.get("last")
+        if last and last.get("email") == old_email:
+            last["email"] = new_email
+            last["username"] = new_username
+            if new_password_plain:
+                last["password"] = _obfuscate(new_password_plain)
+            updated = True
+            
+        if updated:
+            _REMEMBER_FILE.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+    except Exception as e:
+        print(f"[ProfilePage] Failed to update remembered account: {e}")
+
+
+class ProfilePage(QWidget):
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self._avatar_path = None
+        self._build()
+
+
+    def _build(self):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(ProfileTopBar())
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content = QWidget()
+        content.setStyleSheet(f"background: {WHITE};")
+        scroll.setWidget(content)
+        root.addWidget(scroll, stretch=1)
+        outer = QHBoxLayout(content)
+        outer.setContentsMargins(40, 30, 40, 30)
+        outer.addStretch()
+        card = QFrame()
+        card.setObjectName("ProfileCard")
+        card.setFixedWidth(560)
+        card.setStyleSheet(f"QFrame#ProfileCard {{ background: {BLUE_CARD}; border-radius: {CARD_RADIUS + 4}px; }}")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(36, 32, 36, 32)
+        card_layout.setSpacing(18)
+
+        avatar_row = QHBoxLayout(); avatar_row.addStretch()
+        self.avatar = AvatarLabel(140)
+        self.avatar.clicked.connect(self._on_change_avatar)
+        avatar_row.addWidget(self.avatar); avatar_row.addStretch()
+        card_layout.addLayout(avatar_row)
+
+        change_btn = QPushButton("Change Photo")
+        change_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        change_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {TEXT_DARK}; border: 1.5px solid {TEXT_DARK}; border-radius: 14px; padding: 6px 16px; font-size: 12px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(0,0,0,0.07); }}")
+        change_btn.clicked.connect(self._on_change_avatar)
+        change_row = QHBoxLayout(); change_row.addStretch(); change_row.addWidget(change_btn); change_row.addStretch()
+        card_layout.addLayout(change_row)
+        card_layout.addSpacing(8)
+
+        self.name_input = self._make_field(card_layout, "Username", "Insert username here...")
+        self.email_input = self._make_field(card_layout, "Email", "Insert email here...")
+        self._build_password_field(card_layout)
+
+        bio_label = QLabel("Short Bio")
+        bio_label.setStyleSheet(f"color: {TEXT_DARK}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        card_layout.addWidget(bio_label)
+        self.bio_input = QTextEdit()
+        self.bio_input.setPlaceholderText("Tell us a little about yourself...")
+        self.bio_input.setFixedHeight(90)
+        self.bio_input.setStyleSheet(f"QTextEdit {{ background: {WHITE}; border: none; border-radius: 10px; padding: 10px 12px; font-size: 13px; color: {TEXT_DARK}; font-family: '{FONT_FAMILY}'; }}")
+        card_layout.addWidget(self.bio_input)
+        card_layout.addSpacing(10)
+
+        btn_row = QHBoxLayout(); btn_row.setSpacing(10)
+
+        # Delete account icon button (bottom-left of card)
+        delete_icon_btn = QPushButton()
+        delete_icon_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        delete_icon_btn.setFixedSize(38, 38)
+        delete_icon_btn.setToolTip("Delete Account")
+        delete_user_icon = QPixmap(str(_ICON_DIR / "deleteuser.png"))
+        if not delete_user_icon.isNull():
+            delete_icon_btn.setIcon(QIcon(delete_user_icon))
+            delete_icon_btn.setIconSize(QSize(24, 24))
+        else:
+            delete_icon_btn.setText("🗑")
+        delete_icon_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+            }
+            QPushButton:hover {
+                background: rgba(255,255,255,0.15);
+                border-radius: 19px;
+            }
+        """)
+        delete_icon_btn.clicked.connect(self._on_delete_account)
+
+        cancel_btn = QPushButton("Back")
+        cancel_btn.setCursor(Qt.CursorShape.PointingHandCursor); cancel_btn.setFixedHeight(38)
+        cancel_btn.setStyleSheet(f"QPushButton {{ background: transparent; color: {TEXT_DARK}; border: 1.5px solid {TEXT_DARK}; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 600; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: rgba(0,0,0,0.07); }}")
+        cancel_btn.clicked.connect(self.main_window.go_home)
+        save_btn = QPushButton("Save Profile")
+        save_btn.setCursor(Qt.CursorShape.PointingHandCursor); save_btn.setFixedHeight(38)
+        save_btn.setStyleSheet(f"QPushButton {{ background: {WHITE}; color: {BLUE_DARK}; border: none; border-radius: 19px; padding: 0 22px; font-size: 13px; font-weight: 700; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ background: {BLUE_FOOTER}; }}")
+        save_btn.clicked.connect(self._on_save)
+        btn_row.addWidget(delete_icon_btn); btn_row.addStretch(); btn_row.addWidget(cancel_btn); btn_row.addWidget(save_btn)
+        card_layout.addLayout(btn_row)
+
+        # Switch Account button
+        card_layout.addSpacing(8)
+        switch_btn = QPushButton("Switch Account")
+        switch_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        switch_btn.setFixedHeight(40)
+        switch_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {TEXT_DARK};
+                border: 1.5px solid {TEXT_DARK};
+                border-radius: 20px;
+                padding: 0 22px;
+                font-size: 13px;
+                font-weight: 700;
+                font-family: '{FONT_FAMILY}';
+            }}
+            QPushButton:hover {{ background: rgba(0,0,0,0.07); }}
+        """)
+        switch_btn.clicked.connect(self._on_switch_account)
+        switch_row = QHBoxLayout()
+        switch_row.addStretch()
+        switch_row.addWidget(switch_btn)
+        switch_row.addStretch()
+        card_layout.addLayout(switch_row)
+
+        outer.addWidget(card); outer.addStretch()
+
+    def _make_field(self, parent_layout, label_text, placeholder, is_password=False):
+        label = QLabel(label_text)
+        label.setStyleSheet(f"color: {TEXT_DARK}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        parent_layout.addWidget(label)
+        field = QLineEdit()
+        field.setPlaceholderText(placeholder); field.setFixedHeight(36)
+        if is_password: field.setEchoMode(QLineEdit.EchoMode.Password)
+        field.setStyleSheet(f"QLineEdit {{ background: {WHITE}; border: none; border-radius: 18px; padding: 0 14px; font-size: 13px; color: {TEXT_DARK}; font-family: '{FONT_FAMILY}'; }} QLineEdit:focus {{ border: 1.5px solid {BLUE_DARK}; }}")
+        parent_layout.addWidget(field)
+        return field
+
+    def _build_password_field(self, parent_layout):
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        label = QLabel("Password")
+        label.setStyleSheet(f"color: {TEXT_DARK}; font-size: 12px; font-weight: 700; background: transparent; font-family: '{FONT_FAMILY}';")
+        header_layout.addWidget(label)
+        header_layout.addStretch()
+        
+        self.change_pwd_btn = QPushButton("Change Password")
+        self.change_pwd_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.change_pwd_btn.setStyleSheet(f"QPushButton {{ background: transparent; border: none; color: {TEXT_DARK}; font-size: 11px; font-weight: 600; text-decoration: underline; font-family: '{FONT_FAMILY}'; }} QPushButton:hover {{ color: {BLUE_LIGHT}; }}")
+        self.change_pwd_btn.clicked.connect(self._on_ganti_password)
+        header_layout.addWidget(self.change_pwd_btn)
+        
+        parent_layout.addLayout(header_layout)
+        
+        self.pass_input = QLineEdit()
+        self.pass_input.setPlaceholderText("••••••••")
+        self.pass_input.setFixedHeight(36)
+        self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pass_input.setReadOnly(True)
+        self.pass_input.setStyleSheet(f"QLineEdit {{ background: #E0E0E0; border: none; border-radius: 18px; padding: 0 14px; font-size: 13px; color: #888888; font-family: '{FONT_FAMILY}'; }} QLineEdit:focus {{ border: 1.5px solid {BLUE_DARK}; }}")
+        
+        self.toggle_pwd_action = self.pass_input.addAction(QIcon(str(_ICON_DIR / "hide.png")), QLineEdit.ActionPosition.TrailingPosition)
+        self.toggle_pwd_action.triggered.connect(self._toggle_password_visibility)
+        
+        parent_layout.addWidget(self.pass_input)
+
+    def _toggle_password_visibility(self):
         if self.pass_input.echoMode() == QLineEdit.EchoMode.Password:
             self.pass_input.setEchoMode(QLineEdit.EchoMode.Normal)
-            self._eye_btn.setIcon(self._eye_icon_show)
+            self.toggle_pwd_action.setIcon(QIcon(str(_ICON_DIR / "view.png")))
         else:
             self.pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-            self._eye_btn.setIcon(self._eye_icon_hide)
-    def _do_login(self):
-        self.error_lbl.setStyleSheet("color: #f4918e; background: transparent; font-size: 12px;")
-        self.error_lbl.setText("")
-        self.signin_btn.setEnabled(False)
-        self.signin_btn.setText("Signing in...")
-        email_or_user = self.email_input.text().strip()
-        password      = self.pass_input.text()
-        if not email_or_user or not password:
-            self.error_lbl.setText("⚠ Please enter your username/email and password.")
-            self.signin_btn.setEnabled(True)
-            self.signin_btn.setText("Sign In")
-            return
-        user = self._auth.login(email_or_user, password
-        self.signin_btn.setEnabled(True)
-        self.signin_btn.setText("Sign In")
-        if not user:
-            self.error_lbl.setText("⚠ Invalid username/email or password!")
-            self.pass_input.clear()
-            return
-        if self._remember_cb.isChecked():
-            # Save/update this account in remembered list and mark as 'last'
-            _save_remember(
-                email          = user["email"],
-                username       = user["username"],
-                password_plain = password,
-            )
-            # Refresh combo in case a new account was added
-            self._remember_data = _load_remember()
-            self._apply_remember()
+            self.toggle_pwd_action.setIcon(QIcon(str(_ICON_DIR / "hide.png")))
+
+    def _on_ganti_password(self):
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle("Confirm Password")
+        dialog.setLabelText("Enter your old password:")
+        dialog.setTextEchoMode(QLineEdit.EchoMode.Password)
+        dialog.setStyleSheet(f"""
+            QInputDialog {{
+                background: {BLUE_DARK};
+            }}
+            QLabel {{
+                color: {WHITE};
+                font-family: '{FONT_FAMILY}';
+                font-size: 13px;
+                background: transparent;
+            }}
+            QLineEdit {{
+                background: rgba(255,255,255,0.12);
+                color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.35);
+                border-radius: 8px;
+                padding: 4px 10px;
+                font-size: 13px;
+                font-family: '{FONT_FAMILY}';
+            }}
+            QPushButton {{
+                background: rgba(255,255,255,0.15);
+                color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.40);
+                border-radius: 10px;
+                padding: 5px 16px;
+                font-size: 12px;
+                font-weight: 600;
+                font-family: '{FONT_FAMILY}';
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.28);
+            }}
+        """)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            old_pwd = dialog.textValue()
+            if old_pwd:
+                from services.auth_service import AuthService
+                current_email = self.main_window.current_user.get("email", "")
+                user = AuthService().login(current_email, old_pwd)
+                if user:
+                    self._toast("Old password verified. Please enter your new password and click Save Profile.")
+                    self.pass_input.setReadOnly(False)
+                    self.pass_input.setStyleSheet(f"QLineEdit {{ background: {WHITE}; border: none; border-radius: 18px; padding: 0 14px; font-size: 13px; color: {TEXT_DARK}; font-family: '{FONT_FAMILY}'; }} QLineEdit:focus {{ border: 1.5px solid {BLUE_DARK}; }}")
+                    self.pass_input.setFocus()
+                else:
+                    self._toast("Incorrect old password!")
+
+    def _on_change_avatar(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Profile Photo",
+            "",
+            "Image (*.png *.jpg *.jpeg *.bmp *.webp)"
+        )
+
+        if path:
+            pix = QPixmap(path)
+
+            if not pix.isNull():
+                self.avatar.set_image(pix)
+                self._avatar_path = path
+
+                # UPDATE LOGO SIDEBAR LANGSUNG
+                self.main_window.update_sidebar_avatar(path)
+
+    def _on_save(self):
+        name = self.name_input.text().strip(); email = self.email_input.text().strip()
+        pwd = self.pass_input.text(); bio = self.bio_input.toPlainText().strip()
+        if not name: self._toast("Username cannot be empty"); return
+        if "@" not in email or "." not in email: self._toast("Invalid email"); return
+        if pwd and len(pwd) < 6: self._toast("Password must be at least 6 characters"); return
+        
+        from services.user_service import UserService
+        old_email = self.main_window.current_user.get("email", "")
+        
+        success = UserService().update_profile(user_id=self.main_window.current_user["id"], name=name, email=email, password=pwd if pwd else None, bio=bio, avatar_path=self._avatar_path)
+        
+        if success:
+            # Update memory session
+            self.main_window.current_user["email"] = email
+            self.main_window.current_user["username"] = name
+            
+            if self._avatar_path:
+                self.main_window.current_user["avatar_path"] = self._avatar_path
+                self.main_window.update_sidebar_avatar(self._avatar_path)
+                
+            # Update remembered credentials
+            _update_remembered_account(old_email, email, name, pwd if pwd else None)
+            
+            self._toast("Profile saved successfully")
         else:
-            # User does NOT want to be remembered:
-            # Remove from saved list and clear 'last' pointer
-            _remove_remember(user["email"])
-            _clear_last_remember()
-        if self.on_login:
-            self.on_login(user)
+            self._toast("Failed to save profile. Username/Email might be taken.")
+
+
+    def _on_delete_account(self):
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Delete Account")
+        msg.setText("Are you sure you want to delete your account?")
+        msg.setInformativeText("This action is permanent and cannot be undone. All your data will be lost.")
+        msg.setIcon(QMessageBox.Icon.Warning)
+        msg.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel)
+        msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        msg.button(QMessageBox.StandardButton.Yes).setText("Yes, Delete")
+        msg.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
+        msg.setStyleSheet(f"""
+            QMessageBox {{
+                background-color: {BLUE_DARK};
+                font-family: '{FONT_FAMILY}';
+            }}
+            QMessageBox QLabel {{
+                color: {WHITE};
+                background-color: transparent;
+                font-family: '{FONT_FAMILY}';
+                font-size: 13px;
+            }}
+            QMessageBox QTextEdit {{
+                background-color: transparent;
+                color: {WHITE};
+                border: none;
+            }}
+            QPushButton {{
+                background: rgba(255,255,255,0.15);
+                color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.40);
+                border-radius: 12px;
+                padding: 6px 18px;
+                font-family: '{FONT_FAMILY}';
+                font-size: 12px;
+                font-weight: 600;
+                min-width: 80px;
+            }}
+            QPushButton:hover {{
+                background: rgba(255,255,255,0.28);
+            }}
+        """)
+        result = msg.exec()
+        if result == QMessageBox.StandardButton.Yes:
+            from services.user_service import UserService
+            from .login_page import _remove_remember
+            user_id = self.main_window.current_user.get("id")
+            current_email = self.main_window.current_user.get("email", "")
+            success = UserService().delete_account(user_id)
+            if success:
+                _remove_remember(current_email)
+                if callable(self.main_window.on_logout):
+                    self.main_window.on_logout()
+            else:
+                self._toast("Failed to delete account. Please try again.")
+
+    def _on_switch_account(self):
+        dialog = SwitchAccountDialog(self.main_window, parent=self)
+        dialog.exec()
+
+    def _toast(self, msg: str):
+        if hasattr(self.main_window, "show_toast"): self.main_window.show_toast(msg)
+
+    def load_profile(self, name="", email="", bio="", avatar_path=None):
+        self.name_input.setText(name); self.email_input.setText(email)
+        self.bio_input.setPlainText(bio)
+        if avatar_path:
+            pix = QPixmap(avatar_path)
+            if not pix.isNull(): self.avatar.set_image(pix); self._avatar_path = avatar_path
+
+    def refresh(self):
+        try:
+            from services.user_service import UserService
+            data = UserService().get_profile(self.main_window.current_user["id"])
+            if data:
+                self.load_profile(
+                    name=data.name or data.username or "",
+                    email=data.email or "",
+                    bio=data.bio or "",
+                    avatar_path=data.avatar_path
+                )
+                
+                self.pass_input.clear()
+                    
+        except Exception as e:
+            print(f"[ProfilePage] refresh error: {e}")
