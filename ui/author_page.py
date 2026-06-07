@@ -155,7 +155,8 @@ class AuthorBarChart(QWidget):
             if len(display_name) > 18:
                 display_name = display_name[:16] + "…"
 
-            painter.setPen(QColor(TEXT_DARK))
+            # Label ON bar: WHITE if selected, else TEXT_DARK
+            painter.setPen(QColor(WHITE) if author == self._selected else QColor(TEXT_DARK))
             font = QFont("Segoe UI", 9, QFont.Weight.Bold)
             painter.setFont(font)
             label_rect = QRectF(10, y, bar_w - 20, bar_h)

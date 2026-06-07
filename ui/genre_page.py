@@ -125,9 +125,10 @@ class GenreBarChart(QWidget):
         self._data = {}         # {genre: count}
         self._selected = ""     # genre yang sedang aktif
         self._bar_rects = []    # simpan posisi bar untuk deteksi klik
+        self._hovered_genre = None  # genre yang sedang di-hover
         self.setMinimumWidth(220)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setMouseTracking(True)  # untuk hover effect
+        self.setMouseTracking(True)
 
     def set_data(self, counts: dict, selected_genre: str = ""):
         self._data = counts if counts else {}
@@ -154,8 +155,6 @@ class GenreBarChart(QWidget):
         bar_h = 28
         gap = 10
         total_items = len(self._data)
-        available_h = h - padding_t - padding_b
-        # Scrollable area logic — we draw all bars, let parent ScrollArea handle overflow
         start_y = padding_t
 
         self._bar_rects = []  # reset
@@ -175,11 +174,19 @@ class GenreBarChart(QWidget):
             if genre == self._selected:
                 grad.setColorAt(0, QColor(BLUE_PRIMARY))
                 grad.setColorAt(1, QColor("#64B5F6"))
+            elif genre == self._hovered_genre:
+                grad.setColorAt(0, QColor("#5BA4E6"))
+                grad.setColorAt(1, QColor("#82C4F8"))
             else:
                 grad.setColorAt(0, QColor(BLUE_CARD))
                 grad.setColorAt(1, QColor(BLUE_LIGHT))
             painter.setBrush(QBrush(grad))
-            painter.setPen(Qt.PenStyle.NoPen)
+
+            if genre == self._hovered_genre:
+                painter.setPen(QPen(QColor(WHITE), 2))
+            else:
+                painter.setPen(Qt.PenStyle.NoPen)
+
             path = QPainterPath()
             path.addRoundedRect(bar_rect, 14, 14)
             painter.drawPath(path)
@@ -202,7 +209,7 @@ class GenreBarChart(QWidget):
                 count_text
             )
 
-            # Manga count small text
+            # Percentage small text
             if total > 0:
                 pct = count / total * 100
                 painter.setPen(QColor(TEXT_MUTED))
@@ -214,7 +221,7 @@ class GenreBarChart(QWidget):
                     f"({pct:.0f}%)"
                 )
 
-            # Save rect for click detection
+            # Save rect for click/hover detection
             self._bar_rects.append((QRectF(0, y, w, bar_h), genre))
 
         # Update widget height hint based on content
@@ -222,13 +229,30 @@ class GenreBarChart(QWidget):
         if total_height != self.minimumHeight():
             self.setMinimumHeight(max(total_height, 200))
 
+    def mouseMoveEvent(self, event):
+        pos = event.position()
+        new_hover = None
+        for rect, genre in self._bar_rects:
+            if rect.contains(pos):
+                new_hover = genre
+                break
+
+        if new_hover != self._hovered_genre:
+            self._hovered_genre = new_hover
+            self.update()
+
+        super().mouseMoveEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            pos = event.position()
-            for rect, genre in self._bar_rects:
-                if rect.contains(pos):
-                    self.clicked_genre.emit(genre)
-                    break
+            if self._hovered_genre:
+                self.clicked_genre.emit(self._hovered_genre)
+            else:
+                pos = event.position()
+                for rect, genre in self._bar_rects:
+                    if rect.contains(pos):
+                        self.clicked_genre.emit(genre)
+                        break
         super().mousePressEvent(event)
 
 
@@ -619,7 +643,6 @@ class GenrePage(QWidget):
 
     def showEvent(self, event):
         super().showEvent(event)
-        # Force correct layout every time this page becomes visible
         from PyQt6.QtCore import QTimer
         if hasattr(self, '_left_scroll') and self._left_scroll:
             def _fix():
@@ -630,7 +653,6 @@ class GenrePage(QWidget):
             QTimer.singleShot(50, _fix)
             QTimer.singleShot(200, _fix)
 
-            
     def _on_bar_clicked(self, genre: str):
         """When user clicks a bar in the chart, switch to that genre."""
         if genre != self._current_genre:
