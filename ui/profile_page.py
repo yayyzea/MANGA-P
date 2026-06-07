@@ -342,7 +342,7 @@ class LoginPage(QWidget):
             self.signin_btn.setEnabled(True)
             self.signin_btn.setText("Sign In")
             return
-        user = self._auth.login(email_or_user, password)
+        user = self._auth.login(email_or_user, password
         self.signin_btn.setEnabled(True)
         self.signin_btn.setText("Sign In")
         if not user:
