@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel,
-    QSizePolicy, QHBoxLayout
+    QSizePolicy, QHBoxLayout, QGraphicsDropShadowEffect
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot, QMutex, QMutexLocker
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot, QPropertyAnimation, QEasingCurve, QPoint, QMutex, QMutexLocker
 from PyQt6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 import urllib.request
 from collections import deque
@@ -19,6 +19,7 @@ _active_loaders: list = []
 _pending_loaders: deque = deque()
 _pool_mutex = QMutex()
 
+
 def _try_start_next():
     """Jalankan loader berikutnya dari antrian jika ada slot kosong."""
     with QMutexLocker(_pool_mutex):
@@ -30,6 +31,7 @@ def _try_start_next():
             if not loader._cancelled:
                 _active_loaders.append(loader)
                 loader.start()
+
 
 class ImageLoader(QThread):
     loaded = pyqtSignal(QPixmap)
@@ -71,9 +73,11 @@ class ImageLoader(QThread):
         finally:
             _try_start_next()
 
+
 _CARD_MIN_W = 100   # lebar minimum card
 _CARD_MAX_W = 220   # lebar maksimum card
 _ASPECT     = CARD_H / CARD_W   # rasio tinggi:lebar cover (200/140 ≈ 1.43)
+
 
 class MangaCoverLabel(QLabel):
     """Rounded-corner cover image — lebar mengikuti parent, tinggi proporsional."""
@@ -106,8 +110,8 @@ class MangaCoverLabel(QLabel):
         self._pixmap = self._raw_pixmap.scaled(
             w, h,
             Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation
-)
+            Qt.TransformationMode.SmoothTransformation,
+        )
         self.update()
 
     def resizeEvent(self, event):
@@ -133,11 +137,12 @@ class MangaCoverLabel(QLabel):
         else:
             painter.fillPath(path, QColor("#90d5e4"))  # 水のドレス teal placeholder
 
+
 class MangaCard(QWidget):
     """
     Blue rounded card: _PAD px padding → cover image → title + genre text.
     The _PAD creates visible blue edges around the cover on all sides.
-    Hover: card pops forward with slight scale via margin trick.
+    Hover: card pops forward with shadow + slight scale via margin trick.
     """
     clicked = pyqtSignal(int)
 
@@ -154,7 +159,19 @@ class MangaCard(QWidget):
             f"border-radius: {CARD_RADIUS}px;"
         )
 
+        # Drop shadow — tipis saat normal, lebih besar saat hover
+        self._shadow = QGraphicsDropShadowEffect(self)
+        self._shadow.setBlurRadius(12)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(0, 0, 0, 60))
+        self.setGraphicsEffect(self._shadow)
+
         # Animasi posisi (pop-out ke atas)
+        self._anim = QPropertyAnimation(self, b"pos")
+        self._anim.setDuration(150)
+        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._base_pos = None
+
         self._build()
         self._load_cover()
 
@@ -234,6 +251,42 @@ class MangaCard(QWidget):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.manga.id)
 
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        from PyQt6.QtCore import QAbstractAnimation
+        if not self._hovered and self._anim.state() == QAbstractAnimation.State.Stopped:
+            self._base_pos = event.pos()
+
+    def enterEvent(self, event):
+        self._hovered = True
+        # Shadow lebih besar & gelap
+        self._shadow.setBlurRadius(28)
+        self._shadow.setOffset(0, 8)
+        self._shadow.setColor(QColor(0, 0, 0, 100))
+        # Pop ke atas 6px
+        if self._base_pos is None:
+            self._base_pos = self.pos()
+        self._anim.stop()
+        self._anim.setStartValue(self.pos())
+        self._anim.setEndValue(self._base_pos + QPoint(0, -6))
+        self._anim.start()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        # Kembalikan shadow normal
+        self._shadow.setBlurRadius(12)
+        self._shadow.setOffset(0, 4)
+        self._shadow.setColor(QColor(0, 0, 0, 60))
+        # Kembali ke posisi asal
+        if self._base_pos is None:
+            self._base_pos = self.pos()
+        self._anim.stop()
+        self._anim.setStartValue(self.pos())
+        self._anim.setEndValue(self._base_pos)
+        self._anim.start()
+        super().leaveEvent(event)
+
     def stop_loader(self):
         """Batalkan ImageLoader agar tidak membuang bandwidth jika card sudah dihapus."""
         if self._loader:
@@ -243,6 +296,7 @@ class MangaCard(QWidget):
     def closeEvent(self, event):
         self.stop_loader()
         super().closeEvent(event)
+
 
 class MangaCardGrid(QWidget):
     card_clicked = pyqtSignal(int)
