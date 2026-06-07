@@ -72,7 +72,10 @@ class StatCard(QWidget):
 
     def __init__(self, label, value="—", bg=None, parent=None):
         super().__init__(parent)
-        _force_bg(self, bg or BLUE_CARD, radius=CARD_RADIUS)
+        self._bg = bg or BLUE_CARD
+        self._hovered = False
+        self._pressed = False
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setMinimumWidth(140)
         self.setFixedHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -91,17 +94,53 @@ class StatCard(QWidget):
     def set_value(self, v):
         self._val.setText(str(v))
 
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), CARD_RADIUS, CARD_RADIUS)
+        if self._pressed:
+            color = QColor("#B8DFF0")
+        elif self._hovered:
+            color = QColor("#B8DFF0")
+        else:
+            color = QColor(self._bg)
+        painter.fillPath(path, color)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
+            self._pressed = True
+            self.update()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()):
+                self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 class WideCard(QWidget):
     clicked = pyqtSignal(str)
 
     def __init__(self, label, value="—", parent=None):
         super().__init__(parent)
-        _force_bg(self, BLUE_CARD, radius=CARD_RADIUS)
+        self._hovered = False
+        self._pressed = False
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self._card_value = "—"
         self.setFixedHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -123,10 +162,44 @@ class WideCard(QWidget):
         self._card_value = str(v) if v else "—"
         self._val.setText(self._card_value)
 
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), CARD_RADIUS, CARD_RADIUS)
+        if self._pressed:
+            color = QColor("#B8DFF0")
+        elif self._hovered:
+            color = QColor("#B8DFF0")
+        else:
+            color = QColor(BLUE_CARD)
+        painter.fillPath(path, color)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self._card_value != "—":
-            self.clicked.emit(self._card_value)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = True
+            self.update()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()) and self._card_value != "—":
+                self.clicked.emit(self._card_value)
+        super().mouseReleaseEvent(event)
 
 STATUS_COLORS = {
     "Plan to Read": "#a78fd4",
@@ -179,15 +252,30 @@ class PieChartWidget(QWidget):
 
         for label, count in items:
             span = int(round(count / total * 360 * 16))
-            color = QColor(STATUS_COLORS.get(label, BLUE_CARD))
-            painter.setBrush(QBrush(color))
+            base_color = QColor(STATUS_COLORS.get(label, BLUE_CARD))
 
             if label == self._hovered_label:
-                painter.setPen(Qt.PenStyle.NoPen)
+                # Warna lebih terang saat hover
+                hover_color = base_color.lighter(130)
+                painter.setBrush(QBrush(hover_color))
+                # Gambar slice sedikit lebih besar (pop out effect)
+                offset = 6
+                cx, cy = pie_rect.center().x(), pie_rect.center().y()
+                import math
+                mid_angle = math.radians((start_angle + span // 2) / 16)
+                ox = offset * math.cos(mid_angle)
+                oy = -offset * math.sin(mid_angle)
+                expanded_rect = QRectF(
+                    pie_rect.x() + ox - 4, pie_rect.y() + oy - 4,
+                    pie_rect.width() + 8, pie_rect.height() + 8
+                )
+                painter.setPen(QPen(QColor("white"), 2))
+                painter.drawPie(expanded_rect, start_angle, span)
             else:
+                painter.setBrush(QBrush(base_color))
                 painter.setPen(Qt.PenStyle.NoPen)
+                painter.drawPie(pie_rect, start_angle, span)
 
-            painter.drawPie(pie_rect, start_angle, span)
             self._slices.append((pie_rect, start_angle, span, label))
             start_angle += span
 
@@ -386,8 +474,9 @@ class LastReviewCard(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("lastReviewCard")
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        _force_bg(self, BLUE_CARD, radius=CARD_RADIUS)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+        self._hovered = False
+        self._pressed = False
         self._manga_id = None
         self._img_loader = None
 
@@ -487,10 +576,44 @@ class LastReviewCard(QWidget):
     def _on_cover(self, pixmap):
         self._cover.setPixmap(pixmap.scaled(60, 85, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation))
 
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), CARD_RADIUS, CARD_RADIUS)
+        if self._pressed:
+            color = QColor("#B8DFF0")
+        elif self._hovered:
+            color = QColor("#B8DFF0")
+        else:
+            color = QColor(BLUE_CARD)
+        painter.fillPath(path, color)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
-        if event.button() == Qt.MouseButton.LeftButton and self._manga_id:
-            self.clicked.emit(self._manga_id)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = True
+            self.update()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()) and self._manga_id:
+                self.clicked.emit(self._manga_id)
+        super().mouseReleaseEvent(event)
 
 def _chart_card(title: str, chart_widget: QWidget) -> QWidget:
     card = QWidget()
