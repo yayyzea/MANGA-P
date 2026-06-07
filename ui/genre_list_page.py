@@ -624,7 +624,7 @@ class GenreListPage(QWidget):
         tb.addWidget(title_lbl)
         tb.addStretch()
 
-        self._add_btn = QPushButton("＋ 100 Manga")
+        self._add_btn = QPushButton("＋ Manga")
         self._add_btn.setFixedHeight(34)
         self._add_btn.setStyleSheet(f"""
             QPushButton {{
@@ -780,7 +780,7 @@ class GenreListPage(QWidget):
     @pyqtSlot(int)
     def _on_add_finished(self, count: int):
         self._add_btn.setEnabled(True)
-        self._add_btn.setText("＋ 100 Manga")
+        self._add_btn.setText("＋ Manga")
 
         if count > 0:
             self._scrape_status.setText(
