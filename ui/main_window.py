@@ -624,6 +624,37 @@ class MainWindow(QMainWindow):
         if page: page.load_manga(manga_id)
         self._navigate(3)
 
+        # Update HistoryPanel di HomePage dari mana saja di aplikasi
+        self._update_history_panel(manga_id)
+
+    def _update_history_panel(self, manga_id: int):
+        """Load manga lalu update HistoryPanel di background thread.
+        Dipanggil setiap kali go_detail dipanggil — dari halaman manapun."""
+        from PyQt6.QtCore import QThread
+        from PyQt6.QtCore import pyqtSignal as _sig
+
+        class _HistoryUpdater(QThread):
+            done = _sig(object)
+            def __init__(self, mid):
+                super().__init__()
+                self._mid = mid
+            def run(self):
+                try:
+                    from services.manga_service import MangaService
+                    manga = MangaService().get_by_id(self._mid)
+                    self.done.emit(manga)
+                except Exception as e:
+                    print(f"[MainWindow] _update_history_panel error: {e}")
+                    self.done.emit(None)
+
+        loader = _HistoryUpdater(manga_id)
+        loader.done.connect(
+            lambda m: self.home_page.history.load_manga(m) if m else None
+        )
+        loader.start()
+        # Simpan referensi agar tidak di-GC sebelum selesai
+        self._hist_update_loader = loader
+
     def go_back(self):
         """Kembali ke halaman sebelumnya sebelum go_detail dipanggil."""
         prev = getattr(self, "_prev_index", 0)
