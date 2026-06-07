@@ -784,12 +784,12 @@ class GenreListPage(QWidget):
 
         if count > 0:
             self._scrape_status.setText(
-                f"✅  {count} manga berhasil ditambahkan! Memperbarui distribusi…"
+                f"✅  {count} Manga successfully added! Updating distribution…"
             )
             # Reload DB → update total counter + chart sekaligus
             self._load_from_db()
         else:
-            self._scrape_status.setText("⚠  Tidak ada manga baru yang berhasil ditambahkan.")
+            self._scrape_status.setText("⚠  No new manga was successfully added.")
 
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(3000, lambda: self._scrape_status.setVisible(False))
