@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel,
-    QSizePolicy, QHBoxLayout, QGraphicsDropShadowEffect
+    QSizePolicy, QHBoxLayout
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot, QPropertyAnimation, QEasingCurve, QPoint, QMutex, QMutexLocker
+from PyQt6.QtCore import Qt, pyqtSignal, QThread, pyqtSlot, QMutex, QMutexLocker
 from PyQt6.QtGui import QPixmap, QPainter, QPainterPath, QColor
 import urllib.request
 from collections import deque
@@ -168,25 +168,13 @@ class MangaCard(QWidget):
         self.show_labels = show_labels
         self._loader     = None
         self._hovered    = False
+        self._pressed    = False
 
         self.setObjectName("MangaCard")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setStyleSheet(
             f"border-radius: {CARD_RADIUS}px;"
         )
-
-        # Drop shadow — tipis saat normal, lebih besar saat hover
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self.setGraphicsEffect(self._shadow)
-
-        # Animasi posisi (pop-out ke atas)
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(150)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        self._base_pos = None
 
         self._build()
         self._load_cover()
@@ -260,47 +248,38 @@ class MangaCard(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
         path.addRoundedRect(0, 0, self.width(), self.height(), CARD_RADIUS, CARD_RADIUS)
-        painter.fillPath(path, QColor("#DCF0F7"))
+        if self._pressed:
+            color = QColor("#B8DFF0")
+        elif self._hovered:
+            color = QColor("#B8DFF0")
+        else:
+            color = QColor("#DCF0F7")
+        painter.fillPath(path, color)
         super().paintEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.manga.id)
+            self._pressed = True
+            self.update()
+        super().mousePressEvent(event)
 
-    def moveEvent(self, event):
-        super().moveEvent(event)
-        from PyQt6.QtCore import QAbstractAnimation
-        if not self._hovered and self._anim.state() == QAbstractAnimation.State.Stopped:
-            self._base_pos = event.pos()
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()):
+                self.clicked.emit(self.manga.id)
+        super().mouseReleaseEvent(event)
 
     def enterEvent(self, event):
         self._hovered = True
-        # Shadow lebih besar & gelap
-        self._shadow.setBlurRadius(28)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(0, 0, 0, 100))
-        # Pop ke atas 6px
-        if self._base_pos is None:
-            self._base_pos = self.pos()
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self._base_pos + QPoint(0, -6))
-        self._anim.start()
+        self.update()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         self._hovered = False
-        # Kembalikan shadow normal
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        # Kembali ke posisi asal
-        if self._base_pos is None:
-            self._base_pos = self.pos()
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self._base_pos)
-        self._anim.start()
+        self._pressed = False
+        self.update()
         super().leaveEvent(event)
 
     def stop_loader(self):

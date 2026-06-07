@@ -214,9 +214,10 @@ class MangaCardCompact(QWidget):
     def __init__(self, manga_data: dict, parent=None):
         super().__init__(parent)
         self.manga_id = manga_data.get("id", 0)
+        self._hovered = False
         self.setFixedSize(130, 225)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        _force_bg(self, BLUE_CARD, radius=10)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -251,6 +252,25 @@ class MangaCardCompact(QWidget):
 
     def _on_cover(self, pixmap):
         self.cover.set_cover(pixmap)
+
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 10, 10)
+        color = QColor("#C8E8F4") if self._hovered else QColor(BLUE_CARD)
+        painter.fillPath(path, color)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self.update()
+        super().leaveEvent(event)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

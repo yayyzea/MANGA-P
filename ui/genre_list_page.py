@@ -294,15 +294,12 @@ class MangaCardSmall(QWidget):
         self._total_h  = self._cover_h + 52
         self._inner_w  = card_w - 16
         self._hovered  = False
+        self._pressed  = False
 
         self.setFixedSize(self._card_w, self._total_h)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setMouseTracking(True)
-
-        # ── Animasi lift (naik saat hover) ──
-
-        self._set_style(hovered=False)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 6)
@@ -359,18 +356,6 @@ class MangaCardSmall(QWidget):
             )
             self._img_loader.start()
 
-    def _set_style(self, hovered: bool):
-        bg = "#dceeff" if hovered else BLUE_CARD
-        self.setStyleSheet(f"""
-            MangaCardSmall {{
-                background: {bg};
-                border-radius: 10px;
-            }}
-            MangaCardSmall QLabel {{
-                color: #111111;
-                background: transparent;
-            }}
-        """)
     def _on_cover(self, pixmap, w, h):
         try:
             if not self.cover or not self.isVisible():
@@ -383,10 +368,44 @@ class MangaCardSmall(QWidget):
         except RuntimeError:
             pass
 
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 10, 10)
+        if self._pressed:
+            color = QColor("#B8DFF0")
+        elif self._hovered:
+            color = QColor("#B8DFF0")
+        else:
+            color = QColor(BLUE_CARD)
+        painter.fillPath(path, color)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.manga_id)
+            self._pressed = True
+            self.update()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()):
+                self.clicked.emit(self.manga_id)
+        super().mouseReleaseEvent(event)
 
 # ── ScrapedGenrePage ──────────────────────────────────────────────────────────
 
@@ -745,8 +764,8 @@ class GenreListPage(QWidget):
             return
 
         self._add_btn.setEnabled(False)
-        self._add_btn.setText("⏳ Mengambil…")
-        self._scrape_status.setText("⏳  Mengambil 100 manga baru dari Jikan API…")
+        self._add_btn.setText("⏳ Scraping…")
+        self._scrape_status.setText("⏳ Scraping 100 new manga from Jikan API…")
         self._scrape_status.setVisible(True)
 
         self._add_worker = AddMangaWorker()
@@ -756,7 +775,7 @@ class GenreListPage(QWidget):
 
     @pyqtSlot(int)
     def _on_add_progress(self, count: int):
-        self._scrape_status.setText(f"⏳  Mengambil manga baru… {count} / 100")
+        self._scrape_status.setText(f"⏳  Scraping new manga… {count} / 100")
 
     @pyqtSlot(int)
     def _on_add_finished(self, count: int):

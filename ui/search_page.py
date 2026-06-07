@@ -147,7 +147,7 @@ class SearchBar(QWidget):
                 font-size: 16px;
                 color: {BLUE_PRIMARY};
             }}
-            QPushButton:hover {{ background: #E3F2FD; }}
+            QPushButton:hover {{ background: #B8DFF0; }}
         """)
         filter_btn.clicked.connect(self.filter_triggered)
         layout.addWidget(filter_btn)
