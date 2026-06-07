@@ -31,6 +31,23 @@ def _try_start_next():
                 _active_loaders.append(loader)
                 loader.start()
 
+def elide_to_two_lines(label: QLabel, text: str, max_width: int):
+    """Potong teks agar muat 2 baris, dengan ellipsis di akhir baris ke-2."""
+    metrics = label.fontMetrics()
+    line1 = metrics.elidedText(text, Qt.TextElideMode.ElideRight, max_width)
+    
+    if line1 == text:
+        # Teks muat 1 baris, tidak perlu potong
+        label.setText(text)
+        return
+    
+    # Cari batas kata untuk baris pertama
+    chars_per_line = len(line1)
+    baris1 = text[:chars_per_line].rsplit(" ", 1)[0]
+    sisa = text[len(baris1):].strip()
+    baris2 = metrics.elidedText(sisa, Qt.TextElideMode.ElideRight, max_width)
+    label.setText(f"{baris1}\n{baris2}")
+
 class ImageLoader(QThread):
     loaded = pyqtSignal(QPixmap)
 
@@ -172,7 +189,7 @@ class MangaCard(QWidget):
             self.lbl_title.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
             self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
             self.lbl_title.setStyleSheet(
-                "color: #111111; font-size: 13px; font-weight: 600; background: transparent;"
+                "color: #111111; font-size: 15px; font-weight: 600; background: transparent;"
             )
             from PyQt6.QtGui import QPalette, QColor as _QColor
             _pal = self.lbl_title.palette()
@@ -261,3 +278,46 @@ class MangaCardGrid(QWidget):
             layout.addWidget(card)
 
         layout.addStretch()
+
+class RatingBadge(QLabel):
+    def __init__(self, value, parent=None):
+        super().__init__(parent)
+        self.setText(f"★ {value}")
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("""
+            QLabel {
+                color: #f5c842;
+                font-size: 10px;
+                font-weight: 700;
+                background: rgba(255,255,255,0.12);
+                border-radius: 6px;
+                padding: 2px 8px;
+            }
+        """)
+
+class RoundedCoverLabel(QLabel):
+    def __init__(self, w: int, h: int, radius: int = 14, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(w, h)
+        self._w, self._h, self._r = w, h, radius
+        self.setStyleSheet("background: rgba(255,255,255,0.15);")
+
+    def set_cover(self, pixmap: QPixmap):
+        from PyQt6.QtGui import QPainter, QBrush, QPainterPath
+        scaled = pixmap.scaled(self._w, self._h,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation)
+        x = (scaled.width()  - self._w) // 2
+        y = (scaled.height() - self._h) // 2
+        cropped = scaled.copy(x, y, self._w, self._h)
+
+        rounded = QPixmap(self._w, self._h)
+        rounded.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(rounded)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self._w, self._h, self._r, self._r)
+        painter.setClipPath(path)
+        painter.drawPixmap(0, 0, cropped)
+        painter.end()
+        self.setPixmap(rounded)
