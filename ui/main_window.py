@@ -19,7 +19,6 @@ PER_PAGE = 25
 # ── Background scrape worker ──────────────────────────────────────────────────
 
 class _ScrapeWorker(QThread):
-    progress = pyqtSignal(int, int)
     finished = pyqtSignal(int)
 
     def run(self):
@@ -55,7 +54,6 @@ class _ScrapeWorker(QThread):
 
                     saved += len(raw_list)
                     page  += 1
-                    self.progress.emit(min(saved, TARGET), TARGET)
 
                     if len(resp["data"]) < fetch_n:
                         break
@@ -591,16 +589,15 @@ class MainWindow(QMainWindow):
     # ── Initial scrape ────────────────────────────────────────────────────────
 
     def _start_initial_scrape(self):
-        self._splash.enter_scrape_mode()
+        self._splash.set_scraping(True)
         self._scrape_worker = _ScrapeWorker()
-        self._scrape_worker.progress.connect(self._splash.update_scrape_progress)
         self._scrape_worker.finished.connect(self._on_scrape_finished)
         self._scrape_worker.start()
 
     def _on_scrape_finished(self, count: int):
-        self._splash.scrape_finished(count)
+        self._splash.set_scraping(False)
         # Reload HomePage dengan data yang baru masuk
-        QTimer.singleShot(600, self.home_page.refresh)
+        QTimer.singleShot(300, self.home_page.refresh)
 
     # ── Splash dismiss ────────────────────────────────────────────────────────
 

@@ -1,27 +1,25 @@
 """
 SplashScreen — overlay transparan di atas MainWindow.
-Muncul saat app pertama kali buka, fade out otomatis setelah
-HomePage selesai loading data (dan scraping selesai jika DB kosong).
+Muncul saat app pertama kali buka (termasuk saat scraping awal),
+fade out otomatis setelah HomePage selesai loading data.
 """
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QProgressBar
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
 from PyQt6.QtCore import (
     Qt, QTimer, QPropertyAnimation, QEasingCurve,
-    pyqtSlot, QPoint
+    pyqtSlot
 )
 from PyQt6.QtGui import (
-    QPainter, QPainterPath, QColor, QBrush,
-    QLinearGradient, QPen, QFont, QPixmap
+    QPainter, QColor, QBrush,
+    QLinearGradient, QFont, QPixmap
 )
 
-from .theme import BLUE_PRIMARY, BLUE_DARK, WHITE
+from .theme import WHITE
 
 
 # ── Dots loading animation ────────────────────────────────────────────────────
 
 class _DotsWidget(QWidget):
-    """Tiga titik yang bergantian membesar — indikator loading."""
-
     DOT_R   = 7
     DOT_GAP = 18
     PERIOD  = 1200
@@ -32,7 +30,6 @@ class _DotsWidget(QWidget):
         total_w = (n - 1) * self.DOT_GAP + self.DOT_R * 2
         self.setFixedSize(total_w + 8, self.DOT_R * 2 + 8)
         self._phase = 0
-
         self._timer = QTimer(self)
         self._timer.setInterval(30)
         self._timer.timeout.connect(self._tick)
@@ -55,15 +52,13 @@ class _DotsWidget(QWidget):
 
         for i in range(3):
             offset = (self._phase - i * (self.PERIOD / 3)) % self.PERIOD
-            t = offset / self.PERIOD
-            scale = 0.6 + 0.4 * (0.5 + 0.5 * math.sin(2 * math.pi * t - math.pi / 2))
-            r = self.DOT_R * scale
-
-            alpha = int(120 + 135 * scale)
-            color = QColor(255, 255, 255, alpha)
+            t      = offset / self.PERIOD
+            scale  = 0.6 + 0.4 * (0.5 + 0.5 * math.sin(2 * math.pi * t - math.pi / 2))
+            r      = self.DOT_R * scale
+            alpha  = int(120 + 135 * scale)
+            color  = QColor(255, 255, 255, alpha)
             p.setBrush(QBrush(color))
             p.setPen(Qt.PenStyle.NoPen)
-
             x = cx + i * self.DOT_GAP
             p.drawEllipse(int(x - r), int(cy - r), int(r * 2), int(r * 2))
 
@@ -72,13 +67,10 @@ class _DotsWidget(QWidget):
 
 class SplashScreen(QWidget):
     """
-    Overlay penuh di atas MainWindow.
-    - Mode normal  : dots animation + "Loading your library…"
-    - Mode scraping: progress bar + counter + status text
-    Panggil .dismiss() setelah semua proses selesai.
+    Overlay penuh di atas MainWindow — satu tampilan untuk semua kondisi
+    (loading biasa maupun scraping awal). Panggil notify_home_ready()
+    setelah HomePage selesai memuat data; splash akan fade out otomatis.
     """
-
-    SCRAPE_TARGET = 500
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -90,9 +82,8 @@ class SplashScreen(QWidget):
         self.raise_()
 
         self._dismissed       = False
-        self._scrape_done     = False
-        self._home_done       = False
         self._scraping_active = False
+        self._home_done       = False
 
         self._build_ui()
 
@@ -106,9 +97,8 @@ class SplashScreen(QWidget):
     def _build_ui(self):
         lay = QVBoxLayout(self)
         lay.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        lay.setSpacing(20)
+        lay.setSpacing(24)
 
-        # Logo PNG
         import os
         logo = QLabel()
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -131,61 +121,22 @@ class SplashScreen(QWidget):
             )
         lay.addWidget(logo)
 
-        # Subtitle — berubah saat scraping
-        self._sub = QLabel("Loading your library…")
-        self._sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._sub.setStyleSheet(
+        sub = QLabel("Loading your library…")
+        sub.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        sub.setStyleSheet(
             "color: rgba(255,255,255,0.65); font-size: 13px; background: transparent;"
         )
-        lay.addWidget(self._sub)
+        lay.addWidget(sub)
 
-        # ── Progress bar (hidden by default, shown during scraping) ──
-        self._progress_wrap = QWidget()
-        self._progress_wrap.setStyleSheet("background: transparent;")
-        self._progress_wrap.setFixedWidth(420)
-        pw_lay = QVBoxLayout(self._progress_wrap)
-        pw_lay.setContentsMargins(0, 0, 0, 0)
-        pw_lay.setSpacing(8)
-
-        self._bar = QProgressBar()
-        self._bar.setRange(0, self.SCRAPE_TARGET)
-        self._bar.setValue(0)
-        self._bar.setFixedHeight(10)
-        self._bar.setTextVisible(False)
-        self._bar.setStyleSheet("""
-            QProgressBar {
-                background: rgba(255,255,255,0.22);
-                border: none;
-                border-radius: 5px;
-            }
-            QProgressBar::chunk {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                    stop:0 white, stop:1 rgba(255,255,255,0.70));
-                border-radius: 5px;
-            }
-        """)
-        pw_lay.addWidget(self._bar)
-
-        self._count_lbl = QLabel("0 manga fetched")
-        self._count_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._count_lbl.setStyleSheet(
-            "color: rgba(255,255,255,0.78); font-size: 11px; background: transparent;"
-        )
-        pw_lay.addWidget(self._count_lbl)
-
-        self._progress_wrap.setVisible(False)
-        lay.addWidget(self._progress_wrap, alignment=Qt.AlignmentFlag.AlignHCenter)
-
-        # ── Dots (shown during normal loading) ──
         dots_container = QWidget()
         dots_container.setStyleSheet("background: transparent;")
-        dc = QVBoxLayout(dots_container)
+        from PyQt6.QtWidgets import QVBoxLayout as _VL
+        dc = _VL(dots_container)
         dc.setContentsMargins(0, 0, 0, 0)
         dc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._dots = _DotsWidget()
         dc.addWidget(self._dots, alignment=Qt.AlignmentFlag.AlignCenter)
         lay.addWidget(dots_container)
-        self._dots_container = dots_container
 
     # ── Background paint ──────────────────────────────────────────────────────
 
@@ -199,41 +150,16 @@ class SplashScreen(QWidget):
         grad.setColorAt(1.00, QColor("#c4b5de"))
         p.fillRect(self.rect(), grad)
 
-    # ── Scraping mode ─────────────────────────────────────────────────────────
+    # ── Scraping state (dipanggil dari MainWindow) ────────────────────────────
 
-    def enter_scrape_mode(self):
-        """Panggil sebelum scraping dimulai — tampilkan progress bar."""
-        self._scraping_active = True
-        self._sub.setText("Fetching the most popular manga from MyAnimeList.\nThis only needs to be done once.")
-        self._sub.setStyleSheet(
-            "color: rgba(255,255,255,0.88); font-size: 12px;"
-            "background: transparent;"
-        )
-        self._dots_container.setVisible(False)
-        self._progress_wrap.setVisible(True)
-
-    @pyqtSlot(int, int)
-    def update_scrape_progress(self, current: int, total: int):
-        self._bar.setValue(current)
-        self._count_lbl.setText(f"{current} manga fetched")
-
-    @pyqtSlot(int)
-    def scrape_finished(self, count: int):
-        """Dipanggil saat ScrapeWorker selesai."""
-        self._bar.setValue(self.SCRAPE_TARGET)
-        self._count_lbl.setText(f"{count} manga saved ✓")
-        self._scrape_done = True
-        self._scraping_active = False
-        # Kembali ke mode loading biasa sementara HomePage load
-        QTimer.singleShot(400, self._switch_to_loading_mode)
-
-    def _switch_to_loading_mode(self):
-        self._progress_wrap.setVisible(False)
-        self._dots_container.setVisible(True)
-        self._sub.setText("Loading your library…")
-        self._sub.setStyleSheet(
-            "color: rgba(255,255,255,0.65); font-size: 13px; background: transparent;"
-        )
+    def set_scraping(self, active: bool):
+        """
+        True  → tandai bahwa scraping sedang berjalan; tahan dismiss.
+        False → scraping selesai; coba dismiss kalau home juga sudah siap.
+        """
+        self._scraping_active = active
+        if not active:
+            self._try_dismiss()
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -244,7 +170,6 @@ class SplashScreen(QWidget):
         self._try_dismiss()
 
     def _try_dismiss(self):
-        """Dismiss hanya jika scraping selesai (atau tidak perlu) DAN home sudah siap."""
         if self._dismissed:
             return
         if self._scraping_active:
