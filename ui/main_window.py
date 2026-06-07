@@ -3,73 +3,16 @@ from PyQt6.QtWidgets import (
     QPushButton, QStackedWidget, QLabel, QGraphicsOpacityEffect,
     QFrame
 )
-from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QPoint, QThread, pyqtSignal
+from PyQt6.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, QSize, QPoint
 from PyQt6.QtGui import QFont, QColor, QPalette, QPixmap, QIcon, QPainter
 from pathlib import Path
-
+ 
 _ICON_DIR = Path(__file__).parent.parent / "assets"
-
+ 
 from .theme import BLUE_PRIMARY, WHITE, SIDEBAR_WIDTH, APP_STYLESHEET
 from .font_size_manager import FontSizeManager, FONT_MIN_PX, FONT_MAX_PX, FONT_BASE_PX
-
-TARGET   = 500
-PER_PAGE = 25
-
-
-# ── Background scrape worker ──────────────────────────────────────────────────
-
-class _ScrapeWorker(QThread):
-    finished = pyqtSignal(int)
-
-    def run(self):
-        try:
-            from services.jikan_service import JikanService
-            from services.manga_service import MangaService
-            from database import get_session
-            import time as _time
-
-            jikan   = JikanService()
-            svc     = MangaService()
-            session = get_session()
-            saved   = 0
-            page    = 1
-
-            try:
-                while saved < TARGET:
-                    remaining = TARGET - saved
-                    fetch_n   = min(PER_PAGE, remaining)
-                    params    = {"limit": fetch_n, "type": "manga", "page": page}
-                    try:
-                        _time.sleep(0.7)
-                        resp = jikan._get("top/manga", params=params)
-                    except Exception as e:
-                        print(f"[ScrapeWorker] Request error page {page}: {e}")
-                        break
-
-                    if not resp or "data" not in resp or not resp["data"]:
-                        break
-
-                    raw_list = [jikan._clean_manga(item) for item in resp["data"]]
-                    svc._bulk_upsert(raw_list, session)
-
-                    saved += len(raw_list)
-                    page  += 1
-
-                    if len(resp["data"]) < fetch_n:
-                        break
-            finally:
-                session.close()
-
-            self.finished.emit(min(saved, TARGET))
-
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
-            self.finished.emit(0)
-
-
-# ── Toast / FontSizePopup / Sidebar (unchanged) ───────────────────────────────
-
+ 
+ 
 class Toast(QLabel):
     def __init__(self, parent, message: str, duration: int = 2000):
         super().__init__(message, parent)
@@ -93,14 +36,14 @@ class Toast(QLabel):
         self._anim.setEasingCurve(QEasingCurve.Type.InQuad)
         self._anim.finished.connect(self.deleteLater)
         QTimer.singleShot(duration, self._anim.start)
-
+ 
     def _reposition(self):
         p = self.parent()
         if p:
             pw, ph = p.width(), p.height()
             self.move((pw - self.width()) // 2, ph - self.height() - 50)
-
-
+ 
+ 
 class FontSizePopup(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -115,6 +58,8 @@ class FontSizePopup(QFrame):
                 border: none;
             }
         """)
+
+
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 14, 16, 14)
@@ -208,8 +153,8 @@ class FontSizePopup(QFrame):
         self._px_lbl.setText(f"{px} px")
         self._btn_dec.setEnabled(mgr.can_decrease())
         self._btn_inc.setEnabled(mgr.can_increase())
-        steps   = FONT_MAX_PX - FONT_MIN_PX
-        done    = px - FONT_MIN_PX
+        steps = FONT_MAX_PX - FONT_MIN_PX
+        done  = px - FONT_MIN_PX
         total_w = self._bar_bg.width() or 168
         fill_w  = max(4, round(total_w * done / steps))
         self._bar_fill.setFixedWidth(fill_w)
@@ -239,7 +184,7 @@ class FontSizePopup(QFrame):
 class _AaButton(QWidget):
     from PyQt6.QtCore import pyqtSignal as _sig
     clicked = _sig()
-
+ 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("AaButton")
@@ -248,14 +193,14 @@ class _AaButton(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, False)
         self.setAutoFillBackground(False)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-
+ 
     def setChecked(self, state: bool):
         self._checked = state
         self.update()
-
+ 
     def isChecked(self) -> bool:
         return self._checked
-
+ 
     def paintEvent(self, event):
         from PyQt6.QtGui import QPainter, QBrush, QPen, QColor as QC
         p = QPainter(self)
@@ -280,24 +225,24 @@ class _AaButton(QWidget):
         p.setPen(QPen(QC(255, 255, 255, 255)))
         p.drawText(w // 2 - 4, 0, w // 2 + 4, h, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, "A")
         p.end()
-
+ 
     def enterEvent(self, event):
         self._hovered = True
         self.update()
         super().enterEvent(event)
-
+ 
     def leaveEvent(self, event):
         self._hovered = False
         self.update()
         super().leaveEvent(event)
-
+ 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self._checked = not self._checked
             self.update()
             self.clicked.emit()
         super().mousePressEvent(event)
-
+ 
     def keyPressEvent(self, event):
         from PyQt6.QtCore import Qt as Qt_
         if event.key() in (Qt_.Key.Key_Return, Qt_.Key.Key_Space):
@@ -305,16 +250,16 @@ class _AaButton(QWidget):
             self.update()
             self.clicked.emit()
         super().keyPressEvent(event)
-
-
+ 
+ 
 class Sidebar(QWidget):
     def __init__(self, on_navigate, on_logo_click=None, on_logout=None, parent=None):
         super().__init__(parent)
         self.setObjectName("Sidebar")
         self.setFixedWidth(SIDEBAR_WIDTH)
-        self.on_navigate   = on_navigate
+        self.on_navigate = on_navigate
         self.on_logo_click = on_logo_click
-        self.on_logout     = on_logout
+        self.on_logout = on_logout
         self.setAutoFillBackground(True)
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
@@ -322,7 +267,7 @@ class Sidebar(QWidget):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setStyleSheet("border-right: 2px solid rgba(0,60,120,0.20);")
         self._build()
-
+ 
     def _build(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 12, 8, 12)
@@ -357,9 +302,9 @@ class Sidebar(QWidget):
             self._buttons.append((page_idx, btn))
             layout.addWidget(btn, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addStretch()
-
+ 
         self._font_popup = FontSizePopup()
-        self._font_btn   = QPushButton()
+        self._font_btn = QPushButton()
         self._font_btn.setObjectName("SidebarFont")
         self._font_btn.setToolTip("Ukuran Teks")
         self._font_btn.setCheckable(True)
@@ -394,6 +339,7 @@ class Sidebar(QWidget):
         if self.on_logout:
             self._exit_btn.clicked.connect(self.on_logout)
         layout.addWidget(self._exit_btn, alignment=Qt.AlignmentFlag.AlignHCenter)
+
         layout.addSpacing(8)
         self._set_active(0)
 
@@ -401,9 +347,9 @@ class Sidebar(QWidget):
         from PyQt6.QtGui import QPixmap, QPainter, QPainterPath
         px = QPixmap(avatar_path)
         if not px.isNull():
-            size   = 40
+            size = 40
             scaled = px.scaled(size, size, Qt.AspectRatioMode.KeepAspectRatioByExpanding, Qt.TransformationMode.SmoothTransformation)
-            x = (scaled.width()  - size) // 2
+            x = (scaled.width() - size) // 2
             y = (scaled.height() - size) // 2
             cropped = scaled.copy(x, y, size, size)
             rounded = QPixmap(size, size)
@@ -416,14 +362,14 @@ class Sidebar(QWidget):
             painter.drawPixmap(0, 0, cropped)
             painter.end()
             self._logo_lbl.setPixmap(rounded)
-
+ 
     def _nav(self, page_idx): self._set_active(page_idx); self.on_navigate(page_idx)
-
+ 
     def _set_active(self, page_idx):
         for idx, btn in self._buttons: btn.setChecked(idx == page_idx)
-
+ 
     def set_active(self, page_idx): self._set_active(page_idx)
-
+ 
     def _toggle_font_popup(self):
         if self._font_popup.isVisible():
             self._font_popup.hide()
@@ -438,6 +384,7 @@ class Sidebar(QWidget):
         from PyQt6.QtWidgets import QApplication
         if obj is self._font_popup and event.type() == QEvent.Type.Hide:
             self._font_btn.setChecked(False)
+        # Auto-close popup ketika klik di luar
         if self._font_popup.isVisible() and event.type() == QEvent.Type.MouseButtonPress:
             from PyQt6.QtCore import QPoint
             gpos = event.globalPosition().toPoint() if hasattr(event, 'globalPosition') else event.globalPos()
@@ -446,8 +393,8 @@ class Sidebar(QWidget):
                 self._font_btn.setChecked(False)
                 QApplication.instance().removeEventFilter(self)
         return super().eventFilter(obj, event)
-
-
+ 
+ 
 def _history_path():
     import os
     base = os.path.dirname(os.path.abspath(__file__))
@@ -486,26 +433,11 @@ def save_history(user_id: int, manga_id: int):
         print(f"[History] save error: {e}")
 
 
-def _db_is_empty() -> bool:
-    try:
-        from database import get_session
-        from models.manga import Manga
-        session = get_session()
-        try:
-            return session.query(Manga).count() == 0
-        finally:
-            session.close()
-    except Exception:
-        return False
-
-
-# ── MainWindow ────────────────────────────────────────────────────────────────
-
 class MainWindow(QMainWindow):
     def __init__(self, user=None, on_logout=None):
         super().__init__()
         self.current_user = user
-        self.on_logout    = on_logout
+        self.on_logout = on_logout
         self.setWindowTitle("MANGA:P")
         self.resize(1140, 680)
         self.setMinimumSize(900, 580)
@@ -513,7 +445,6 @@ class MainWindow(QMainWindow):
         mgr = FontSizeManager.instance()
         mgr.set_base_stylesheet(APP_STYLESHEET)
         mgr.register_window(self)
-        self._scrape_worker = None
         self._build()
 
         try:
@@ -523,33 +454,27 @@ class MainWindow(QMainWindow):
                 self.update_sidebar_avatar(profile.avatar_path)
         except Exception as e:
             print("Avatar load error:", e)
-
+ 
     def _build(self):
         root = QWidget()
         root.setObjectName("CentralWidget")
         root.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setCentralWidget(root)
-        h = QHBoxLayout(root)
-        h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(0)
-
-        self.sidebar = Sidebar(
-            on_navigate=self._navigate,
-            on_logo_click=self.go_profile,
-            on_logout=self.on_logout,
-        )
+        h = QHBoxLayout(root); h.setContentsMargins(0,0,0,0); h.setSpacing(0)
+        self.sidebar = Sidebar(on_navigate=self._navigate, on_logo_click=self.go_profile, on_logout=self.on_logout)
         h.addWidget(self.sidebar)
+        self.stack = QStackedWidget(); h.addWidget(self.stack)
 
-        self.stack = QStackedWidget()
-        h.addWidget(self.stack)
-
+        # ── Lazy page cache — page hanya dibuat saat pertama kali dibuka ──
         self._page_cache = {}
 
+        # Hanya HomePage yang langsung dibuat (halaman pertama yang terlihat)
         from .home_page import HomePage
         self.home_page = HomePage(self)
         self._page_cache[0] = self.home_page
-        self.stack.addWidget(self.home_page)
+        self.stack.addWidget(self.home_page)  # index 0
 
+        # Sisanya pakai placeholder kosong dulu — diganti saat navigate
         self._placeholder_indices = {
             1: "library_page",
             2: "search_page",
@@ -576,43 +501,19 @@ class MainWindow(QMainWindow):
         self._splash.show()
         self._splash.raise_()
 
-        # ── Jika DB kosong, jalankan scraping di balik splash ──
-        if _db_is_empty():
-            QTimer.singleShot(300, self._start_initial_scrape)
-
-        # Restore history
+        # Restore history di background setelah UI tampil
         if self.current_user:
             last_id = load_history(self.current_user["id"])
             if last_id:
                 QTimer.singleShot(800, lambda: self._restore_history(last_id))
 
-    # ── Initial scrape ────────────────────────────────────────────────────────
-
-    def _start_initial_scrape(self):
-        self._splash.set_scraping(True)
-        self._scrape_worker = _ScrapeWorker()
-        self._scrape_worker.finished.connect(self._on_scrape_finished)
-        self._scrape_worker.start()
-
-    def _on_scrape_finished(self, count: int):
-        self._splash.set_scraping(False)
-        # Reset flag supaya reload berikutnya bisa trigger dismiss splash
-        self.home_page._splash_dismissed = False
-        # Reload HomePage dengan data yang baru masuk
-        QTimer.singleShot(300, self.home_page.refresh)
-
-    # ── Splash dismiss ────────────────────────────────────────────────────────
-
-    def dismiss_splash(self):
-        """Dipanggil oleh HomePage setelah data pertama kali selesai dimuat."""
-        if hasattr(self, '_splash') and self._splash:
-            self._splash.notify_home_ready()
-
-    # ── Lazy page creation ────────────────────────────────────────────────────
-
     def _restore_history(self, last_id: int):
+        """Load history manga di background thread agar tidak freeze UI."""
+        from PyQt6.QtCore import QThread
+        from PyQt6.QtCore import pyqtSignal as _sig
+
         class _HistoryLoader(QThread):
-            done = pyqtSignal(object)
+            done = _sig(object)
             def __init__(self, mid): super().__init__(); self._mid = mid
             def run(self):
                 try:
@@ -630,6 +531,7 @@ class MainWindow(QMainWindow):
         self._hist_loader.start()
 
     def _get_or_create_page(self, idx: int):
+        """Buat page jika belum ada, kembalikan widget-nya."""
         if idx in self._page_cache:
             return self._page_cache[idx]
 
@@ -672,18 +574,27 @@ class MainWindow(QMainWindow):
             setattr(self, name, page)
 
         return page
-
+ 
     def showEvent(self, event):
         super().showEvent(event)
+
+        from PyQt6.QtCore import QTimer
+
         QTimer.singleShot(300, self.home_page._relayout)
 
     def _navigate(self, idx):
+        # Inisialisasi page secara lazy saat pertama kali dibuka
         page = self._get_or_create_page(idx)
         if idx == 1 and page and hasattr(page, 'refresh'): page.refresh()
         if idx == 5 and page and hasattr(page, 'refresh'): page.refresh()
         if idx == 6 and page and hasattr(page, 'refresh'): page.refresh()
         self.stack.setCurrentIndex(idx)
         if idx in (0, 1, 5): self.sidebar.set_active(idx)
+
+    def dismiss_splash(self):
+        """Dipanggil oleh HomePage setelah data pertama kali selesai dimuat."""
+        if hasattr(self, '_splash') and self._splash:
+            self._splash.dismiss()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
@@ -692,11 +603,11 @@ class MainWindow(QMainWindow):
             if cw:
                 self._splash.resize(cw.size())
 
-    def go_home(self):     self._navigate(0)
-    def go_library(self):  self._navigate(1)
-    def go_about(self):    self._navigate(4)
+    def go_home(self): self._navigate(0)
+    def go_library(self): self._navigate(1)
+    def go_about(self): self._navigate(4)
     def go_dashboard(self): self._navigate(5)
-    def go_profile(self):  self._navigate(6)
+    def go_profile(self): self._navigate(6)
 
     def go_search(self, query=""):
         page = self._get_or_create_page(2)
@@ -704,35 +615,17 @@ class MainWindow(QMainWindow):
         self._navigate(2)
 
     def go_detail(self, manga_id: int):
+        # Simpan index halaman sebelumnya untuk tombol Back
         self._prev_index = self.stack.currentIndex()
+        # Simpan history dulu (hanya baca DB, cepat)
         if self.current_user:
             save_history(self.current_user["id"], manga_id)
         page = self._get_or_create_page(3)
         if page: page.load_manga(manga_id)
         self._navigate(3)
-        self._update_history_panel(manga_id)
-
-    def _update_history_panel(self, manga_id: int):
-        class _HistoryUpdater(QThread):
-            done = pyqtSignal(object)
-            def __init__(self, mid): super().__init__(); self._mid = mid
-            def run(self):
-                try:
-                    from services.manga_service import MangaService
-                    manga = MangaService().get_by_id(self._mid)
-                    self.done.emit(manga)
-                except Exception as e:
-                    print(f"[MainWindow] _update_history_panel error: {e}")
-                    self.done.emit(None)
-
-        loader = _HistoryUpdater(manga_id)
-        loader.done.connect(
-            lambda m: self.home_page.history.load_manga(m) if m else None
-        )
-        loader.start()
-        self._hist_update_loader = loader
 
     def go_back(self):
+        """Kembali ke halaman sebelumnya sebelum go_detail dipanggil."""
         prev = getattr(self, "_prev_index", 0)
         self._navigate(prev)
 
@@ -766,23 +659,29 @@ class MainWindow(QMainWindow):
         if page: page.load_genre(genre)
         self.stack.setCurrentIndex(12)
 
-    def show_toast(self, message: str, duration: int = 2500):
-        Toast(self, message, duration)
+    def show_toast(self, message: str, duration: int = 2500): Toast(self, message, duration)
 
     def update_sidebar_avatar(self, avatar_path: str):
         self.sidebar.update_logo(avatar_path)
 
     def _switch_to_user(self, user: dict):
+        """Reload seluruh halaman untuk user baru setelah switch account."""
         self.current_user = user
+
+        # Hanya refresh page yang sudah pernah dibuat (lazy)
         for idx, page in self._page_cache.items():
             if hasattr(page, 'refresh'):
                 page.refresh()
+
+        # Load avatar sidebar user baru kalau ada
         try:
             from services.user_service import UserService
             profile = UserService().get_profile(user["id"])
             if profile and profile.avatar_path:
                 self.update_sidebar_avatar(profile.avatar_path)
             else:
+                # Reset ke logo default
+                from PyQt6.QtGui import QPixmap
                 _logo_px = QPixmap(str(_ICON_DIR / "logo_kucing.png"))
                 if not _logo_px.isNull():
                     self.sidebar._logo_lbl.setPixmap(
