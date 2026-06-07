@@ -350,6 +350,8 @@ class SearchBar(QWidget):
         pal = self.palette()
         pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
         self.setPalette(pal)
+        self._filter_hovered = False
+        self._filter_pressed = False
         self._build()
 
     def _build(self):
@@ -396,6 +398,7 @@ class SearchBar(QWidget):
         """)
         self.input.returnPressed.connect(self._on_search)
         wrapper_layout.addWidget(self.input)
+        input_wrapper.installEventFilter(self)
         layout.addWidget(input_wrapper)
 
         self.filter_btn = QPushButton()
@@ -413,13 +416,52 @@ class SearchBar(QWidget):
                 border-radius: 22px; font-size: 16px; color: {BLUE_PRIMARY};
             }}
         """)
-
         self.filter_btn.clicked.connect(self.filter_triggered)
         self.filter_btn.installEventFilter(self)
         layout.addWidget(self.filter_btn)
 
     def eventFilter(self, obj, event):
+        from PyQt6.QtCore import QEvent
+        if event.type() == QEvent.Type.Enter:
+            if obj == self._input_wrapper:
+                self._input_wrapper.setStyleSheet(f"""
+                    QWidget {{ background: #E8F4FB; border-radius: 22px; }}
+                """)
+            elif obj == self.filter_btn:
+                self._filter_hovered = True
+                self._apply_filter_style()
+        elif event.type() == QEvent.Type.Leave:
+            if obj == self._input_wrapper:
+                self._input_wrapper.setStyleSheet(f"""
+                    QWidget {{ background: {WHITE}; border-radius: 22px; }}
+                """)
+            elif obj == self.filter_btn:
+                self._filter_hovered = False
+                self._filter_pressed = False
+                self._apply_filter_style()
+        elif event.type() == QEvent.Type.MouseButtonPress:
+            if obj == self.filter_btn:
+                self._filter_pressed = True
+                self._apply_filter_style()
+        elif event.type() == QEvent.Type.MouseButtonRelease:
+            if obj == self.filter_btn:
+                self._filter_pressed = False
+                self._apply_filter_style()
         return super().eventFilter(obj, event)
+
+    def _apply_filter_style(self):
+        if self._filter_pressed:
+            bg = "#9DCCE8"
+        elif self._filter_hovered:
+            bg = "#B8DFF0"
+        else:
+            bg = WHITE
+        self.filter_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {bg}; border: none;
+                border-radius: 22px; font-size: 16px; color: {BLUE_PRIMARY};
+            }}
+        """)
 
     def _on_search(self):
         self.search_triggered.emit(self.input.text().strip())
@@ -432,7 +474,9 @@ class MostGenreCard(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        _force_bg(self, BLUE_CARD, radius=CARD_RADIUS)
+        self._hovered = False
+        self._pressed = False
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setFixedHeight(110)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -487,10 +531,44 @@ class MostGenreCard(QWidget):
     def set_genre(self, genre: str):
         self._value.setText(genre if genre else "—")
 
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), CARD_RADIUS, CARD_RADIUS)
+        if self._pressed:
+            color = QColor("#B8DFF0")
+        elif self._hovered:
+            color = QColor("#B8DFF0")
+        else:
+            color = QColor(BLUE_CARD)
+        painter.fillPath(path, color)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit()
+            self._pressed = True
+            self.update()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()):
+                self.clicked.emit()
+        super().mouseReleaseEvent(event)
 
 class _GenreOnlyLoader(QThread):
     """Lightweight loader: hanya hitung genre_counts dari seluruh DB, tanpa fetch top manga."""

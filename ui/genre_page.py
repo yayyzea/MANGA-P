@@ -243,10 +243,11 @@ class MangaCardSmall(QWidget):
     def __init__(self, manga_data: dict, parent=None):
         super().__init__(parent)
         self.manga_id = manga_data.get("id", 0)
+        self._hovered = False
+        self._pressed = False
         self.setFixedSize(130, 210)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"background: {BLUE_CARD}; border-radius: 10px;")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
 
         # Force black text via QPalette — overrides APP_STYLESHEET inheritance
         from PyQt6.QtGui import QPalette, QColor
@@ -314,10 +315,44 @@ class MangaCardSmall(QWidget):
             )
         )
 
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 10, 10)
+        if self._pressed:
+            color = QColor("#B8DFF0")
+        elif self._hovered:
+            color = QColor("#B8DFF0")
+        else:
+            color = QColor(BLUE_CARD)
+        painter.fillPath(path, color)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.manga_id)
+            self._pressed = True
+            self.update()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()):
+                self.clicked.emit(self.manga_id)
+        super().mouseReleaseEvent(event)
 
 
 # ══════════════════════════════════════════════════════════════════════

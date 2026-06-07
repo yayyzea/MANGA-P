@@ -84,11 +84,11 @@ class MangaCardCompact(QWidget):
     def __init__(self, manga_data: dict, accent_color: str, parent=None):
         super().__init__(parent)
         self.manga_id = manga_data.get("id", 0)
+        self._hovered = False
+        self._pressed = False
         self.setFixedSize(130, 225)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        _force_bg(self, '#DCF0F7', radius=10)
-
-        # Animasi posisi pop-out ke atas (identik MangaCard)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -128,10 +128,44 @@ class MangaCardCompact(QWidget):
     def _on_cover(self, pixmap):
         self.cover.set_cover(pixmap)
 
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPainterPath, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, self.width(), self.height(), 10, 10)
+        if self._pressed:
+            color = QColor("#B8DFF0")
+        elif self._hovered:
+            color = QColor("#B8DFF0")
+        else:
+            color = QColor("#DCF0F7")
+        painter.fillPath(path, color)
+
+    def enterEvent(self, event):
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self._hovered = False
+        self._pressed = False
+        self.update()
+        super().leaveEvent(event)
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            self.clicked.emit(self.manga_id)
+            self._pressed = True
+            self.update()
         super().mousePressEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.pos()):
+                self.clicked.emit(self.manga_id)
+        super().mouseReleaseEvent(event)
 
 class StatusPage(QWidget):
     """Page showing manga filtered by collection status."""

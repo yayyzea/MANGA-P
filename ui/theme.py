@@ -115,12 +115,9 @@ QWidget {{
 
 /* ── Manga card ── */
 #MangaCard {{
-    background: {BLUE_CARD};
+    background: transparent;
     border-radius: {CARD_RADIUS}px;
     border: none;
-}}
-#MangaCard:hover {{
-    background: #fce4f0;
 }}
 
 #MangaCard QLabel {{
