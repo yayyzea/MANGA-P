@@ -271,12 +271,46 @@ class SwitchAccountDialog(QDialog):
             self.main_window.on_logout()
 
 
+def _update_remembered_account(old_email: str, new_email: str, new_username: str, new_password_plain: str = None):
+    try:
+        from .login_page import _load_remember, _obfuscate, _REMEMBER_FILE
+        import json
+        data = _load_remember()
+        updated = False
+        
+        # Update in accounts list
+        for acc in data.get("accounts", []):
+            if acc.get("email") == old_email:
+                acc["email"] = new_email
+                acc["username"] = new_username
+                if new_password_plain:
+                    acc["password"] = _obfuscate(new_password_plain)
+                updated = True
+                
+        # Update in last
+        last = data.get("last")
+        if last and last.get("email") == old_email:
+            last["email"] = new_email
+            last["username"] = new_username
+            if new_password_plain:
+                last["password"] = _obfuscate(new_password_plain)
+            updated = True
+            
+        if updated:
+            _REMEMBER_FILE.write_text(
+                json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8"
+            )
+    except Exception as e:
+        print(f"[ProfilePage] Failed to update remembered account: {e}")
+
+
 class ProfilePage(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
         self._avatar_path = None
         self._build()
+
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -515,12 +549,28 @@ class ProfilePage(QWidget):
         if not name: self._toast("Username cannot be empty"); return
         if "@" not in email or "." not in email: self._toast("Invalid email"); return
         if pwd and len(pwd) < 6: self._toast("Password must be at least 6 characters"); return
+        
         from services.user_service import UserService
-        UserService().update_profile(user_id=self.main_window.current_user["id"], name=name, email=email, password=pwd if pwd else None, bio=bio, avatar_path=self._avatar_path)
-        if self._avatar_path:
-            self.main_window.current_user["avatar_path"] = self._avatar_path
-            self.main_window.update_sidebar_avatar(self._avatar_path)
-        self._toast("Profile saved successfully ✓")
+        old_email = self.main_window.current_user.get("email", "")
+        
+        success = UserService().update_profile(user_id=self.main_window.current_user["id"], name=name, email=email, password=pwd if pwd else None, bio=bio, avatar_path=self._avatar_path)
+        
+        if success:
+            # Update memory session
+            self.main_window.current_user["email"] = email
+            self.main_window.current_user["username"] = name
+            
+            if self._avatar_path:
+                self.main_window.current_user["avatar_path"] = self._avatar_path
+                self.main_window.update_sidebar_avatar(self._avatar_path)
+                
+            # Update remembered credentials
+            _update_remembered_account(old_email, email, name, pwd if pwd else None)
+            
+            self._toast("Profile saved successfully")
+        else:
+            self._toast("Failed to save profile. Username/Email might be taken.")
+
 
     def _on_delete_account(self):
         msg = QMessageBox(self)

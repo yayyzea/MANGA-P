@@ -1,9 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-    QPushButton, QLineEdit, QCheckBox, QGridLayout, QMessageBox,
-    QGraphicsDropShadowEffect, QComboBox,
+    QPushButton, QLineEdit, QCheckBox, QGridLayout, QMessageBox, QComboBox
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QSize, QTimer, QPropertyAnimation, QEasingCurve, QEvent, QPoint
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent
 from PyQt6.QtGui import QColor, QPalette, QPixmap, QIcon
 from pathlib import Path
 
@@ -17,7 +16,6 @@ from .theme import (
 from .widgets import MangaCard, _CARD_MIN_W, _CARD_MAX_W, _ASPECT, _PAD
 from .add_manga_form import AddMangaForm
 
-
 GENRES = [
     "Action",        "Drama",
     "Adventure",     "Fantasy",
@@ -30,7 +28,6 @@ GENRES = [
 ]
 
 READ_STATUS_OPTIONS = ["Plan to Read", "Reading", "Completed", "Dropped"]
-
 
 def _filter_entries(entries, query: str, genres: list, statuses: list, year: str):
     result = []
@@ -55,7 +52,6 @@ def _filter_entries(entries, query: str, genres: list, statuses: list, year: str
                 pass
         result.append(entry)
     return result
-
 
 class CollectionLoader(QThread):
     finished = pyqtSignal(list, list)
@@ -103,7 +99,6 @@ class CollectionLoader(QThread):
             traceback.print_exc()
             print(f"[LibraryPage] Load error: {e}")
             self.finished.emit([], [])
-
 
 class LibrarySearchBar(QWidget):
     search_triggered  = pyqtSignal(str)
@@ -166,15 +161,6 @@ class LibrarySearchBar(QWidget):
         )
         wrapper_layout.addWidget(self.input)
 
-        self._input_shadow = QGraphicsDropShadowEffect(input_wrapper)
-        self._input_shadow.setBlurRadius(12)
-        self._input_shadow.setOffset(0, 4)
-        self._input_shadow.setColor(QColor(0, 0, 0, 60))
-        input_wrapper.setGraphicsEffect(self._input_shadow)
-
-        self._input_anim = QPropertyAnimation(input_wrapper, b"pos")
-        self._input_anim.setDuration(150)
-        self._input_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self._input_wrapper = input_wrapper
         input_wrapper.installEventFilter(self)
 
@@ -198,15 +184,6 @@ class LibrarySearchBar(QWidget):
             QPushButton:checked {{ background: #ddd5f5; }}
         """)
 
-        self._filter_shadow = QGraphicsDropShadowEffect(self.filter_btn)
-        self._filter_shadow.setBlurRadius(12)
-        self._filter_shadow.setOffset(0, 4)
-        self._filter_shadow.setColor(QColor(0, 0, 0, 60))
-        self.filter_btn.setGraphicsEffect(self._filter_shadow)
-
-        self._filter_anim = QPropertyAnimation(self.filter_btn, b"pos")
-        self._filter_anim.setDuration(150)
-        self._filter_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.filter_btn.installEventFilter(self)
 
         self.filter_btn.clicked.connect(self.filter_toggled)
@@ -232,15 +209,6 @@ class LibrarySearchBar(QWidget):
             }}
         """)
 
-        self._trash_shadow = QGraphicsDropShadowEffect(self.trash_btn)
-        self._trash_shadow.setBlurRadius(12)
-        self._trash_shadow.setOffset(0, 4)
-        self._trash_shadow.setColor(QColor(0, 0, 0, 60))
-        self.trash_btn.setGraphicsEffect(self._trash_shadow)
-
-        self._trash_anim = QPropertyAnimation(self.trash_btn, b"pos")
-        self._trash_anim.setDuration(150)
-        self._trash_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
         self.trash_btn.installEventFilter(self)
 
         self.trash_btn.toggled.connect(self.delete_toggled)
@@ -253,42 +221,6 @@ class LibrarySearchBar(QWidget):
 
     def get_text(self) -> str:
         return self.input.text().strip()
-
-    def eventFilter(self, obj, event):
-        if event.type() == QEvent.Type.Enter:
-            if obj == self._input_wrapper:
-                self._hover_in(self._input_shadow, self._input_anim, self._input_wrapper)
-            elif obj == self.filter_btn:
-                self._hover_in(self._filter_shadow, self._filter_anim, self.filter_btn)
-            elif obj == self.trash_btn:
-                self._hover_in(self._trash_shadow, self._trash_anim, self.trash_btn)
-        elif event.type() == QEvent.Type.Leave:
-            if obj == self._input_wrapper:
-                self._hover_out(self._input_shadow, self._input_anim, self._input_wrapper)
-            elif obj == self.filter_btn:
-                self._hover_out(self._filter_shadow, self._filter_anim, self.filter_btn)
-            elif obj == self.trash_btn:
-                self._hover_out(self._trash_shadow, self._trash_anim, self.trash_btn)
-        return super().eventFilter(obj, event)
-
-    def _hover_in(self, shadow, anim, widget):
-        shadow.setBlurRadius(28)
-        shadow.setOffset(0, 8)
-        shadow.setColor(QColor(0, 0, 0, 100))
-        anim.stop()
-        anim.setStartValue(widget.pos())
-        anim.setEndValue(widget.pos() + QPoint(0, -4))
-        anim.start()
-
-    def _hover_out(self, shadow, anim, widget):
-        shadow.setBlurRadius(12)
-        shadow.setOffset(0, 4)
-        shadow.setColor(QColor(0, 0, 0, 60))
-        anim.stop()
-        anim.setStartValue(widget.pos())
-        anim.setEndValue(widget.pos() + QPoint(0, 4))
-        anim.start()
-
 
 class LibraryFilterPanel(QWidget):
     apply_clicked = pyqtSignal()
@@ -343,7 +275,7 @@ class LibraryFilterPanel(QWidget):
         self._custom_genre_input.setPlaceholderText("e.g. Isekai")
         self._custom_genre_input.setStyleSheet(f"""
             QLineEdit {{
-                background: {WHITE};
+                background: transparent;
                 border: 1.5px solid {BLUE_LIGHT};
                 border-radius: 6px; padding: 4px 10px;
                 font-size: 13px; color: {TEXT_DARK};
@@ -365,16 +297,19 @@ class LibraryFilterPanel(QWidget):
                 s_grid.addWidget(cb, row_idx, col_idx)
         root.addLayout(s_grid)
 
-        root.addWidget(self._subheading("Tahun"))
+        root.addWidget(self._subheading("Year"))
         self._year_input = QLineEdit()
+        self._year_input.setPlaceholderText("e.g. 2023")
         self._year_input.setFixedHeight(32)
         self._year_input.setMaximumWidth(110)
         self._year_input.setStyleSheet(f"""
             QLineEdit {{
-                background: {WHITE};
+                background: transparent;
                 border: 1.5px solid {BLUE_LIGHT};
-                border-radius: 6px; padding: 4px 10px;
-                font-size: 13px; color: {TEXT_DARK};
+                border-radius: 6px; 
+                padding: 4px 10px;
+                font-size: 13px; 
+                color: {TEXT_DARK};
             }}
             QLineEdit:focus {{ border-color: {BLUE_PRIMARY}; }}
         """)
@@ -393,7 +328,8 @@ class LibraryFilterPanel(QWidget):
                 border: 2.5px solid {BLUE_PRIMARY};
                 border-radius: 23px;
                 color: {BLUE_PRIMARY};
-                font-size: 15px; font-weight: 700;
+                font-size: 15px; 
+                font-weight: 700;
             }}
             QPushButton:hover {{
                 background: {BLUE_PRIMARY};
@@ -444,7 +380,6 @@ class LibraryFilterPanel(QWidget):
     def toggle_visibility(self):
         self.setVisible(not self.isVisible())
 
-
 class _CircleCheck(QWidget):
     """Tombol centang bulat custom — transparan saat unchecked, hijau + ceklis saat checked."""
 
@@ -492,7 +427,6 @@ class _CircleCheck(QWidget):
             p.setBrush(QBrush(_QC(255, 255, 255, 180)))
             p.setPen(QPen(_QC(WHITE), 2.2))
             p.drawEllipse(1, 1, s-2, s-2)
-
 
 _STATUS_OPTIONS = ["Plan to Read", "Reading", "Completed", "Dropped"]
 
@@ -544,7 +478,6 @@ def _status_combo_style(status: str) -> str:
             font-size: 11px;
         }}
     """
-
 
 class SelectableMangaCard(QWidget):
     clicked = pyqtSignal(int)
@@ -641,7 +574,6 @@ class SelectableMangaCard(QWidget):
 
     def is_selected(self) -> bool:
         return self._checkbox is not None and self._checkbox.is_checked()
-
 
 class CardRow(QWidget):
     """Menampilkan kartu manga dalam grid yang wrap otomatis — tidak ada scroll horizontal sendiri."""
@@ -768,7 +700,6 @@ class CardRow(QWidget):
             if item.widget():
                 item.widget().deleteLater()
 
-
 class DeleteConfirmBar(QWidget):
     cancelled = pyqtSignal()
     confirmed = pyqtSignal()
@@ -847,7 +778,6 @@ class DeleteConfirmBar(QWidget):
             self.info_lbl.setText(f"{count} manga selected")
             self.delete_btn.setEnabled(True)
 
-
 class LibraryPage(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
@@ -903,7 +833,16 @@ class LibraryPage(QWidget):
         """)
         self._add_btn.clicked.connect(self._open_add_form)
         lr_header.addWidget(self._add_btn)
-        cl.addLayout(lr_header)
+
+        # Bungkus lr_header ke dalam QWidget agar bisa di-hide/show sebagai satu unit
+        self._last_read_header_widget = QWidget()
+        self._last_read_header_widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self._last_read_header_widget.setStyleSheet("background: transparent;")
+        lrh_outer = QHBoxLayout(self._last_read_header_widget)
+        lrh_outer.setContentsMargins(0, 0, 0, 0)
+        lrh_outer.setSpacing(0)
+        lrh_outer.addLayout(lr_header)
+        cl.addWidget(self._last_read_header_widget)
 
         self.last_read_row = CardRow()
         self.last_read_row.set_scroll_area(scroll)
@@ -1079,13 +1018,38 @@ class LibraryPage(QWidget):
         statuses = self.filter_panel.selected_statuses()
         year     = self.filter_panel.selected_year()
 
-        filtered_lr = _filter_entries(self._all_last_read, query, genres, statuses, year)
-        filtered_mb = _filter_entries(self._all_my_books,  query, genres, statuses, year)
+        # Tentukan apakah filter aktif (selain status)
+        any_filter_active = bool(query or genres or statuses or year)
 
-        self.last_read_row.load_cards(filtered_lr[:12], self.main_window.go_detail,
-                                      mode="chapter", on_update=self._update_entry)
-        self.my_books_row.load_cards(filtered_mb,       self.main_window.go_detail,
-                                     mode="status",  on_update=self._update_entry)
+        # --- Last Read section ---
+        # Sembunyikan Last Read jika filter status aktif, atau filter lain aktif.
+        # Last Read TIDAK boleh dipakai sebagai fallback saat filter dijalankan.
+        if statuses or any_filter_active:
+            # Sembunyikan seluruh widget Last Read agar tidak muncul sebagai fallback
+            self.last_read_row.setVisible(False)
+            # Sembunyikan juga label header "Last Read" (widget sebelum last_read_row di layout)
+            self._set_last_read_header_visible(False)
+        else:
+            # Tidak ada filter aktif → tampilkan Last Read seperti biasa
+            self.last_read_row.setVisible(True)
+            self._set_last_read_header_visible(True)
+            filtered_lr = _filter_entries(self._all_last_read, query, genres, statuses, year)
+            self.last_read_row.load_cards(filtered_lr[:12], self.main_window.go_detail,
+                                          mode="chapter", on_update=self._update_entry)
+
+        # --- My Books section ---
+        # Filter My Books berdasarkan semua kriteria yang dipilih pengguna.
+        # Jika status dipilih tapi tidak ada manga yang cocok → tampilkan kosong (bukan Last Read).
+        filtered_mb = _filter_entries(self._all_my_books, query, genres, statuses, year)
+        self.my_books_row.load_cards(filtered_mb, self.main_window.go_detail,
+                                     mode="status", on_update=self._update_entry)
+
+    def _set_last_read_header_visible(self, visible: bool):
+        """Sembunyikan / tampilkan header 'Last Read' beserta baris kartu-nya."""
+        # Header Last Read adalah widget layout (lr_header) yang berisi label + add button.
+        # Kita simpan referensi _last_read_header saat _build() dipanggil.
+        if hasattr(self, '_last_read_header_widget'):
+            self._last_read_header_widget.setVisible(visible)
 
     def _update_entry(self, entry_id: int, **kwargs):
         """Update current_chapter atau status langsung dari dropdown di card."""

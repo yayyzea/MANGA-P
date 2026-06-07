@@ -1,11 +1,10 @@
 # rating_page.py
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QScrollArea, QPushButton, QSizePolicy, QGridLayout,
-    QGraphicsDropShadowEffect
+    QScrollArea, QPushButton, QSizePolicy, QGridLayout
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QPropertyAnimation, QEasingCurve, QPoint
 from PyQt6.QtGui import QPixmap, QColor
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
 
 from .theme import (
     SKY_BLUE, TEAL, DEWY_GREEN, PETAL_PINK, LILAC_MIST,
@@ -13,12 +12,10 @@ from .theme import (
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
 
-
 def _force_bg(widget, hex_color, radius=0):
     widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     r = f"border-radius: {radius}px;" if radius else ""
     widget.setStyleSheet(f"background: {hex_color}; {r}")
-
 
 class RatingPageLoader(QThread):
     finished = pyqtSignal(list, int)
@@ -41,26 +38,16 @@ class RatingPageLoader(QThread):
             session = get_session()
             try:
                 rows = (
-                    session.query(Manga)
+                    session.query(Manga, Review)
                     .join(Review, Review.manga_id == Manga.id)
-                    .join(UserCollection, UserCollection.manga_id == Manga.id)
                     .filter(
                         Review.user_id == self.user_id,
-                        UserCollection.user_id == self.user_id,
                         Review.rating == self.rating
                     )
                     .all()
                 )
 
-                for manga in rows:
-                    review = (
-                        session.query(Review)
-                        .filter(
-                            Review.user_id == self.user_id,
-                            Review.manga_id == manga.id
-                        )
-                        .first()
-                    )
+                for manga, review in rows:
                     results.append({
                         "id": manga.id,
                         "title": manga.title,
@@ -82,7 +69,6 @@ class RatingPageLoader(QThread):
 
         self.finished.emit(results, rating_display)
 
-
 class RatingBadge(QLabel):
     def __init__(self, rating: int, parent=None):
         super().__init__(parent)
@@ -99,7 +85,6 @@ class RatingBadge(QLabel):
             }
         """)
 
-
 class MangaCardCompact(QWidget):
     clicked = pyqtSignal(int)
 
@@ -109,17 +94,6 @@ class MangaCardCompact(QWidget):
         self.setFixedSize(130, 210)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         _force_bg(self, '#DCF0F7', radius=10)
-
-        # Shadow + hover animation (same as home_page MangaCard)
-        self._shadow = QGraphicsDropShadowEffect(self)
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self.setGraphicsEffect(self._shadow)
-
-        self._anim = QPropertyAnimation(self, b"pos")
-        self._anim.setDuration(150)
-        self._anim.setEasingCurve(QEasingCurve.Type.OutCubic)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -163,31 +137,10 @@ class MangaCardCompact(QWidget):
                 Qt.TransformationMode.SmoothTransformation)
         )
 
-    def enterEvent(self, event):
-        self._shadow.setBlurRadius(28)
-        self._shadow.setOffset(0, 8)
-        self._shadow.setColor(QColor(0, 0, 0, 100))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, -6))
-        self._anim.start()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self._shadow.setBlurRadius(12)
-        self._shadow.setOffset(0, 4)
-        self._shadow.setColor(QColor(0, 0, 0, 60))
-        self._anim.stop()
-        self._anim.setStartValue(self.pos())
-        self._anim.setEndValue(self.pos() + QPoint(0, 6))
-        self._anim.start()
-        super().leaveEvent(event)
-
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.clicked.emit(self.manga_id)
         super().mousePressEvent(event)
-
 
 class RatingPage(QWidget):
     def __init__(self, main_window, parent=None):
@@ -204,7 +157,7 @@ class RatingPage(QWidget):
 
         topbar = QWidget()
         topbar.setFixedHeight(60)
-        topbar.setAttribute(__import__("PyQt6.QtCore", fromlist=["Qt"]).Qt.WidgetAttribute.WA_StyledBackground, True)
+        topbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
         tb = QHBoxLayout(topbar)
         tb.setContentsMargins(16, 0, 24, 0)
@@ -226,12 +179,12 @@ class RatingPage(QWidget):
         self._stars_header = RatingBadge(0)
         self._stars_header.setStyleSheet("""
             QLabel {
-                color: #f5c842;
+                color: #111111;
                 font-size: 16px;
                 font-weight: 700;
-                background: rgba(255,255,255,0.18);
-                border-radius: 10px;
-                padding: 4px 14px;
+                background: transparent;
+                border-radius: 0px;
+                padding: 4px 4px;
             }
         """)
         tb.addWidget(self._stars_header)
@@ -275,7 +228,7 @@ class RatingPage(QWidget):
             self._loader.quit()
             self._loader.wait()
 
-        uid = self.main_window.current_user["id"]
+        uid = (self.main_window.current_user or {}).get('id', 1)
         self._loader = RatingPageLoader(user_id=uid, rating=rating)
         self._loader.finished.connect(self._on_loaded)
         self._loader.start()

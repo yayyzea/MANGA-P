@@ -32,7 +32,9 @@ class UserService:
             user = session.query(User).filter(User.id == user_id).first()
             if not user:
                 return False
-            if name: user.name = name
+            if name:
+                user.name = name
+                user.username = name
             if email: user.email = email
             if bio: user.bio = bio
             if avatar_path: user.avatar_path = avatar_path
