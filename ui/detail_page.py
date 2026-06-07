@@ -1,3 +1,5 @@
+from concurrent.futures import thread
+
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QScrollArea, QTextEdit, QSpinBox,
@@ -616,7 +618,7 @@ class SimilarPanel(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(10)
         hdr = QLabel("More like this…")
-        hdr.setStyleSheet(f"color: {BLACK}; font-size: 13px; font-weight: 700; background: transparent;")
+        hdr.setStyleSheet(f"color: {BLACK}; font-size: 16px; font-weight: 700; background: transparent;")
         layout.addWidget(hdr)
         self._cards_layout = QVBoxLayout()
         self._cards_layout.setSpacing(10)
@@ -695,7 +697,7 @@ class DetailPage(QWidget):
         self._cover = CoverLabel(160, 225)
         left_col.addWidget(self._cover, alignment=Qt.AlignmentFlag.AlignHCenter)
         self._title_lbl = QLabel("Loading…")
-        self._title_lbl.setStyleSheet(f"color: {BLACK}; font-size: 14px; font-weight: 700; background: transparent; max-width: 160px;")
+        self._title_lbl.setStyleSheet(f"color: {BLACK}; font-size: 18px; font-weight: 700; background: transparent; max-width: 160px;")
         self._title_lbl.setWordWrap(True)
         self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         left_col.addWidget(self._title_lbl)
@@ -708,11 +710,10 @@ class DetailPage(QWidget):
         right_col.setSpacing(8)
         right_col.setAlignment(Qt.AlignmentFlag.AlignTop)
         syn_hdr = QLabel("Synopsis")
-        syn_hdr.setStyleSheet(f"color: {BLACK}; font-size: 14px; font-weight: 700; background: transparent;")
+        syn_hdr.setStyleSheet(f"color: {BLACK}; font-size: 18px; font-weight: 700; background: transparent;")
         right_col.addWidget(syn_hdr)
         self._synopsis = QLabel("")
-        # Perbaikan: Menambahkan f-string dan mengubah warna ke {BLACK}
-        self._synopsis.setStyleSheet(f"color: {BLACK}; font-size: 12px; background: transparent;")
+        self._synopsis.setStyleSheet(f"color: {BLACK}; font-size: 15px; background: transparent;")
         self._synopsis.setWordWrap(True)
         self._synopsis.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         self._synopsis.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
@@ -756,8 +757,7 @@ class DetailPage(QWidget):
     def _add_meta(self, key, value):
         if not value or str(value) in ("", "None"): return
         lbl = QLabel(f"<b>{key}</b>  {value}")
-        # Perbaikan: Menambahkan f-string dan mengubah warna ke {BLACK}
-        lbl.setStyleSheet(f"color: {BLACK}; font-size: 11px; background: transparent;")
+        lbl.setStyleSheet(f"color: {BLACK}; font-size: 13px; background: transparent;")
         lbl.setWordWrap(True)
         self._meta_layout.addWidget(lbl)
 
@@ -789,7 +789,7 @@ class DetailPage(QWidget):
         
         # Perbaikan: Simpan referensi ke active_threads (Keep-alive)
         self._active_threads.append(self._loader)
-        self._loader.finished.connect(lambda: self._cleanup_thread(self._loader))
+        self._loader.finished.connect(lambda: self._cleanup_thread(thread))
         
         self._loader.start()
 

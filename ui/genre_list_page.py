@@ -318,18 +318,19 @@ class MangaCardSmall(QWidget):
 
         # Title
         title = manga_data.get("title", "—")
-        self.lbl_title = QLabel(title)
+        self.lbl_title = QLabel()
         self.lbl_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_title.setMaximumWidth(self._inner_w)
+        self.lbl_title.setMaximumHeight(36)
+        self.lbl_title.setWordWrap(True)
         self.lbl_title.setStyleSheet(
-            "font-size: 10px; font-weight: 700; color: #111111; background: transparent;"
-        )
-        self.lbl_title.setTextFormat(Qt.TextFormat.PlainText)
-        metrics = self.lbl_title.fontMetrics()
-        self.lbl_title.setText(
-            metrics.elidedText(title, Qt.TextElideMode.ElideRight, self._inner_w)
+            "font-size: 12px; font-weight: 700; color: #111111; background: transparent;"
         )
         layout.addWidget(self.lbl_title)
+
+        max_chars = 20
+        display_title = title if len(title) <= max_chars else title[:max_chars] + "..."
+        self.lbl_title.setText(display_title)
 
         # Score
         score = manga_data.get("score", 0)
@@ -341,9 +342,9 @@ class MangaCardSmall(QWidget):
         score_layout.setSpacing(2)
         score_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         lbl_star = QLabel("★")
-        lbl_star.setStyleSheet("font-size: 10px; font-weight: 700; color: #F5C518; background: transparent;")
+        lbl_star.setStyleSheet("font-size: 12px; font-weight: 700; color: #F5C518; background: transparent;")
         self.lbl_score = QLabel(score_num)
-        self.lbl_score.setStyleSheet("font-size: 10px; font-weight: 600; color: #111111; background: transparent;")
+        self.lbl_score.setStyleSheet("font-size: 12px; font-weight: 600; color: #111111; background: transparent;")
         score_layout.addWidget(lbl_star)
         score_layout.addWidget(self.lbl_score)
         layout.addWidget(score_row)
