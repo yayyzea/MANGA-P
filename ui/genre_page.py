@@ -555,6 +555,11 @@ class GenrePage(QWidget):
         if not widgets:
             return
 
+        if hasattr(self, '_left_scroll') and self._left_scroll:
+            vp_w = self._left_scroll.viewport().width()
+            if vp_w > 10:
+                self._grid_container.setFixedWidth(vp_w)
+
         cols, container_width = self._get_cols()
         spacing = self._grid_layout.spacing()
         card_w = min(_CARD_MAX_W, max(_CARD_MIN_W, (container_width - spacing * (cols - 1)) // cols))
@@ -570,8 +575,26 @@ class GenrePage(QWidget):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        if hasattr(self, '_left_scroll') and self._left_scroll:
+            vp_w = self._left_scroll.viewport().width()
+            if vp_w > 10:
+                self._grid_container.setFixedWidth(vp_w)
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(50, self._relayout)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Force correct layout every time this page becomes visible
+        from PyQt6.QtCore import QTimer
+        if hasattr(self, '_left_scroll') and self._left_scroll:
+            def _fix():
+                vp_w = self._left_scroll.viewport().width()
+                if vp_w > 10:
+                    self._grid_container.setFixedWidth(vp_w)
+                self._relayout()
+            QTimer.singleShot(50, _fix)
+            QTimer.singleShot(200, _fix)
+
             
     def _on_bar_clicked(self, genre: str):
         """When user clicks a bar in the chart, switch to that genre."""
