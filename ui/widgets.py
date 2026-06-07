@@ -32,7 +32,6 @@ def _try_start_next():
                 _active_loaders.append(loader)
                 loader.start()
 
-<<<<<<< HEAD
 def elide_to_two_lines(label: QLabel, text: str, max_width: int):
     """Potong teks agar muat 2 baris, dengan ellipsis di akhir baris ke-2."""
     metrics = label.fontMetrics()
@@ -49,8 +48,6 @@ def elide_to_two_lines(label: QLabel, text: str, max_width: int):
     sisa = text[len(baris1):].strip()
     baris2 = metrics.elidedText(sisa, Qt.TextElideMode.ElideRight, max_width)
     label.setText(f"{baris1}\n{baris2}")
-=======
->>>>>>> 96abbdca675862bd0eee01cf8eecddc93b915550
 
 class ImageLoader(QThread):
     loaded = pyqtSignal(QPixmap)
@@ -334,7 +331,6 @@ class MangaCardGrid(QWidget):
             layout.addWidget(card)
 
         layout.addStretch()
-<<<<<<< HEAD
 
 class RatingBadge(QLabel):
     def __init__(self, value, parent=None):
@@ -378,5 +374,3 @@ class RoundedCoverLabel(QLabel):
         painter.drawPixmap(0, 0, cropped)
         painter.end()
         self.setPixmap(rounded)
-=======
->>>>>>> 96abbdca675862bd0eee01cf8eecddc93b915550
