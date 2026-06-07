@@ -1,9 +1,9 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QLineEdit, QScrollArea, QCheckBox,
-    QGridLayout, QSizePolicy, QGraphicsDropShadowEffect
+    QGridLayout, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QPoint, QTimer
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QTimer
 from PyQt6.QtGui import QColor, QPalette, QIcon, QPixmap
 from pathlib import Path
 
@@ -16,7 +16,6 @@ from .theme import (
 )
 from .widgets import MangaCard, _CARD_MIN_W, _CARD_MAX_W, _ASPECT, _PAD
 
-
 GENRES = [
     "Action",        "Drama",
     "Adventure",     "Fantasy",
@@ -28,7 +27,6 @@ GENRES = [
     "Supernatural",
 ]
 STATUS_OPTIONS = ["Publishing", "Finished", "On Hiatus"]
-
 
 # ── Background worker ─────────────────────────────────────────────────────────
 
@@ -57,8 +55,8 @@ class SearchLoader(QThread):
                     status=self.status,
                     year=self.year,
                     page=self.page,
-                    limit=self.PAGE_SIZE,
-                )
+                    limit=self.PAGE_SIZE
+)
             else:
                 all_top = svc.get_top_manga(limit=500)
                 offset = (self.page - 1) * self.PAGE_SIZE
@@ -67,7 +65,6 @@ class SearchLoader(QThread):
         except Exception as e:
             print(f"[SearchPage] Load error: {e}")
             self.finished.emit([])
-
 
 # ── Search bar ────────────────────────────────────────────────────────────────
 
@@ -100,12 +97,6 @@ class SearchBar(QWidget):
         """)
         input_wrapper.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         input_wrapper.setFixedHeight(44)
-
-        self._search_shadow = QGraphicsDropShadowEffect(input_wrapper)
-        self._search_shadow.setBlurRadius(12)
-        self._search_shadow.setOffset(0, 4)
-        self._search_shadow.setColor(QColor(0, 0, 0, 60))
-        input_wrapper.setGraphicsEffect(self._search_shadow)
 
         self._input_wrapper = input_wrapper
         wrapper_layout = QHBoxLayout(input_wrapper)
@@ -167,7 +158,6 @@ class SearchBar(QWidget):
     def get_text(self) -> str:
         return self.input.text().strip()
 
-
 # ── Filter panel ──────────────────────────────────────────────────────────────
 
 class FilterPanel(QWidget):
@@ -220,7 +210,7 @@ class FilterPanel(QWidget):
         self._custom_genre_input.setPlaceholderText("e.g. Isekai")
         self._custom_genre_input.setStyleSheet(f"""
             QLineEdit {{
-                background: {WHITE};
+                background: transparent;
                 border: 1.5px solid {BLUE_LIGHT};
                 border-radius: 6px; padding: 4px 10px;
                 font-size: 13px; color: {TEXT_DARK};
@@ -240,23 +230,21 @@ class FilterPanel(QWidget):
             s_grid.addWidget(cb, i // 2, i % 2)
         root.addLayout(s_grid)
 
-        root.addWidget(self._subheading("Tahun"))
+        root.addWidget(self._subheading("Year"))
         self._year_input = QLineEdit()
         self._year_input.setPlaceholderText("e.g. 2023")
         self._year_input.setFixedHeight(32)
         self._year_input.setMaximumWidth(110)
         self._year_input.setStyleSheet(f"""
             QLineEdit {{
-                background: {WHITE};
+                background: transparent;
                 border: 1.5px solid {BLUE_LIGHT};
                 border-radius: 6px;
                 padding: 4px 10px;
                 font-size: 13px;
                 color: {TEXT_DARK};
             }}
-            QLineEdit:focus {{
-                border-color: {BLUE_PRIMARY};
-            }}
+            QLineEdit:focus {{ border-color: {BLUE_PRIMARY};}}
         """)
         root.addWidget(self._year_input)
         root.addStretch()
@@ -342,7 +330,6 @@ class FilterPanel(QWidget):
             except ValueError:
                 pass
         return None
-
 
 # ── Search page ───────────────────────────────────────────────────────────────
 
@@ -532,8 +519,8 @@ class SearchPage(QWidget):
             genres=self.filter_panel.selected_genres(),
             status=self.filter_panel.selected_status(),
             year=self.filter_panel.selected_year(),
-            page=page,
-        )
+            page=page
+)
         loader.finished.connect(lambda results, p=page: self._on_results(results, p))
         loader.start()
         self._loader = loader

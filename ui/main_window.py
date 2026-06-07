@@ -48,16 +48,18 @@ class FontSizePopup(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setObjectName("FontSizePopup")
-        self.setWindowFlags(Qt.WindowType.Popup | Qt.WindowType.FramelessWindowHint)
+        self.setWindowFlags(Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint | Qt.WindowType.NoDropShadowWindowHint)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setFixedWidth(200)
         self.setStyleSheet("""
             #FontSizePopup {
-                background: #ede8f8;
+                background: #B8DCF0;
                 border-radius: 16px;
-                border: 1.5px solid rgba(100,80,160,0.30);
+                border: none;
             }
         """)
+
+
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(16, 14, 16, 14)
@@ -66,22 +68,22 @@ class FontSizePopup(QFrame):
         title = QLabel("Text Size")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setStyleSheet(
-            "color: rgba(60,40,130,0.75); font-size: 11px;"
+            "color: rgba(0,60,120,0.70); font-size: 11px;"
             "font-weight: 600; letter-spacing: 1px; background: transparent;"
         )
         outer.addWidget(title)
 
         btn_style = """
             QPushButton {
-                background: rgba(100,80,160,0.10);
+                background: rgba(0,100,180,0.10);
                 border: none; border-radius: 14px;
-                color: #3d2a8a; font-size: 20px; font-weight: 700;
+                color: #003c78; font-size: 20px; font-weight: 700;
             }
-            QPushButton:hover   { background: rgba(100,80,160,0.20); }
-            QPushButton:pressed { background: rgba(100,80,160,0.35); }
+            QPushButton:hover   { background: rgba(0,100,180,0.20); }
+            QPushButton:pressed { background: rgba(0,100,180,0.35); }
             QPushButton:disabled{
-                background: rgba(100,80,160,0.05);
-                color: rgba(100,80,160,0.25);
+                background: rgba(0,100,180,0.05);
+                color: rgba(0,100,180,0.25);
             }
         """
         self._btn_dec = QPushButton("−")
@@ -92,7 +94,7 @@ class FontSizePopup(QFrame):
         self._px_lbl = QLabel("13 px")
         self._px_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._px_lbl.setStyleSheet(
-            "color: rgba(60,40,130,0.75); font-size: 18px; font-weight: 700;"
+            "color: rgba(0,60,120,0.85); font-size: 18px; font-weight: 700;"
             "background: transparent; min-width: 64px;"
         )
 
@@ -113,7 +115,7 @@ class FontSizePopup(QFrame):
         bar_bg = QFrame()
         bar_bg.setFixedHeight(4)
         bar_bg.setStyleSheet(
-            "background: rgba(100,80,160,0.20); border-radius: 2px;"
+            "background: rgba(0,100,180,0.18); border-radius: 2px;"
         )
         bar_layout = QHBoxLayout(bar_bg)
         bar_layout.setContentsMargins(0, 0, 0, 0)
@@ -122,7 +124,7 @@ class FontSizePopup(QFrame):
         self._bar_fill = QFrame()
         self._bar_fill.setFixedHeight(4)
         self._bar_fill.setStyleSheet(
-            "background: rgba(60,40,130,0.75); border-radius: 2px;"
+            "background: rgba(0,100,180,0.70); border-radius: 2px;"
         )
         bar_layout.addWidget(self._bar_fill)
         bar_layout.addStretch()
@@ -135,7 +137,7 @@ class FontSizePopup(QFrame):
         lbl_max = QLabel(f"{FONT_MAX_PX}px")
         for l in (lbl_min, lbl_max):
             l.setStyleSheet(
-                "color: rgba(60,40,130,0.40); font-size: 10px; background: transparent;"
+                "color: rgba(0,60,120,0.45); font-size: 10px; background: transparent;"
             )
         hint_row.addWidget(lbl_min)
         hint_row.addStretch()
@@ -374,12 +376,22 @@ class Sidebar(QWidget):
             self._font_btn.setChecked(False)
         else:
             self._font_popup.show_near(self, self._font_btn)
-            self._font_popup.installEventFilter(self)
- 
+            from PyQt6.QtWidgets import QApplication
+            QApplication.instance().installEventFilter(self)
+
     def eventFilter(self, obj, event):
         from PyQt6.QtCore import QEvent
+        from PyQt6.QtWidgets import QApplication
         if obj is self._font_popup and event.type() == QEvent.Type.Hide:
             self._font_btn.setChecked(False)
+        # Auto-close popup ketika klik di luar
+        if self._font_popup.isVisible() and event.type() == QEvent.Type.MouseButtonPress:
+            from PyQt6.QtCore import QPoint
+            gpos = event.globalPosition().toPoint() if hasattr(event, 'globalPosition') else event.globalPos()
+            if not self._font_popup.geometry().contains(gpos):
+                self._font_popup.hide()
+                self._font_btn.setChecked(False)
+                QApplication.instance().removeEventFilter(self)
         return super().eventFilter(obj, event)
  
  
@@ -603,12 +615,19 @@ class MainWindow(QMainWindow):
         self._navigate(2)
 
     def go_detail(self, manga_id: int):
+        # Simpan index halaman sebelumnya untuk tombol Back
+        self._prev_index = self.stack.currentIndex()
         # Simpan history dulu (hanya baca DB, cepat)
         if self.current_user:
             save_history(self.current_user["id"], manga_id)
         page = self._get_or_create_page(3)
         if page: page.load_manga(manga_id)
         self._navigate(3)
+
+    def go_back(self):
+        """Kembali ke halaman sebelumnya sebelum go_detail dipanggil."""
+        prev = getattr(self, "_prev_index", 0)
+        self._navigate(prev)
 
     def go_genre(self, genre: str):
         page = self._get_or_create_page(7)
