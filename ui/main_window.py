@@ -596,6 +596,8 @@ class MainWindow(QMainWindow):
 
     def _on_scrape_finished(self, count: int):
         self._splash.set_scraping(False)
+        # Reset flag supaya reload berikutnya bisa trigger dismiss splash
+        self.home_page._splash_dismissed = False
         # Reload HomePage dengan data yang baru masuk
         QTimer.singleShot(300, self.home_page.refresh)
 
