@@ -12,6 +12,8 @@ from .theme import (
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
 
+from .widgets import elide_to_two_lines, RatingBadge, RoundedCoverLabel
+
 def _force_bg(widget, hex_color, radius=0):
     widget.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     r = f"border-radius: {radius}px;" if radius else ""
@@ -97,24 +99,20 @@ class MangaCardCompact(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
+        layout.setSpacing(4)
 
-        self.cover = QLabel()
-        self.cover.setFixedSize(114, 150)
-        self.cover.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.cover.setScaledContents(True)
-        self.cover.setStyleSheet("background: rgba(255,255,255,0.15); border-radius: 6px;")
+        self.cover = RoundedCoverLabel(114, 150, radius=8)
         layout.addWidget(self.cover, alignment=Qt.AlignmentFlag.AlignCenter)
 
         title = manga_data.get("title", "—")
-        if len(title) > 18:
-            title = title[:16] + "…"
-        title_lbl = QLabel(title)
+        title_lbl = QLabel()
         title_lbl.setStyleSheet(
-            "color: #111111; font-size: 10px; font-weight: 700; background: transparent;"
+            "color: #111111; font-size: 12px; font-weight: 700; background: transparent;"
         )
         title_lbl.setWordWrap(True)
-        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_lbl.setFixedHeight(36)
+        title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignTop)
+        elide_to_two_lines(title_lbl, title, 114)
         layout.addWidget(title_lbl)
 
         rating = manga_data.get("rating", 0)
@@ -131,11 +129,7 @@ class MangaCardCompact(QWidget):
             self._img_loader.start()
 
     def _on_cover(self, pixmap):
-        self.cover.setPixmap(
-            pixmap.scaled(114, 150,
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation)
-        )
+        self.cover.set_cover(pixmap)
 
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:

@@ -15,7 +15,7 @@ from .theme import (
     BLUE_PRIMARY, BLUE_CARD, BLUE_DARK, BLUE_LIGHT,
     WHITE, TEXT_DARK, TEXT_MUTED, CARD_RADIUS
 )
-from .widgets import _CARD_MIN_W, _CARD_MAX_W, _PAD
+from .widgets import _CARD_MIN_W, _CARD_MAX_W, _PAD, elide_to_two_lines
 
 
 def _force_bg(widget, hex_color, radius=0):
@@ -275,12 +275,14 @@ class MangaCardSmall(QWidget):
             title = title[:16] + "…"
         title_lbl = QLabel(title)
         title_lbl.setWordWrap(True)
+        title_lbl.setMaximumHeight(36)
         title_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_pal = title_lbl.palette()
         title_pal.setColor(QPalette.ColorRole.WindowText, QColor("#111111"))
         title_lbl.setPalette(title_pal)
-        title_lbl.setStyleSheet("font-size: 10px; font-weight: 700; background: transparent;")
+        title_lbl.setStyleSheet("font-size: 12px; font-weight: 700; background: transparent;")
         layout.addWidget(title_lbl)
+        elide_to_two_lines(title_lbl, title, 114)
 
         # Score badge
         score = manga_data.get("score", 0)
