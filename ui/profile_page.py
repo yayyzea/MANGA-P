@@ -254,13 +254,20 @@ class SwitchAccountDialog(QDialog):
     def _do_switch(self, acc: dict):
         """Login ke akun lain dan reload MainWindow."""
         from services.auth_service import AuthService
-        from .login_page import _deobfuscate
+        from .login_page import _deobfuscate, _save_remember
         password = _deobfuscate(acc["password"])
         user = AuthService().login(acc["email"], password)
         if not user:
             self.main_window.show_toast("⚠ Failed to switch account, please log in again.")
             self.reject()
             return
+        # Update 'last' di remember_me.json ke akun yang baru dipilih,
+        # sehingga auto-fill di login page ikut berubah sesuai akun terakhir dipakai.
+        _save_remember(
+            email=user["email"],
+            username=user["username"],
+            password_plain=password,
+        )
         self.reject()
         self.main_window._switch_to_user(user)
 
