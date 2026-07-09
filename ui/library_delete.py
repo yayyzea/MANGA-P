@@ -62,22 +62,29 @@ _COMBO_STYLE_CHAPTER = """
 """
 
 def _status_combo_style(status: str) -> str:
-    bg, fg = _STATUS_COLORS.get(status, ("#f5a623", "#7a4a00"))
+    bg, _ = _STATUS_COLORS.get(status, ("#f5a623", "#7a4a00"))
+
     return f"""
         QComboBox {{
             background: {bg};
-            color: #ffffff;
+            color: white;
             border: none;
             border-radius: 6px;
             padding: 3px 8px;
             font-size: 11px;
             font-weight: 600;
         }}
-        QComboBox::drop-down {{ border: none; width: 18px; }}
+
+        QComboBox::drop-down {{
+            border: none;
+            width: 18px;
+        }}
+
         QComboBox QAbstractItemView {{
-            background: #ffffff;
-            color: {fg};
+            background: white;
+            color: #123C73;
             selection-background-color: {bg}44;
+            selection-color: #123C73;
             border: 1px solid {bg};
             font-size: 11px;
         }}
