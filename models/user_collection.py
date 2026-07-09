@@ -3,6 +3,9 @@ from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
 
+# Konstanta status koleksi terpusat di modul filters.py (root project).
+from filters import COLLECTION_STATUS_OPTIONS
+
 
 class UserCollection(Base):
     __tablename__ = "user_collection"
@@ -27,7 +30,7 @@ class UserCollection(Base):
         cascade="all, delete-orphan"
     )
 
-    STATUS_OPTIONS = ["Plan to Read", "Reading", "Completed", "Dropped"]
+    STATUS_OPTIONS = COLLECTION_STATUS_OPTIONS
 
     def __repr__(self):
         return f"<UserCollection(id={self.id}, manga_id={self.manga_id}, status='{self.status}')>"

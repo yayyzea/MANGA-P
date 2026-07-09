@@ -16,17 +16,8 @@ from .theme import (
 )
 from .widgets import MangaCard, _CARD_MIN_W, _CARD_MAX_W, _ASPECT, _PAD
 
-GENRES = [
-    "Action",        "Drama",
-    "Adventure",     "Fantasy",
-    "Avant Garde",   "Gourmet",
-    "Award Winning", "Horror",
-    "Comedy",        "Mystery",
-    "Romance",       "Sci-Fi",
-    "Slice of Life", "Sports",
-    "Supernatural",
-]
-STATUS_OPTIONS = ["Publishing", "Finished", "On Hiatus"]
+# Konstanta filter (genre & status) terpusat di modul filters.py (root project).
+from filters import GENRES, MANGA_STATUS_OPTIONS as STATUS_OPTIONS
 
 # ── Background worker ─────────────────────────────────────────────────────────
 

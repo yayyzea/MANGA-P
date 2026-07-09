@@ -29,10 +29,11 @@ from .theme import (
 )
 from .widgets import MangaCard, _CARD_MIN_W, _ASPECT, _PAD
 
+# Konstanta status koleksi terpusat di modul filters.py (root project).
+from filters import COLLECTION_STATUS_OPTIONS as _STATUS_OPTIONS
+
 
 # ── Status helpers ─────────────────────────────────────────────────────────────
-
-_STATUS_OPTIONS = ["Plan to Read", "Reading", "Completed", "Dropped"]
 
 _STATUS_COLORS = {
     "Plan to Read": ("#f5a623", "#7a4a00"),   # oranye

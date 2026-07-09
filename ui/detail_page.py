@@ -1,863 +1,722 @@
-from concurrent.futures import thread
-
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QScrollArea, QTextEdit, QSpinBox,
-    QComboBox, QFrame, QSizePolicy, QMessageBox,
-    QGraphicsOpacityEffect, QInputDialog
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
+    QPushButton, QLineEdit, QCheckBox, QGridLayout, QMessageBox,
 )
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot
-from PyQt6.QtGui import QPixmap
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, pyqtSlot, QSize, QTimer, QEvent, QPoint
+from PyQt6.QtGui import QColor, QPalette, QPixmap, QIcon
+from pathlib import Path
+
+_ICON_DIR = Path(__file__).parent.parent / "assets"
 
 from .theme import (
-    BLUE_PRIMARY, BLUE_CARD, BLUE_DARK, BLUE_LIGHT,
-    BLACK, WHITE, TEXT_MUTED,
+    BLUE_DARK, BLUE_PRIMARY, BLUE_CARD, BLUE_LIGHT, WHITE,
+    TEXT_DARK, TEXT_MUTED,
     TOPBAR_HEIGHT, CARD_W, CARD_H, CARD_RADIUS
 )
-from .widgets import ImageLoader
+from .widgets import MangaCard, _CARD_MIN_W, _CARD_MAX_W, _ASPECT, _PAD
+from .add_manga_form import AddMangaForm
+from .library_delete import (
+    CardRow, DeleteConfirmBar, SelectableMangaCard,
+    _STATUS_OPTIONS, _STATUS_COLORS,
+    _COMBO_STYLE_CHAPTER, _status_combo_style,
+)
+
+# Logika & konstanta filter sekarang terpusat di modul filters.py (root project),
+# supaya tidak terduplikasi di beberapa file UI. Tinggal import dan pakai.
+from filters import (
+    GENRES,
+    COLLECTION_STATUS_OPTIONS as READ_STATUS_OPTIONS,
+    filter_collection_entries as _filter_entries,
+)
 
 
-class DetailLoader(QThread):
-    finished = pyqtSignal(object, object, object, list)
+class CollectionLoader(QThread):
+    finished = pyqtSignal(list, list)
 
-    def __init__(self, manga_id: int, user_id: int):
+    def __init__(self, user_id: int):
         super().__init__()
-        self.manga_id = manga_id
         self.user_id = user_id
 
     def run(self):
         try:
-            from services.manga_service import MangaService
-            from services.collection_service import CollectionService
-            from services.review_service import ReviewService
+            from database import get_session
+            from models.user_collection import UserCollection
+            from sqlalchemy.orm import joinedload
 
-            svc = MangaService()
-            manga = svc.get_by_id(self.manga_id)
-            collection = CollectionService().get_by_manga_id(self.manga_id, user_id=self.user_id)
-            review = ReviewService().get_by_manga(self.manga_id, user_id=self.user_id)
-
-            similar = []
-            if manga:
-                try:
-                    similar = svc.get_recommendations(manga, limit=4)
-                except Exception:
-                    similar = []
-
-            self.finished.emit(manga, collection, review, similar)
-        except Exception as e:
-            print(f"[DetailPage] Load error: {e}")
-            self.finished.emit(None, None, None, [])
-
-
-class CoverLabel(QLabel):
-    def __init__(self, w: int, h: int, parent=None):
-        super().__init__(parent)
-        self.setFixedSize(w, h)
-        self._w, self._h = w, h
-        self.setStyleSheet("background: rgba(255,255,255,1.0); border-radius: 10px;")
-        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-    def set_cover(self, pixmap: QPixmap):
-        scaled = pixmap.scaled(self._w, self._h,
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.SmoothTransformation)
-        x = (scaled.width() - self._w) // 2
-        y = (scaled.height() - self._h) // 2
-        self.setPixmap(scaled.copy(x, y, self._w, self._h))
-
-
-class CollectionPanel(QWidget):
-    changed = pyqtSignal()
-    status_changed = pyqtSignal(str)
-    STATUS_OPTIONS = ["Plan to Read", "Reading", "Completed", "Dropped"]
-
-    def __init__(self, main_window=None, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet("background: transparent;")
-        self._manga_id = self._col_id = None
-        self._manga_chapters = 0   
-        self._main_window = main_window
-        self._build()
-
-    def _toast(self, msg: str):
-        if self._main_window:
-            self._main_window.show_toast(msg)
-
-    def _build(self):
-        self._layout = QVBoxLayout(self)
-        self._layout.setContentsMargins(0, 0, 0, 0)
-        self._layout.setSpacing(6)
-
-        self._add_btn = QPushButton("＋  Add to Collection")
-        self._add_btn.setFixedHeight(36)
-        self._add_btn.setStyleSheet(f"""
-            QPushButton {{ background: {BLACK}; color: {WHITE};
-                border: none; border-radius: 8px; font-size: 12px; font-weight: 700; padding: 0 14px; }}
-            QPushButton:hover {{ background: {BLUE_LIGHT}; }} """)
-        self._add_btn.clicked.connect(self._on_add)
-        self._layout.addWidget(self._add_btn)
-
-        self._in_col = QWidget()
-        self._in_col.setStyleSheet("background: transparent;")
-        ic = QVBoxLayout(self._in_col)
-        ic.setContentsMargins(0, 0, 0, 0)
-        ic.setSpacing(4)
-
-        r1 = QHBoxLayout()
-        lbl1 = QLabel("Status:")
-        lbl1.setStyleSheet(f"color: {BLACK}; font-size: 11px; background: transparent;")
-        self._status_cb = QComboBox()
-        self._status_cb.addItems(self.STATUS_OPTIONS)
-        self._status_cb.setFixedWidth(140)
-        self._status_cb.setStyleSheet(f"""
-            QComboBox {{ background: {WHITE}; color: {BLACK};
-                border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 8px; font-size: 11px; }}
-            QComboBox::drop-down {{ border: none; }}
-            QComboBox QAbstractItemView {{ background: {WHITE}; color: {BLACK}; selection-background-color: {BLUE_LIGHT}; }} """)
-        r1.addWidget(lbl1); r1.addWidget(self._status_cb); r1.addStretch()
-        self._status_cb.currentIndexChanged.connect(self._on_status_changed)
-        ic.addLayout(r1)
-
-        r2 = QHBoxLayout()
-        lbl2 = QLabel("Chapter:")
-        lbl2.setStyleSheet(f"color: {BLACK}; font-size: 11px; background: transparent;")
-        self._ch_spin = QSpinBox()
-        self._ch_spin.setRange(0, 9999)
-        self._ch_spin.setFixedWidth(80)
-        self._ch_spin.setStyleSheet(f"""
-            QSpinBox {{ background: rgba(255,255,255,1.0); color: {BLACK};
-                border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 6px; font-size: 11px; }}
-            QSpinBox::up-button, QSpinBox::down-button {{ background: rgba(255,255,255,0.15); border: none; width: 16px; }} """)
-        r2.addWidget(lbl2); r2.addWidget(self._ch_spin); r2.addStretch()
-        self._ch_spin.valueChanged.connect(self._on_chapter_changed)
-        ic.addLayout(r2)
-
-        r3 = QHBoxLayout(); r3.setSpacing(8)
-        self._save_btn = QPushButton("Save")
-        self._save_btn.setFixedHeight(30)
-        self._save_btn.setStyleSheet(f"""
-            QPushButton {{ background: {BLACK}; color: {WHITE};
-                border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 0 12px; }}
-            QPushButton:hover {{ background: {BLUE_LIGHT}; }} """)
-        self._save_btn.clicked.connect(self._on_save)
-
-        self._remove_btn = QPushButton("Remove")
-        self._remove_btn.setFixedHeight(30)
-        self._remove_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(180,50,50,0.75); color: #fff5f5;
-                border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 0 12px; }} """)
-        self._remove_btn.clicked.connect(self._on_remove)
-
-        r3.addWidget(self._save_btn); r3.addWidget(self._remove_btn); r3.addStretch()
-        ic.addLayout(r3)
-        self._in_col.hide()
-        self._layout.addWidget(self._in_col)
-
-    def load(self, manga_id, entry, manga_chapters: int = 0):
-        self._manga_id = manga_id
-        self._manga_chapters = manga_chapters or 0
-        if entry:
-            self._col_id = entry.id
-            self._status_cb.blockSignals(True)
-            self._status_cb.setCurrentText(entry.status or "Plan to Read")
-            self._status_cb.blockSignals(False)
-            self._apply_chapter_rules(entry.current_chapter or 0)
-            self._add_btn.hide(); self._in_col.show()
-        else:
-            self._col_id = None
-            self._add_btn.show(); self._in_col.hide()
-
-    def _on_status_changed(self):
-        self._apply_chapter_rules()
-        self.status_changed.emit(self._status_cb.currentText())
-
-    def _on_chapter_changed(self, value: int):
-        if not self._manga_chapters or self._manga_chapters <= 0:
-            return
-        if value >= self._manga_chapters:
-            self._status_cb.blockSignals(True)
-            self._status_cb.setCurrentText("Completed")
-            self._status_cb.blockSignals(False)
-            self._apply_chapter_rules()
-
-    def _apply_chapter_rules(self, current_chapter: int = None):
-        status = self._status_cb.currentText()
-        mx = self._manga_chapters  
-
-        if status == "Plan to Read":
-            self._ch_spin.setRange(0, 0)
-            self._ch_spin.setValue(0)
-            self._ch_spin.setEnabled(False)
-
-        elif status == "Reading":
-            hi = mx if mx and mx > 0 else 9999
-            self._ch_spin.setRange(1, hi)
-            self._ch_spin.setEnabled(True)
-            if current_chapter is not None:
-                self._ch_spin.setValue(max(1, min(current_chapter, hi)))
-            elif self._ch_spin.value() < 1:
-                self._ch_spin.setValue(1)
-
-        elif status == "Completed":
-            val = mx if mx and mx > 0 else (self._ch_spin.value() or 0)
-            self._ch_spin.setRange(val, val)
-            self._ch_spin.setValue(val)
-            self._ch_spin.setEnabled(False)
-
-        elif status == "Dropped":
-            if mx and mx > 1:
-                hi = mx - 1
-                self._ch_spin.setRange(1, hi)
-                self._ch_spin.setEnabled(True)
-                if current_chapter is not None:
-                    self._ch_spin.setValue(max(1, min(current_chapter, hi)))
-                elif self._ch_spin.value() < 1:
-                    self._ch_spin.setValue(1)
-            else:
-                self._ch_spin.setRange(1, 9999)
-                self._ch_spin.setEnabled(True)
-                if current_chapter is not None:
-                    self._ch_spin.setValue(max(1, current_chapter))
-                elif self._ch_spin.value() < 1:
-                    self._ch_spin.setValue(1)
-
-    def _on_add(self):
-        if not self._manga_id: return
-        try:
-            from services.collection_service import CollectionService
-            user_id = self._main_window.current_user["id"] if self._main_window else None
-            if not user_id: return
-            entry = CollectionService().add(user_id=user_id, manga_id=self._manga_id)
-            if entry:
-                self._col_id = entry.id
-                self._status_cb.blockSignals(True)
-                self._status_cb.setCurrentText(entry.status or "Plan to Read")
-                self._status_cb.blockSignals(False)
-                self._apply_chapter_rules(entry.current_chapter or 0)
-                self._add_btn.hide(); self._in_col.show()
-                self.changed.emit()
-                self._toast("Successfully added to collection")
-        except Exception as e:
-            print(f"[CollectionPanel] Add error: {e}")
-
-    def _on_save(self):
-        if not self._col_id: return
-        try:
-            from services.collection_service import CollectionService
-            CollectionService().update(self._col_id,
-                status=self._status_cb.currentText(),
-                current_chapter=self._ch_spin.value())
-            self.changed.emit()
-            self._toast("Collection successfully saved")
-        except Exception as e:
-            print(f"[CollectionPanel] Save error: {e}")
-
-    def _on_remove(self):
-        if not self._col_id: return
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Remove")
-        msg_box.setText("Remove from collection?\n(Reviews will also be deleted.)")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        msg_box.setStyleSheet(f"""
-            QMessageBox {{
-                background: #1e1a3a;
-                font-family: Arial;
-            }}
-            QLabel {{
-                color: {WHITE};
-                background: transparent;
-                font-size: 13px;
-            }}
-            QPushButton {{
-                background: rgba(255,255,255,0.15);
-                color: {WHITE};
-                border: 1px solid rgba(255,255,255,0.40);
-                border-radius: 12px;
-                padding: 6px 18px;
-                font-size: 12px;
-                font-weight: 600;
-                min-width: 80px;
-            }}
-            QPushButton:hover {{
-                background: rgba(255,255,255,0.28);
-            }}
-        """)
-        reply = msg_box.exec()
-        if reply == QMessageBox.StandardButton.Yes:
+            session = get_session()
             try:
-                from services.collection_service import CollectionService
-                user_id = self._main_window.current_user["id"] if self._main_window else None
-                CollectionService().delete(self._col_id, user_id=user_id)
-                self._col_id = None
-                self._in_col.hide(); self._add_btn.show()
-                self.changed.emit()
-                self._toast("Collection successfully removed")
-            except Exception as e:
-                print(f"[CollectionPanel] Remove error: {e}")
+                entries = (
+                    session.query(UserCollection)
+                    .filter(UserCollection.user_id == self.user_id)
+                    .options(joinedload(UserCollection.manga))
+                    .order_by(UserCollection.updated_at.desc())
+                    .all()
+                )
+
+                for entry in entries:
+                    if entry.manga:
+                        _ = entry.manga.title
+                        _ = entry.manga.genres
+                        _ = entry.manga.cover_url
+
+            finally:
+                session.close()
+
+            last_read = [
+                e for e in entries
+                if e.status in ("Reading", "Completed") and e.manga
+            ][:48]
+
+            my_books = [e for e in entries if e.manga]
+
+            self.finished.emit(last_read, my_books)
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[LibraryPage] Load error: {e}")
+            self.finished.emit([], [])
 
 
-_TAG_COLORS = {
-    "still reading": ("#4a90d9", "#ddeeff"),
-    "completed":     ("#2d7a50", "#d6f5e8"),
-    "dropped":       ("#b03a38", "#ffe8e8"),
-}
-
-
-class TagBar(QWidget):
-    tags_changed = pyqtSignal(list)
-
-    STATUS_TAG_MAP = {
-        "Reading":   "still reading",
-        "Completed": "completed",
-        "Dropped":   "dropped",
-    }
+class LibrarySearchBar(QWidget):
+    search_triggered  = pyqtSignal(str)
+    filter_toggled    = pyqtSignal()
+    delete_toggled    = pyqtSignal(bool)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setStyleSheet("background: transparent;")
-        self._tags: list = []
-        self._auto_tag: str = ""
-        self._locked = False
+        self.setObjectName("SearchBar")
+        self.setFixedHeight(TOPBAR_HEIGHT)
+        self.setAutoFillBackground(True)
+        pal = self.palette()
+        pal.setColor(QPalette.ColorRole.Window, QColor(BLUE_PRIMARY))
+        self.setPalette(pal)
+        # Hover/pressed state untuk filter dan trash btn
+        self._filter_hovered = False
+        self._filter_pressed = False
+        self._trash_hovered  = False
+        self._trash_pressed  = False
         self._build()
 
     def _build(self):
-        outer = QHBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
-        outer.setSpacing(6)
-
-        self._container = QWidget()
-        self._container.setStyleSheet("background: transparent;")
-        self._row = QHBoxLayout(self._container)
-        self._row.setContentsMargins(0, 0, 0, 0)
-        self._row.setSpacing(6)
-        self._row.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
-        outer.addWidget(self._container, stretch=1)
-
-        self._add_btn = QPushButton("＋")
-        self._add_btn.setFixedSize(26, 26)
-        self._add_btn.setToolTip("Add tag")
-        self._add_btn.setStyleSheet(
-            f"QPushButton{{background:{BLUE_PRIMARY};color:white;"
-            "border:none;border-radius:13px;"
-            "font-size:13px;font-weight:700;}"
-            f"QPushButton:hover{{background:{BLUE_DARK};}}"
-            "QPushButton:disabled{opacity:0.35;}"
-        )
-        self._add_btn.clicked.connect(self._on_add)
-        outer.addWidget(self._add_btn, alignment=Qt.AlignmentFlag.AlignVCenter)
-
-    def set_status(self, status: str):
-        new_auto = self.STATUS_TAG_MAP.get(status, "")
-        if new_auto == self._auto_tag:
-            return
-        if self._auto_tag and self._auto_tag in self._tags:
-            self._tags.remove(self._auto_tag)
-        self._auto_tag = new_auto
-        if new_auto and new_auto not in self._tags:
-            self._tags.insert(0, new_auto)
-        self._refresh()
-
-    def load_tags(self, tags: list, status: str = ""):
-        self._auto_tag = self.STATUS_TAG_MAP.get(status, "")
-        others = [t for t in tags if t != self._auto_tag]
-        self._tags = ([self._auto_tag] if self._auto_tag else []) + others
-        self._refresh()
-
-    def get_tags(self) -> list:
-        return list(self._tags)
-
-    def set_locked(self, locked: bool):
-        self._locked = locked
-        self._add_btn.setEnabled(not locked)
-        self._refresh()
-
-    def _refresh(self):
-        while self._row.count():
-            item = self._row.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-        for tag in self._tags:
-            self._row.addWidget(self._make_pill(tag))
-
-    def _make_pill(self, tag: str) -> QWidget:
-        colors = _TAG_COLORS.get(tag.lower())
-        if colors:
-            bg, fg = colors
-        else:
-            bg, fg = "#e8e4f5", "#3d2a8a"
-
-        pill = QWidget()
-        pill.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        pill.setFixedHeight(24)
-        pill.setSizePolicy(
-            pill.sizePolicy().horizontalPolicy(),
-            pill.sizePolicy().verticalPolicy()
-        )
-        pill.setStyleSheet(
-            f"QWidget{{background:{bg};border-radius:12px;}}"
-        )
-
-        row = QHBoxLayout(pill)
-        row.setContentsMargins(10, 0, 8, 0)
-        row.setSpacing(4)
-
-        lbl = QLabel(tag)
-        lbl.setStyleSheet(
-            f"color:{fg};font-size:10px;font-weight:600;background:transparent;"
-        )
-        row.addWidget(lbl)
-
-        is_auto = (tag == self._auto_tag)
-        if not is_auto and not self._locked:
-            x_style = (
-                f"QPushButton{{background:transparent;color:{fg};border:none;"
-                f"font-size:9px;font-weight:700;padding:0;}}"
-                f"QPushButton:hover{{color:#000000;}}"
-            )
-            x = QPushButton("✕")
-            x.setFixedSize(13, 13)
-            x.setStyleSheet(x_style)
-            x.clicked.connect(lambda _, t=tag: self._remove(t))
-            row.addWidget(x)
-        return pill
-
-    def _remove(self, tag: str):
-        if tag in self._tags:
-            self._tags.remove(tag)
-        self._refresh()
-        self.tags_changed.emit(self._tags)
-
-    def _on_add(self):
-        if self._locked:
-            return
-        dialog = QInputDialog(self)
-        dialog.setWindowTitle("New Tag")
-        dialog.setLabelText("Tag name:")
-        dialog.setStyleSheet("""
-            QInputDialog { background-color: #f8f6ff; }
-            QLabel { color: #1A1A2E; font-size: 12px; }
-            QLineEdit { background-color: #eee9ff; color: #1e1a3a; border: 1px solid #c0b0e8;
-                        border-radius: 6px; padding: 4px 8px; font-size: 12px; }
-            QPushButton { background-color: #6a5acd; color: white; border: none;
-                          border-radius: 6px; padding: 4px 14px; font-size: 11px; font-weight: 700; }
-            QPushButton:hover { background-color: #7b6ade; }
-        """)
-        ok = dialog.exec()
-        text = dialog.textValue()
-        tag = text.strip().lower()
-        if ok and tag and tag not in self._tags:
-            self._tags.append(tag)
-            self._refresh()
-            self.tags_changed.emit(self._tags)
-
-
-class ReviewPanel(QWidget):
-    def __init__(self, main_window=None, parent=None):
-        super().__init__(parent)
-        self.setStyleSheet("background: transparent;")
-        self._manga_id = self._col_id = self._review_id = None
-        self._main_window = main_window
-        self._build()
-
-    def _toast(self, msg: str):
-        if self._main_window:
-            self._main_window.show_toast(msg)
-
-    def _build(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(6)
-        r1 = QHBoxLayout()
-        lbl = QLabel("Rating:")
-        lbl.setStyleSheet(f"color: {BLACK}; font-size: 11px; background: transparent;")
-        self._rating = QSpinBox()
-        self._rating.setRange(1, 10); self._rating.setValue(7); self._rating.setFixedWidth(60)
-        self._rating.setStyleSheet(f"""
-            QSpinBox {{ background: rgba(255,255,255,1.0); color: {BLACK};
-                border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; padding: 2px 6px; font-size: 12px; }}
-            QSpinBox::up-button, QSpinBox::down-button {{ background: rgba(255,255,255,0.15); border: none; width: 16px; }} """)
-        r1.addWidget(lbl); r1.addWidget(self._rating); r1.addStretch()
-        layout.addLayout(r1)
-        self._text = QTextEdit()
-        self._text.setPlaceholderText("Write your review here…")
-        self._text.setFixedHeight(70)
-        self._text.setStyleSheet(f"""
-            QTextEdit {{ background: rgba(255,255,255,1.0); color: {BLACK};
-                border: 1px solid rgba(255,255,255,0.35); border-radius: 8px; padding: 6px; font-size: 11px; }} """)
-        layout.addWidget(self._text)
-        r2 = QHBoxLayout(); r2.setSpacing(8)
-        self._save_btn = QPushButton("Save Review")
-        self._save_btn.setFixedHeight(30)
-        self._save_btn.setStyleSheet(f"""
-            QPushButton {{ background: {BLACK}; color: {WHITE};
-                border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 0 12px; }}
-            QPushButton:hover {{ background: {BLUE_LIGHT}; }} """)
-        self._save_btn.clicked.connect(self._on_save)
-        self._del_btn = QPushButton("Delete")
-        self._del_btn.setFixedHeight(30)
-        self._del_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(180,50,50,0.75); color: #fff5f5;
-                border: none; border-radius: 7px; font-size: 11px; font-weight: 700; padding: 0 12px; }} """)
-        self._del_btn.clicked.connect(self._on_delete)
-        self._del_btn.hide()
-        r2.addWidget(self._save_btn); r2.addWidget(self._del_btn); r2.addStretch()
-        layout.addLayout(r2)
-
-        tag_hdr = QLabel("Tags")
-        tag_hdr.setStyleSheet("color:rgba(0,0,0,0.55);font-size:10px;font-weight:600;background:transparent;")
-        layout.addWidget(tag_hdr)
-        self._tag_bar = TagBar()
-        layout.addWidget(self._tag_bar)
-
-    def load(self, manga_id, col_id, review, status: str = ""):
-        self._manga_id = manga_id; self._col_id = col_id
-        self._review_id = review.id if review else None
-        self._rating.setValue(review.rating if review else 7)
-        self._text.setPlainText(review.review_text or "" if review else "")
-        self._del_btn.setVisible(review is not None)
-        try:
-            import json
-            raw = getattr(review, "tags", "[]") if review else "[]"
-            saved_tags = json.loads(raw or "[]")
-        except Exception:
-            saved_tags = []
-        self._tag_bar.load_tags(saved_tags, status=status)
-
-    def clear(self):
-        self._manga_id = self._col_id = self._review_id = None
-        self._rating.setValue(7); self._text.clear(); self._del_btn.hide()
-        self._tag_bar.load_tags([], status="")
-
-    def set_locked(self, locked: bool):
-        self._rating.setEnabled(not locked)
-        self._text.setEnabled(not locked)
-        self._save_btn.setEnabled(not locked)
-        self._tag_bar.set_locked(locked)
-        effect = self.graphicsEffect()
-        if not isinstance(effect, QGraphicsOpacityEffect):
-            effect = QGraphicsOpacityEffect(self)
-            self.setGraphicsEffect(effect)
-        effect.setOpacity(0.35 if locked else 1.0)
-        self._text.setPlaceholderText(
-            'Set a status other than "Plan to Read" to write a review…'
-            if locked else "Write your review here…"
-        )
-
-    def _on_save(self):
-        if not self._manga_id or not self._col_id: return
-        try:
-            from services.review_service import ReviewService
-            svc = ReviewService()
-            rating = self._rating.value()
-            text = self._text.toPlainText().strip() or None
-            tags = self._tag_bar.get_tags()
-            user_id = self._main_window.current_user["id"] if self._main_window else None
-            if not user_id: return
-            if self._review_id:
-                svc.update(self._review_id, rating=rating, review_text=text, tags=tags)
-            else:
-                r = svc.add(manga_id=self._manga_id, collection_id=self._col_id, user_id=user_id, rating=rating, review_text=text, tags=tags)
-                if r:
-                    self._review_id = r.id; self._del_btn.show()
-            self._toast("Review successfully saved")
-        except Exception as e:
-            print(f"[ReviewPanel] Save error: {e}")
-
-    def _on_delete(self):
-        if not self._review_id: return
-        msg_box = QMessageBox(self)
-        msg_box.setWindowTitle("Delete Review")
-        msg_box.setText("Delete this review?")
-        msg_box.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
-        msg_box.setStyleSheet(f"""
-            QMessageBox {{
-                background: #1e1a3a;
-                font-family: Arial;
-            }}
-            QLabel {{
-                color: {WHITE};
-                background: transparent;
-                font-size: 13px;
-            }}
-            QPushButton {{
-                background: rgba(255,255,255,0.15);
-                color: {WHITE};
-                border: 1px solid rgba(255,255,255,0.40);
-                border-radius: 12px;
-                padding: 6px 18px;
-                font-size: 12px;
-                font-weight: 600;
-                min-width: 80px;
-            }}
-            QPushButton:hover {{
-                background: rgba(255,255,255,0.28);
-            }}
-        """)
-        reply = msg_box.exec()
-        if reply == QMessageBox.StandardButton.Yes:
-            try:
-                from services.review_service import ReviewService
-                ReviewService().delete(self._review_id)
-                self._review_id = None; self._text.clear()
-                self._rating.setValue(7); self._del_btn.hide()
-                self._toast("Review successfully deleted")
-            except Exception as e:
-                print(f"[ReviewPanel] Delete error: {e}")
-
-
-class SimilarPanel(QWidget):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setFixedWidth(180)
-        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        self.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
-        self._build()
-
-    def _build(self):
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(16, 8, 16, 8)
         layout.setSpacing(10)
-        hdr = QLabel("More like this…")
-        hdr.setStyleSheet(f"color: {BLACK}; font-size: 16px; font-weight: 700; background: transparent;")
-        layout.addWidget(hdr)
-        self._cards_layout = QVBoxLayout()
-        self._cards_layout.setSpacing(10)
-        layout.addLayout(self._cards_layout)
-        layout.addStretch()
 
-    def load(self, manga_list, on_click):
-        while self._cards_layout.count():
-            item = self._cards_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                if hasattr(w, 'stop_loader'):
-                    w.stop_loader()
-                else:
-                    ldr = getattr(w, '_loader', None)
-                    if ldr and ldr.isRunning():
-                        ldr.quit()
-                        ldr.wait()
-                w.deleteLater()
-        from .widgets import MangaCard
-        for manga in manga_list[:4]:
-            card = MangaCard(manga, show_labels=False)
-            card.clicked.connect(on_click)
-            self._cards_layout.addWidget(card)
+        # ── Search input wrapper (icon inside pill) ──
+        input_wrapper = QWidget()
+        input_wrapper.setStyleSheet(f"""
+            QWidget {{
+                background: {WHITE};
+                border-radius: 22px;
+            }}
+        """)
+        input_wrapper.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        input_wrapper.setFixedHeight(44)
+        wrapper_layout = QHBoxLayout(input_wrapper)
+        wrapper_layout.setContentsMargins(14, 0, 14, 0)
+        wrapper_layout.setSpacing(8)
+
+        icon = QLabel()
+        icon.setFixedSize(18, 18)
+        _sx = QPixmap(str(_ICON_DIR / "search.png"))
+        if not _sx.isNull():
+            icon.setPixmap(_sx.scaled(18, 18,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation))
+        else:
+            icon.setText("🔍")
+        icon.setStyleSheet("background: transparent;")
+        wrapper_layout.addWidget(icon)
+
+        self.input = QLineEdit()
+        self.input.setObjectName("SearchInput")
+        self.input.setPlaceholderText("Search Mangas...")
+        self.input.setStyleSheet(f"""
+            QLineEdit {{
+                background: transparent; border: none;
+                padding: 0; font-size: 14px; color: {TEXT_DARK};
+            }}
+        """)
+        self.input.textChanged.connect(lambda t: self.search_triggered.emit(t.strip()))
+        self.input.returnPressed.connect(
+            lambda: self.search_triggered.emit(self.input.text().strip())
+        )
+        wrapper_layout.addWidget(self.input)
+
+        self._input_wrapper = input_wrapper
+        input_wrapper.installEventFilter(self)
+
+        layout.addWidget(input_wrapper)
+
+        self.filter_btn = QPushButton()
+        self.filter_btn.setObjectName("FilterBtn")
+        self.filter_btn.setFixedSize(36, 36)
+        self.filter_btn.setCheckable(True)
+        _fx = QPixmap(str(_ICON_DIR / "filter.png"))
+        if not _fx.isNull():
+            self.filter_btn.setIcon(QIcon(_fx))
+            self.filter_btn.setIconSize(self.filter_btn.size() * 0.6)
+        else:
+            self.filter_btn.setText("⚙")
+        self.filter_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {WHITE}; border: none;
+                border-radius: 18px; font-size: 16px; color: {BLUE_PRIMARY};
+            }}
+            QPushButton:checked {{ background: #ddd5f5; }}
+        """)
+
+        self.filter_btn.installEventFilter(self)
+
+        self.filter_btn.clicked.connect(self.filter_toggled)
+        layout.addWidget(self.filter_btn)
+
+        self.trash_btn = QPushButton()
+        _tx = QPixmap(str(_ICON_DIR / "trash.png"))
+        if not _tx.isNull():
+            self.trash_btn.setIcon(QIcon(_tx))
+            self.trash_btn.setIconSize(QSize(20, 20))
+        else:
+            self.trash_btn.setText("🗑")
+        self.trash_btn.setObjectName("TrashBtn")
+        self.trash_btn.setFixedSize(36, 36)
+        self.trash_btn.setCheckable(True)
+        self.trash_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {WHITE}; border: none;
+                border-radius: 18px; font-size: 16px; color: #c85a58;
+            }}
+            QPushButton:checked {{
+                background: #e87e7c; color: #fff5f5;
+            }}
+        """)
+
+        self.trash_btn.installEventFilter(self)
+
+        self.trash_btn.toggled.connect(self.delete_toggled)
+        layout.addWidget(self.trash_btn)
+
+    def reset_trash(self):
+        self.trash_btn.blockSignals(True)
+        self.trash_btn.setChecked(False)
+        self.trash_btn.blockSignals(False)
+
+    def get_text(self) -> str:
+        return self.input.text().strip()
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.Enter:
+            if obj == self._input_wrapper:
+                self._set_input_hover(True)
+            elif obj == self.filter_btn:
+                self._set_btn_hover(self.filter_btn, "filter", True)
+            elif obj == self.trash_btn:
+                self._set_btn_hover(self.trash_btn, "trash", True)
+        elif event.type() == QEvent.Type.Leave:
+            if obj == self._input_wrapper:
+                self._set_input_hover(False)
+            elif obj == self.filter_btn:
+                self._set_btn_hover(self.filter_btn, "filter", False)
+            elif obj == self.trash_btn:
+                self._set_btn_hover(self.trash_btn, "trash", False)
+        elif event.type() == QEvent.Type.MouseButtonPress:
+            if obj == self.filter_btn:
+                self._set_btn_pressed(self.filter_btn, "filter", True)
+            elif obj == self.trash_btn:
+                self._set_btn_pressed(self.trash_btn, "trash", True)
+        elif event.type() == QEvent.Type.MouseButtonRelease:
+            if obj == self.filter_btn:
+                self._set_btn_pressed(self.filter_btn, "filter", False)
+            elif obj == self.trash_btn:
+                self._set_btn_pressed(self.trash_btn, "trash", False)
+        return super().eventFilter(obj, event)
+
+    def _set_input_hover(self, hovered: bool):
+        bg = "#E8F4FB" if hovered else WHITE
+        self._input_wrapper.setStyleSheet(f"""
+            QWidget {{
+                background: {bg};
+                border-radius: 22px;
+            }}
+        """)
+
+    def _set_btn_hover(self, btn: QPushButton, kind: str, hovered: bool):
+        setattr(self, f"_{kind}_hovered", hovered)
+        self._apply_btn_style(btn, kind)
+
+    def _set_btn_pressed(self, btn: QPushButton, kind: str, pressed: bool):
+        setattr(self, f"_{kind}_pressed", pressed)
+        self._apply_btn_style(btn, kind)
+
+    def _apply_btn_style(self, btn: QPushButton, kind: str):
+        hovered = getattr(self, f"_{kind}_hovered", False)
+        pressed = getattr(self, f"_{kind}_pressed", False)
+
+        if kind == "trash":
+            if pressed:
+                bg = "#9DCCE8"
+            elif hovered:
+                bg = "#B8DFF0"
+            else:
+                bg = WHITE
+            checked_bg = "#e87e7c"
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {bg}; border: none;
+                    border-radius: 18px; font-size: 16px; color: #c85a58;
+                }}
+                QPushButton:checked {{
+                    background: {checked_bg}; color: #fff5f5;
+                }}
+            """)
+        else:  # filter
+            if pressed:
+                bg = "#9DCCE8"
+            elif hovered:
+                bg = "#B8DFF0"
+            else:
+                bg = WHITE
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background: {bg}; border: none;
+                    border-radius: 18px; font-size: 16px; color: {BLUE_PRIMARY};
+                }}
+                QPushButton:checked {{ background: #ddd5f5; }}
+            """)
 
 
-class DetailPage(QWidget):
+class LibraryFilterPanel(QWidget):
+    apply_clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedWidth(320)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        self.setStyleSheet("background: transparent;")
+        self._genre_cbs  = {}
+        self._status_cbs = {}
+        self._year_input = None
+        self._custom_genre_input = None
+        self._build()
+        self.setVisible(False)
+
+    def _build(self):
+        from PyQt6.QtWidgets import QScrollArea
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(12, 0, 12, 12)
+        outer.setSpacing(0)
+
+        # Scroll area untuk semua konten filter
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setStyleSheet("background: transparent; border: none;")
+
+        inner_widget = QWidget()
+        inner_widget.setStyleSheet("background: transparent;")
+        root = QVBoxLayout(inner_widget)
+        root.setContentsMargins(20, 20, 20, 20)
+        root.setSpacing(14)
+
+        root.addWidget(self._heading("Filter"))
+
+        root.addWidget(self._subheading("Genre"))
+        g_grid = QGridLayout()
+        g_grid.setSpacing(6)
+        g_grid.setContentsMargins(0, 0, 0, 0)
+        for i, g in enumerate(GENRES):
+            cb = QCheckBox(g)
+            cb.setStyleSheet(self._cb_style())
+            self._genre_cbs[g] = cb
+            g_grid.addWidget(cb, i // 2, i % 2)
+        root.addLayout(g_grid)
+
+        root.addWidget(self._subheading("Other genre"))
+        self._custom_genre_input = QLineEdit()
+        self._custom_genre_input.setFixedHeight(32)
+        self._custom_genre_input.setMaximumWidth(160)
+        self._custom_genre_input.setPlaceholderText("e.g. Isekai")
+        self._custom_genre_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: transparent;
+                border: 1.5px solid {BLUE_LIGHT};
+                border-radius: 6px; padding: 4px 10px;
+                font-size: 13px; color: {TEXT_DARK};
+            }}
+            QLineEdit:focus {{ border-color: {BLUE_PRIMARY}; }}
+        """)
+        root.addWidget(self._custom_genre_input)
+
+        root.addWidget(self._subheading("Read Status"))
+        s_grid = QGridLayout()
+        s_grid.setSpacing(6)
+        s_grid.setContentsMargins(0, 0, 0, 0)
+        pairs = [("Plan to Read", "Completed"), ("Reading", "Dropped")]
+        for row_idx, (s1, s2) in enumerate(pairs):
+            for col_idx, s in enumerate([s1, s2]):
+                cb = QCheckBox(s)
+                cb.setStyleSheet(self._cb_style())
+                self._status_cbs[s] = cb
+                s_grid.addWidget(cb, row_idx, col_idx)
+        root.addLayout(s_grid)
+
+        root.addWidget(self._subheading("Year"))
+        self._year_input = QLineEdit()
+        self._year_input.setFixedHeight(32)
+        self._year_input.setMaximumWidth(110)
+        self._year_input.setPlaceholderText("e.g. 2023")
+        self._year_input.setStyleSheet(f"""
+            QLineEdit {{
+                background: transparent;
+                border: 1.5px solid {BLUE_LIGHT};
+                border-radius: 6px; padding: 4px 10px;
+                font-size: 13px; color: {TEXT_DARK};
+            }}
+            QLineEdit:focus {{ border-color: {BLUE_PRIMARY}; }}
+        """)
+        root.addWidget(self._year_input)
+        root.addStretch()
+
+        scroll.setWidget(inner_widget)
+        outer.addWidget(scroll, stretch=1)
+
+        # Apply button di luar scroll, selalu nempel di bawah
+        apply_btn = QPushButton("Apply")
+        apply_btn.setFixedHeight(46)
+        apply_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                border: 2.5px solid {BLUE_PRIMARY};
+                border-radius: 23px;
+                color: {BLUE_PRIMARY};
+                font-size: 15px; font-weight: 700;
+            }}
+            QPushButton:hover {{
+                background: {BLUE_PRIMARY};
+                color: {WHITE};
+            }}
+        """)
+        apply_btn.clicked.connect(self.apply_clicked)
+        outer.addWidget(apply_btn)
+
+    def _heading(self, text):
+        lbl = QLabel(text)
+        lbl.setStyleSheet(
+            f"font-size: 18px; font-weight: 700; color: {TEXT_DARK}; background: transparent;"
+        )
+        return lbl
+
+    def _subheading(self, text):
+        lbl = QLabel(text)
+        lbl.setStyleSheet(
+            f"font-size: 14px; font-weight: 700; color: {TEXT_DARK}; background: transparent;"
+        )
+        return lbl
+
+    def _cb_style(self):
+        return f"""
+            QCheckBox {{ font-size: 11px; color: {TEXT_DARK}; background: transparent; spacing: 5px; }}
+            QCheckBox::indicator {{
+                width: 14px; height: 14px;
+                border: 2px solid {TEXT_MUTED}; border-radius: 3px;
+                background: transparent;
+            }}
+            QCheckBox::indicator:checked {{
+                background: {BLUE_PRIMARY}; border-color: {BLUE_PRIMARY};
+            }}
+        """
+
+    def selected_genres(self) -> list:
+        genres = [g for g, cb in self._genre_cbs.items() if cb.isChecked()]
+        if self._custom_genre_input:
+            custom = self._custom_genre_input.text().strip()
+            if custom:
+                genres.append(custom)
+        return genres
+
+    def selected_statuses(self) -> list: return [s for s, cb in self._status_cbs.items() if cb.isChecked()]
+    def selected_year(self)     -> str:  return (self._year_input.text() or "").strip()
+
+    def toggle_visibility(self):
+        self.setVisible(not self.isVisible())
+
+
+class LibraryPage(QWidget):
     def __init__(self, main_window, parent=None):
         super().__init__(parent)
         self.main_window = main_window
         self._loader = None
-        self._cover_ldr = None
-        self._active_threads = []   
-        self._manga_id = None
+        self._all_last_read: list = []
+        self._all_my_books:  list = []
         self._build()
+        self._start_loading()
+
+    def adjust_content_width(self):
+        if hasattr(self, 'scroll') and self.scroll and self.scroll.widget():
+            vp_w = self.scroll.viewport().width()
+            if vp_w > 10:
+                self.scroll.widget().setFixedWidth(vp_w)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self.adjust_content_width()
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        # Force correct layout every time this page becomes visible
+        QTimer.singleShot(50, self.adjust_content_width)
+        QTimer.singleShot(100, self.last_read_row._relayout)
+        QTimer.singleShot(100, self.my_books_row._relayout)
 
     def _build(self):
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
-        topbar = QWidget()
-        topbar.setFixedHeight(TOPBAR_HEIGHT)
-        topbar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        topbar.setStyleSheet("background: qlineargradient(x1:0,y1:0,x2:1,y2:0,stop:0 #7aaee0,stop:0.5 #80d9e8,stop:1 #b5dfa0);")
-        tb = QHBoxLayout(topbar)
-        tb.setContentsMargins(16, 0, 16, 0)
-        back_btn = QPushButton("  Back")
-        back_btn.setFixedSize(80, 34)
-        back_btn.setStyleSheet(f"""
-            QPushButton {{ background: rgba(0,60,120,0.12); color: #003c78;
-                border: 1px solid rgba(0,60,120,0.25); border-radius: 8px; font-size: 13px; font-weight: 600; }}
-            QPushButton:hover {{ background: rgba(0,60,120,0.22); }} """)
-        back_btn.clicked.connect(self.main_window.go_back)
-        tb.addWidget(back_btn); tb.addStretch()
-        root.addWidget(topbar)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll.setStyleSheet("background: transparent; border: none;")
-        body = QWidget()
-        body_h = QHBoxLayout(body)
-        body_h.setContentsMargins(20, 20, 20, 20)
-        body_h.setSpacing(16)
-        main_card = QWidget()
-        main_card.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
-        main_card.setStyleSheet(f"background: {BLUE_CARD}; border-radius: {CARD_RADIUS}px;")
-        mc = QVBoxLayout(main_card)
-        mc.setContentsMargins(20, 20, 20, 20)
-        mc.setSpacing(16)
-        top_row = QHBoxLayout()
-        top_row.setSpacing(20)
-        top_row.setAlignment(Qt.AlignmentFlag.AlignTop)
-        left_col = QVBoxLayout()
-        left_col.setSpacing(6)
-        left_col.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self._cover = CoverLabel(160, 225)
-        left_col.addWidget(self._cover, alignment=Qt.AlignmentFlag.AlignHCenter)
-        self._title_lbl = QLabel("Loading…")
-        self._title_lbl.setStyleSheet(f"color: {BLACK}; font-size: 18px; font-weight: 700; background: transparent; max-width: 160px;")
-        self._title_lbl.setWordWrap(True)
-        self._title_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
-        left_col.addWidget(self._title_lbl)
-        self._meta_layout = QVBoxLayout()
-        self._meta_layout.setSpacing(2)
-        left_col.addLayout(self._meta_layout)
-        left_col.addStretch()
-        top_row.addLayout(left_col)
-        right_col = QVBoxLayout()
-        right_col.setSpacing(8)
-        right_col.setAlignment(Qt.AlignmentFlag.AlignTop)
-        syn_hdr = QLabel("Synopsis")
-        syn_hdr.setStyleSheet(f"color: {BLACK}; font-size: 18px; font-weight: 700; background: transparent;")
-        right_col.addWidget(syn_hdr)
-        self._synopsis = QLabel("")
-        self._synopsis.setStyleSheet(f"color: {BLACK}; font-size: 15px; background: transparent;")
-        self._synopsis.setWordWrap(True)
-        self._synopsis.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
-        self._synopsis.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
-        right_col.addWidget(self._synopsis)
-        right_col.addStretch()
-        top_row.addLayout(right_col, stretch=1)
-        mc.addLayout(top_row)
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet("background: rgba(255,255,255,1.0); border: none; max-height: 1px;")
-        mc.addWidget(sep)
-        bottom_row = QHBoxLayout()
-        bottom_row.setSpacing(32)
-        bottom_row.setAlignment(Qt.AlignmentFlag.AlignTop)
-        col_sec = QVBoxLayout(); col_sec.setSpacing(6)
-        col_lbl = QLabel("Collection")
-        col_lbl.setStyleSheet(f"color: {BLACK}; font-size: 13px; font-weight: 700; background: transparent;")
-        self._col_panel = CollectionPanel(main_window=self.main_window)
-        self._col_panel.changed.connect(self._on_collection_changed)
-        self._col_panel.status_changed.connect(self._on_status_dropdown_changed)
-        col_sec.addWidget(col_lbl); col_sec.addWidget(self._col_panel); col_sec.addStretch()
-        bottom_row.addLayout(col_sec)
-        rev_sec = QVBoxLayout(); rev_sec.setSpacing(6)
-        rev_lbl = QLabel("My Review")
-        rev_lbl.setStyleSheet(f"color: {BLACK}; font-size: 13px; font-weight: 700; background: transparent;")
-        self._rev_panel = ReviewPanel(main_window=self.main_window)
-        rev_sec.addWidget(rev_lbl); rev_sec.addWidget(self._rev_panel); rev_sec.addStretch()
-        bottom_row.addLayout(rev_sec, stretch=1)
-        mc.addLayout(bottom_row)
-        body_h.addWidget(main_card, stretch=1)
-        self._similar = SimilarPanel()
-        body_h.addWidget(self._similar, alignment=Qt.AlignmentFlag.AlignTop)
-        scroll.setWidget(body)
-        root.addWidget(scroll, stretch=1)
 
-    def _clear_meta(self):
-        while self._meta_layout.count():
-            item = self._meta_layout.takeAt(0)
-            if item.widget(): item.widget().deleteLater()
+        self.search_bar = LibrarySearchBar()
+        self.search_bar.search_triggered.connect(self._apply_filters)
+        self.search_bar.filter_toggled.connect(self._toggle_filter)
+        self.search_bar.delete_toggled.connect(self._set_delete_mode)
+        root.addWidget(self.search_bar)
 
-    def _add_meta(self, key, value):
-        if not value or str(value) in ("", "None"): return
-        lbl = QLabel(f"<b>{key}</b>  {value}")
-        lbl.setStyleSheet(f"color: {BLACK}; font-size: 13px; background: transparent;")
-        lbl.setWordWrap(True)
-        self._meta_layout.addWidget(lbl)
+        self.body = QHBoxLayout()
+        self.body.setContentsMargins(0, 0, 0, 0)
+        self.body.setSpacing(0)
 
-    def load_manga(self, manga_id: int):
-        self._manga_id = manga_id
-        self._title_lbl.setText("Loading…")
-        self._synopsis.setText("")
-        self._clear_meta()
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll.setStyleSheet("background: transparent; border: none;")
 
-        if self._loader is not None:
-            try:
-                self._loader.finished.disconnect()
-            except Exception:
-                pass
-            if self._loader.isRunning():
-                self._loader.quit()
-                self._loader.wait()
-            self._loader = None
+        content = QWidget()
+        cl = QVBoxLayout(content)
+        cl.setContentsMargins(24, 20, 24, 20)
+        cl.setSpacing(20)
 
-        if self._cover_ldr is not None:
-            if self._cover_ldr.isRunning():
-                self._cover_ldr.quit()
-                self._cover_ldr.wait()
-            self._cover_ldr = None
+        lr_header = QHBoxLayout()
+        lr_header.setContentsMargins(0, 0, 0, 0)
+        lr_header.addWidget(self._sec("Last Read"))
+        lr_header.addStretch()
+        self._add_btn = QPushButton("+")
+        self._add_btn.setFixedSize(32, 32)
+        self._add_btn.setToolTip("Tambah Manga Manual")
+        self._add_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {BLUE_PRIMARY};
+                border: none;
+                font-size: 26px;
+                font-weight: 300;
+                line-height: 1;
+            }}
+            QPushButton:hover {{ color: {BLUE_DARK}; }}
+        """)
+        self._add_btn.clicked.connect(self._open_add_form)
+        lr_header.addWidget(self._add_btn)
+        cl.addLayout(lr_header)
 
-        user_id = self.main_window.current_user["id"] if self.main_window else None
-        self._loader = DetailLoader(manga_id, user_id)
-        self._loader.finished.connect(self._on_loaded)
+        self.last_read_row = CardRow()
+        self.last_read_row.set_scroll_area(self.scroll)
+        self.last_read_row.show_placeholders(6)
+        cl.addWidget(self.last_read_row)
+
+        cl.addWidget(self._sec("My Books"))
+        self.my_books_row = CardRow()
+        self.my_books_row.set_scroll_area(self.scroll)
+        self.my_books_row.show_placeholders(6)
+        cl.addWidget(self.my_books_row)
+
+        cl.addStretch()
+        self.scroll.setWidget(content)
+        self.body.addWidget(self.scroll, stretch=1)
+
+        self.filter_panel = LibraryFilterPanel()
+        self.filter_panel.apply_clicked.connect(self._apply_filters)
+        self.body.addWidget(self.filter_panel)
+
+        root.addLayout(self.body, stretch=1)
+
+        self.confirm_bar = DeleteConfirmBar()
+        self.confirm_bar.cancelled.connect(self._cancel_delete_mode)
+        self.confirm_bar.confirmed.connect(self._confirm_delete)
+        root.addWidget(self.confirm_bar)
+
+        self._check_timer = QTimer(self)
+        self._check_timer.setInterval(150)
+        self._check_timer.timeout.connect(self._update_selection_count)
+
+    def _sec(self, text):
+        lbl = QLabel(text)
+        lbl.setStyleSheet(
+            f"color: {BLUE_PRIMARY}; font-size: 16px; "
+            f"font-weight: 700; background: transparent;"
+        )
+        return lbl
+
+    def _toggle_filter(self):
+        self.filter_panel.toggle_visibility()
+        self._add_btn.setVisible(not self.filter_panel.isVisible())
         
-        # Perbaikan: Simpan referensi ke active_threads (Keep-alive)
-        self._active_threads.append(self._loader)
-        self._loader.finished.connect(lambda: self._cleanup_thread(thread))
-        
-        self._loader.start()
+        # Schedul relayout setelah layout engine selesai menyesuaikan lebar
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(50, self.adjust_content_width)
+        QTimer.singleShot(100, self.last_read_row._relayout)
+        QTimer.singleShot(100, self.my_books_row._relayout)
 
-    @pyqtSlot(object, object, object, list)
-    def _on_loaded(self, manga, collection, review, similar):
-        if not manga:
-            self._title_lbl.setText("Manga not found")
-            return
-        if manga.cover_url:
-            if self._cover_ldr is not None and self._cover_ldr.isRunning():
-                self._cover_ldr.quit()
-                self._cover_ldr.wait()
-            self._cover_ldr = ImageLoader(manga.cover_url)
-            self._cover_ldr.loaded.connect(self._cover.set_cover)
-            self._cover_ldr.finished.connect(lambda: self._cleanup_thread(self._cover_ldr))
-            
-            # Perbaikan: Simpan referensi cover_ldr ke active_threads
-            self._active_threads.append(self._cover_ldr)
-            
-            self._cover_ldr.start()
-        self._title_lbl.setText(manga.title or "—")
-        syn = manga.synopsis or "No synopsis available."
-        self._synopsis.setText(syn)
-        self._clear_meta()
-        self._add_meta("Genre:", manga.genres)
-        self._add_meta("Author:", manga.authors)
-        self._add_meta("Year:", manga.year)
-        self._add_meta("Status:", manga.status)
-        self._add_meta("Score:", manga.score)
-        self._add_meta("Chapters:", manga.chapters)
-        self._col_panel.load(manga.id, collection, manga_chapters=manga.chapters or 0)
-        if collection:
-            _status = (collection.status or "Plan to Read").strip()
-            self._rev_panel.load(manga.id, collection.id, review, status=_status)
-            self._rev_panel.set_locked(_status == "Plan to Read")
+
+    def _open_add_form(self):
+        try:
+            dialog = AddMangaForm(parent=self)
+            dialog.manga_added.connect(self._on_manga_added)
+            dialog.exec()
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+
+    def _on_manga_added(self, manga_id: int):
+        self._start_loading()
+        if hasattr(self.main_window, 'show_toast'):
+            self.main_window.show_toast("Manga successfully added!")
+
+    def _set_delete_mode(self, active: bool):
+        self.last_read_row.set_select_mode(active)
+        self.my_books_row.set_select_mode(active)
+        if active:
+            self.confirm_bar.setVisible(True)
+            self._check_timer.start()
         else:
-            self._rev_panel.clear()
-            self._rev_panel.set_locked(True)
-        self._similar.load(similar, self.load_manga)
+            self.confirm_bar.setVisible(False)
+            self._check_timer.stop()
 
-    def _on_collection_changed(self):
-        if not self._manga_id: return
+    def _cancel_delete_mode(self):
+        self.search_bar.reset_trash()
+        self._set_delete_mode(False)
+
+    def _update_selection_count(self):
+        ids = list(dict.fromkeys(
+            self.last_read_row.get_selected_entry_ids()
+            + self.my_books_row.get_selected_entry_ids()
+        ))
+        self.confirm_bar.update_count(len(ids))
+
+    def _style_msgbox(self, msg):
+        """Force QMessageBox pakai warna terang agar tidak kena dark theme sistem."""
+        from PyQt6.QtGui import QPalette, QColor as _QC
+        pal = msg.palette()
+        pal.setColor(QPalette.ColorRole.Window,     _QC(BLUE_DARK))
+        pal.setColor(QPalette.ColorRole.WindowText, _QC(WHITE))
+        pal.setColor(QPalette.ColorRole.ButtonText, _QC(WHITE))
+        pal.setColor(QPalette.ColorRole.Text,       _QC(WHITE))
+        msg.setPalette(pal)
+        msg.setStyleSheet(f"""
+            QMessageBox {{ background: {BLUE_DARK}; font-family: Arial; }}
+            QLabel {{ color: {WHITE}; background: transparent; font-size: 13px; }}
+            QPushButton {{
+                background: rgba(255,255,255,0.15); color: {WHITE};
+                border: 1px solid rgba(255,255,255,0.40); border-radius: 12px;
+                padding: 6px 18px; font-size: 12px; font-weight: 600; min-width: 80px;
+            }}
+            QPushButton:hover {{ background: rgba(255,255,255,0.28); }}
+        """)
+
+    def _confirm_delete(self):
+        ids = list(dict.fromkeys(
+            self.last_read_row.get_selected_entry_ids()
+            + self.my_books_row.get_selected_entry_ids()
+        ))
+        if not ids:
+            return
+
+        count = len(ids)
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Delete Confirmation")
+        msg.setText(
+            f"Delete {count} manga from My Library?\n\n"
+            "This action cannot be undone."
+        )
+        msg.setStandardButtons(
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel
+        )
+        msg.setDefaultButton(QMessageBox.StandardButton.Cancel)
+        msg.button(QMessageBox.StandardButton.Yes).setText("Yes, Delete")
+        msg.button(QMessageBox.StandardButton.Cancel).setText("Cancel")
+        self._style_msgbox(msg)
+
+        if msg.exec() == QMessageBox.StandardButton.Yes:
+            self._do_delete(ids)
+
+    def _do_delete(self, entry_ids: list):
         try:
             from services.collection_service import CollectionService
-            from services.review_service import ReviewService
-            user_id = self.main_window.current_user["id"] if self.main_window else None
-            if not user_id: return
-            col = CollectionService().get_by_manga_id(self._manga_id, user_id=user_id)
-            rev = ReviewService().get_by_manga(self._manga_id, user_id=user_id)
-            if col:
-                _status = (col.status or "Plan to Read").strip()
-                self._rev_panel.load(self._manga_id, col.id, rev, status=_status)
-                self._rev_panel.set_locked(_status == "Plan to Read")
-            else:
-                self._rev_panel.clear()
-                self._rev_panel.set_locked(True)
+            svc = CollectionService()
+            uid = self.main_window.current_user["id"]
+
+            deleted = sum(1 for eid in entry_ids if svc.delete(eid, user_id=uid))
+            self._cancel_delete_mode()
+            self._start_loading()
+            if deleted:
+                ok = QMessageBox(self)
+                ok.setWindowTitle("Success")
+                ok.setText(f"{deleted} manga successfully deleted from My Library.")
+                ok.setStandardButtons(QMessageBox.StandardButton.Ok)
+                self._style_msgbox(ok)
+                ok.exec()
         except Exception as e:
-            print(f"[DetailPage] Refresh error: {e}")
+            print(f"[LibraryPage] Delete error: {e}")
 
-    def _cleanup_thread(self, thread):
+    def _start_loading(self):
+        if self._loader and self._loader.isRunning():
+            self._loader.quit()
+            self._loader.wait()
+        self.last_read_row.show_placeholders(6)
+        self.my_books_row.show_placeholders(6)
+        user_id = self.main_window.current_user["id"]
+        self._loader = CollectionLoader(user_id=user_id)
+        self._loader.finished.connect(self._on_loaded)
+        self._loader.start()
+
+    @pyqtSlot(list, list)
+    def _on_loaded(self, lr_entries, mb_entries):
+        self._all_last_read = lr_entries
+        self._all_my_books  = mb_entries
+        self._apply_filters()
+
+    def _apply_filters(self, query: str = ""):
+        if not isinstance(query, str):
+            query = ""
+        current_text = self.search_bar.get_text()
+        if current_text:
+            query = current_text
+
+        genres   = self.filter_panel.selected_genres()
+        statuses = self.filter_panel.selected_statuses()
+        year     = self.filter_panel.selected_year()
+
+        filtered_lr = _filter_entries(self._all_last_read, query, genres, statuses, year)
+        filtered_mb = _filter_entries(self._all_my_books,  query, genres, statuses, year)
+
+        self.last_read_row.load_cards(filtered_lr[:12], self.main_window.go_detail,
+                                      mode="chapter", on_update=self._update_entry)
+        self.my_books_row.load_cards(filtered_mb,       self.main_window.go_detail,
+                                     mode="status",  on_update=self._update_entry)
+
+        # Force correct layout on initial load — cascade relayouts so cards
+        # never appear stacked/overlapping before the user interacts
+        QTimer.singleShot(50, self.adjust_content_width)
+        QTimer.singleShot(100, self.last_read_row._relayout)
+        QTimer.singleShot(100, self.my_books_row._relayout)
+        QTimer.singleShot(300, self.adjust_content_width)
+        QTimer.singleShot(350, self.last_read_row._relayout)
+        QTimer.singleShot(350, self.my_books_row._relayout)
+
+    def _update_entry(self, entry_id: int, **kwargs):
+        """Update current_chapter atau status langsung dari dropdown di card."""
         try:
-            if thread in self._active_threads:
-                self._active_threads.remove(thread)
-        except Exception:
-            pass
+            from services.collection_service import CollectionService
+            CollectionService().update(collection_id=entry_id, **kwargs)
+        except Exception as e:
+            print(f"[LibraryPage] update_entry error: {e}")
 
-    def _on_status_dropdown_changed(self, status: str):
-        locked = status.strip() == "Plan to Read"
-        self._rev_panel.set_locked(locked)
-        if not locked:
-            self._rev_panel._tag_bar.set_status(status.strip())
+    def refresh(self):
+        self._start_loading()
