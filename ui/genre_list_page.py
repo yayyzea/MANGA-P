@@ -765,7 +765,7 @@ class GenreListPage(QWidget):
 
         self._add_btn.setEnabled(False)
         self._add_btn.setText("⏳ Scraping…")
-        self._scrape_status.setText("⏳ Scraping 100 new manga from Jikan API…")
+        self._scrape_status.setText("⏳ Scraping new manga from Jikan API…")
         self._scrape_status.setVisible(True)
 
         self._add_worker = AddMangaWorker()
@@ -775,7 +775,7 @@ class GenreListPage(QWidget):
 
     @pyqtSlot(int)
     def _on_add_progress(self, count: int):
-        self._scrape_status.setText(f"⏳  Scraping new manga… {count} / 100")
+        self._scrape_status.setText("⏳  Scraping new manga…")
 
     @pyqtSlot(int)
     def _on_add_finished(self, count: int):
@@ -784,7 +784,7 @@ class GenreListPage(QWidget):
 
         if count > 0:
             self._scrape_status.setText(
-                f"✅  {count} Manga successfully added! Updating distribution…"
+                "✅  Manga successfully added! Updating distribution…"
             )
             # Reload DB → update total counter + chart sekaligus
             self._load_from_db()
