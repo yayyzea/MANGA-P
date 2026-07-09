@@ -624,7 +624,7 @@ class GenreListPage(QWidget):
         tb.addWidget(title_lbl)
         tb.addStretch()
 
-        self._add_btn = QPushButton("＋ 100 Manga")
+        self._add_btn = QPushButton("＋ Manga")
         self._add_btn.setFixedHeight(34)
         self._add_btn.setStyleSheet(f"""
             QPushButton {{
@@ -780,16 +780,16 @@ class GenreListPage(QWidget):
     @pyqtSlot(int)
     def _on_add_finished(self, count: int):
         self._add_btn.setEnabled(True)
-        self._add_btn.setText("＋ 100 Manga")
+        self._add_btn.setText("＋ Manga")
 
         if count > 0:
             self._scrape_status.setText(
-                f"✅  {count} manga berhasil ditambahkan! Memperbarui distribusi…"
+                f"✅  {count} Manga successfully added! Updating distribution…"
             )
             # Reload DB → update total counter + chart sekaligus
             self._load_from_db()
         else:
-            self._scrape_status.setText("⚠  Tidak ada manga baru yang berhasil ditambahkan.")
+            self._scrape_status.setText("⚠  No new manga was successfully added.")
 
         from PyQt6.QtCore import QTimer
         QTimer.singleShot(3000, lambda: self._scrape_status.setVisible(False))
