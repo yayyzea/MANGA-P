@@ -551,7 +551,7 @@ class MainWindow(QMainWindow):
         elif name == "dashboard_page":
             from .dashboard_page import DashboardPage; page = DashboardPage(self)
         elif name == "profile_page":
-            from .profile_page import LoginPage; page = LoginPage(self)
+            from .profile_page import ProfilePage; page = ProfilePage(self)
         elif name == "genre_page":
             from .genre_page import GenrePage; page = GenrePage(self)
         elif name == "status_page":
